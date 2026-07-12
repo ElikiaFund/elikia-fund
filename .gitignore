@@ -1,0 +1,10 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Env files (each app also has its own, this is a catch-all)
+.env
+.env.*
+!.env.example
