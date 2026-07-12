@@ -2,7 +2,7 @@ import { TrendingDownIcon, TrendingUpIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import type { Contribution, NewUser, Transaction } from '@/data/dashboard-mock'
+import type { Contribution, NewUser, Transaction } from '@/components/dashboard/types'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 const number = new Intl.NumberFormat('fr-FR')

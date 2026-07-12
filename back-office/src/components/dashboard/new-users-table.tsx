@@ -4,7 +4,7 @@ import { fr } from 'date-fns/locale'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { NewUser } from '@/data/dashboard-mock'
+import type { NewUser } from '@/components/dashboard/types'
 
 function initials(name: string) {
   return name

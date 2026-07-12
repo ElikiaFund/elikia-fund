@@ -10,8 +10,10 @@ class GroupController extends Controller
 {
     public function index(): JsonResponse
     {
+        // `contributions` is eager-loaded (not just summed) so the back-office dashboard can
+        // aggregate/date-filter cotisations client-side without a dedicated endpoint.
         return response()->json(
-            Group::with('owner')
+            Group::with('owner', 'contributions')
                 ->withCount('members')
                 ->withSum('contributions', 'amount')
                 ->latest()

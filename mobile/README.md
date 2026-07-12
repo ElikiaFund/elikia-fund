@@ -14,12 +14,13 @@ Before OAuth actually works you need real credentials, filled into `app.json`'s 
 
 ## Structure
 
-- `src/app/` — Expo Router screens (file-based). `login.tsx` (public) vs. `(tabs)/` + `vault-activate.tsx` + `vault-unlock.tsx` (authenticated) are split via `Stack.Protected` in `src/app/_layout.tsx`.
-- `src/services/apiService.ts` — the single axios instance (base URL, auth header injection, French error normalization). All other services (`authService.ts`, `vaultService.ts`) call through it — don't create a second axios instance.
-- `src/context/auth-context.tsx` — session state, backed by `expo-secure-store`.
+- `src/app/` — Expo Router screens (file-based). Three-way split via `Stack.Protected` in `src/app/_layout.tsx`: `login.tsx` (unauthenticated) → `onboarding.tsx` (authenticated but no company yet — gated on `user.onboarding_completed_at`, not on relation presence) → `(tabs)/` + `vault-activate.tsx` + `vault-unlock.tsx` (fully onboarded).
+- `src/services/apiService.ts` — the single axios instance (base URL, auth header injection, French error normalization). All other services (`authService.ts`, `vaultService.ts`, `companyService.ts`) call through it — don't create a second axios instance.
+- `src/context/auth-context.tsx` — session state, backed by `expo-secure-store`. `refreshUser()` re-fetches `/me` — call it after onboarding completes so the `Stack.Protected` guard re-evaluates and routes into the app.
 - `src/context/vault-context.tsx` — in-memory "is the vault unlocked right now" flag. It resets every time the Coffre tab loses focus, so the PIN is required on every visit, not just once per app launch.
 - `src/db/database.ts` — `expo-sqlite`: `transactions` + `sync_queue` tables (Day 1 data model). Cash flow reads/writes should go through here first, never straight to the network — see `../fintech-mvp-one-week-plan.md`.
 - Auth is OAuth-only for end users (no email/password) — `login.tsx` calls the native sign-in SDKs, then exchanges the resulting token with the API (`POST /auth/google|apple|facebook`).
+- Onboarding (`onboarding.tsx`) collects a company name + category (fixed list in `companyService.ts`, must match `Company::CATEGORIES` on the API) via `POST /onboarding/company`. One company per user, mobile-only flow — the back-office manages companies separately, read/delete only.
 - Vault access requires a 4-digit PIN, set on first activation (`vault-activate.tsx`) and re-entered on every subsequent visit (`vault-unlock.tsx`) — mirrors the API's `POST /vault/activate` / `POST /vault/pin/verify`.
 - Cashflow/Vault/Groups screens are placeholder stubs (`// TODO (Day N): ...`) — see `../fintech-mvp-one-week-plan.md` for what each one should do.
 

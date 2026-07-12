@@ -4,7 +4,7 @@ import { fr } from 'date-fns/locale'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { Transaction } from '@/data/dashboard-mock'
+import type { Transaction } from '@/components/dashboard/types'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 

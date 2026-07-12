@@ -1,7 +1,7 @@
 import { endOfDay, format, isWithinInterval, startOfDay, subMilliseconds } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 
-import type { Contribution, Transaction } from '@/data/dashboard-mock'
+import type { Contribution, Transaction } from '@/components/dashboard/types'
 
 function dateOf(item: { date: Date } | { joinedAt: Date }) {
   return 'date' in item ? item.date : item.joinedAt
