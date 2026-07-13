@@ -10,6 +10,8 @@ type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   loginWithApple: (identityToken: string, name?: string) => Promise<void>;
   loginWithFacebook: (accessToken: string) => Promise<void>;
@@ -50,6 +52,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setUser(user);
   }
 
+  async function register(name: string, email: string, password: string) {
+    await applySession(await authService.register(name, email, password));
+  }
+
+  async function login(email: string, password: string) {
+    await applySession(await authService.login(email, password));
+  }
+
   async function loginWithGoogle(idToken: string) {
     await applySession(await authService.loginWithGoogle(idToken));
   }
@@ -84,6 +94,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         user,
         isLoading,
         isAuthenticated: user !== null,
+        register,
+        login,
         loginWithGoogle,
         loginWithApple,
         loginWithFacebook,

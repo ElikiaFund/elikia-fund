@@ -36,6 +36,13 @@ apiService.interceptors.request.use((config) => {
 apiService.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (__DEV__ && !error.response) {
+      // No response at all reached us — almost always a reachability issue (wrong
+      // EXPO_PUBLIC_API_URL, e.g. "localhost" from a physical device, or the API isn't
+      // running/reachable on the network), not something the API itself rejected.
+      console.warn(`[apiService] Network request failed: ${error.message} (baseURL: ${API_URL})`);
+    }
+
     const message = error.response?.data?.message ?? 'Une erreur est survenue. Veuillez réessayer.';
     return Promise.reject(new ApiError(message, error.response?.status, error.response?.data?.errors));
   },

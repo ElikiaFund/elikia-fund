@@ -4,6 +4,7 @@ export type Company = {
   id: number;
   name: string;
   category: string;
+  other_category: string | null;
 };
 
 export type AuthUser = {
@@ -22,6 +23,14 @@ export type AuthResponse = {
 };
 
 export const authService = {
+  register(name: string, email: string, password: string) {
+    return apiService.post<AuthResponse>('/auth/register', { name, email, password }).then((r) => r.data);
+  },
+
+  login(email: string, password: string) {
+    return apiService.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data);
+  },
+
   loginWithGoogle(idToken: string) {
     return apiService.post<AuthResponse>('/auth/google', { id_token: idToken }).then((r) => r.data);
   },

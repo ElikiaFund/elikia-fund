@@ -1,31 +1,63 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
-import { PinInput } from '@/components/pin-input';
+import { PinCodeInput } from '@/components/pin-code-input';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useVault } from '@/context/vault-context';
 import { vaultService } from '@/services/vaultService';
+import { useTheme } from '@/hooks/use-theme';
+
+type Step = 'create' | 'confirm';
 
 export default function VaultActivateScreen() {
+  const theme = useTheme();
   const router = useRouter();
   const { unlock } = useVault();
+  const [step, setStep] = useState<Step>('create');
   const [pin, setPin] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
 
-  const canSubmit = pin.length === 4 && confirmation.length === 4;
+  function handlePinChange(text: string) {
+    setPin(text);
 
-  async function handleSubmit() {
-    if (pin !== confirmation) {
+    if (text.length === 4) {
+      setTimeout(() => setStep('confirm'), 200);
+    }
+  }
+
+  function handleConfirmationChange(text: string) {
+    setConfirmation(text);
+    setError(null);
+    setHasError(false);
+
+    if (text.length === 4) {
+      submit(text);
+    }
+  }
+
+  function handleBack() {
+    setStep('create');
+    setPin('');
+    setConfirmation('');
+    setError(null);
+    setHasError(false);
+  }
+
+  async function submit(confirmed: string) {
+    if (pin !== confirmed) {
       setError('Les deux codes ne correspondent pas.');
+      setHasError(true);
+      setConfirmation('');
       return;
     }
 
-    setError(null);
     setIsSubmitting(true);
 
     try {
@@ -34,7 +66,7 @@ export default function VaultActivateScreen() {
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
-      setPin('');
+      setHasError(true);
       setConfirmation('');
     } finally {
       setIsSubmitting(false);
@@ -43,36 +75,49 @@ export default function VaultActivateScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>
-        Activer le coffre
-      </ThemedText>
-      <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-        Choisissez un code PIN à 4 chiffres. Il vous sera demandé à chaque accès au coffre.
-      </ThemedText>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            <View style={[styles.icon, { backgroundColor: theme.tint }]}>
+              <Ionicons name="lock-closed" size={24} color={theme.tintForeground} />
+            </View>
 
-      <ThemedText type="small" style={styles.label}>
-        Code PIN
-      </ThemedText>
-      <PinInput value={pin} onChange={setPin} autoFocus />
+            <ThemedText type="title" style={styles.title}>
+              {step === 'create' ? 'Créez votre code PIN' : 'Confirmez votre code'}
+            </ThemedText>
+            <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+              {step === 'create'
+                ? 'Ce code à 4 chiffres protégera votre coffre à chaque visite.'
+                : 'Entrez à nouveau le même code pour le confirmer.'}
+            </ThemedText>
 
-      <ThemedText type="small" style={styles.label}>
-        Confirmez le code PIN
-      </ThemedText>
-      <PinInput value={confirmation} onChange={setConfirmation} />
+            <View style={styles.pinArea}>
+              {step === 'create' ? (
+                <PinCodeInput value={pin} onChange={handlePinChange} autoFocus />
+              ) : (
+                <PinCodeInput value={confirmation} onChange={handleConfirmationChange} hasError={hasError} autoFocus />
+              )}
+            </View>
 
-      {error && (
-        <ThemedText themeColor="textSecondary" style={styles.error}>
-          {error}
-        </ThemedText>
-      )}
+            <View style={styles.feedback}>
+              {isSubmitting && <ActivityIndicator color={theme.tint} />}
+              {error && (
+                <ThemedText type="small" style={{ color: theme.danger }}>
+                  {error}
+                </ThemedText>
+              )}
+            </View>
 
-      {isSubmitting ? (
-        <ActivityIndicator style={styles.spinner} />
-      ) : (
-        <Pressable style={[styles.button, !canSubmit && styles.buttonDisabled]} disabled={!canSubmit} onPress={handleSubmit}>
-          <ThemedText type="smallBold">Activer</ThemedText>
-        </Pressable>
-      )}
+            {step === 'confirm' && !isSubmitting && (
+              <Pressable onPress={handleBack} style={styles.backLink}>
+                <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                  Recommencer
+                </ThemedText>
+              </Pressable>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
@@ -80,37 +125,51 @@ export default function VaultActivateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: Spacing.four,
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.six,
+  },
+  content: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+  },
+  icon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.four,
   },
   title: {
     textAlign: 'center',
+    fontSize: 28,
+    lineHeight: 34,
   },
   subtitle: {
     textAlign: 'center',
     marginTop: Spacing.two,
-    marginBottom: Spacing.five,
+    marginBottom: Spacing.six,
+    maxWidth: 280,
   },
-  label: {
-    marginBottom: Spacing.two,
-    marginTop: Spacing.three,
+  pinArea: {
+    minHeight: 64,
   },
-  error: {
-    textAlign: 'center',
-    marginTop: Spacing.three,
-  },
-  button: {
+  feedback: {
     marginTop: Spacing.five,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#8E8E93',
-    borderRadius: 12,
-    paddingVertical: Spacing.three,
     alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 24,
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  spinner: {
-    marginTop: Spacing.five,
+  backLink: {
+    marginTop: Spacing.three,
   },
 });

@@ -1,4 +1,5 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
@@ -15,6 +16,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <AuthProvider>
         <VaultProvider>
           <RootNavigator />
@@ -33,7 +35,7 @@ function RootNavigator() {
   }
 
   return (
-    <Stack>
+    <Stack screenOptions={{ headerShadowVisible: false }}>
       <Stack.Protected guard={!isAuthenticated}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
       </Stack.Protected>
@@ -44,8 +46,15 @@ function RootNavigator() {
 
       <Stack.Protected guard={isAuthenticated && !needsOnboarding}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="vault-activate" options={{ presentation: 'modal', title: 'Activer le coffre' }} />
-        <Stack.Screen name="vault-unlock" options={{ presentation: 'modal', title: 'Déverrouiller le coffre' }} />
+        <Stack.Screen name="vault-activate" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="vault-unlock" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="add-transaction" options={{ presentation: 'modal', title: 'Nouvelle transaction' }} />
+        <Stack.Screen name="transactions" options={{ title: 'Transactions' }} />
+        <Stack.Screen name="vault-transaction" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="create-group" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="join-group" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="group/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="edit-profile" options={{ title: 'Modifier le profil' }} />
       </Stack.Protected>
     </Stack>
   );

@@ -14,7 +14,7 @@ Before OAuth actually works you need real credentials, filled into `app.json`'s 
 
 ## Dev builds (EAS)
 
-`eas.json` defines three build profiles: `development` (dev client, internal distribution, iOS simulator build), `development-device` (same but for a physical iOS device — needs a provisioning profile, `eas build` will prompt to set one up), and `preview`/`production` (store-distributable, no dev client). `app.json` carries the EAS `projectId` (`extra.eas.projectId`, `owner: "arden28"`) and the app identifiers (`ios.bundleIdentifier` / `android.package`, both `com.elikiafund.mobile`) that EAS needs to build native binaries.
+`eas.json` defines two build profiles: `development` (dev client, internal distribution — targets a physical iOS device, not the simulator, since that's exclusively what this project builds for; needs a provisioning profile, `eas build` will prompt to set one up) and `preview`/`production` (store-distributable, no dev client). `app.config.js` carries the EAS `projectId` (`extra.eas.projectId`, `owner: "arden28"`) and the app identifiers (`ios.bundleIdentifier` / `android.package`, both `com.elikiafund.mobile`) that EAS needs to build native binaries.
 
 ```
 npx expo install expo-dev-client   # already installed — reinstall after any Expo SDK bump
