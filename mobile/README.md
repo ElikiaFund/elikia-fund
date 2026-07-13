@@ -12,6 +12,19 @@ Expo (React Native + TypeScript), file-based routing via Expo Router.
 
 Before OAuth actually works you need real credentials, filled into `app.json`'s `plugins` (the `REPLACE_WITH_...` placeholders for Google's `iosUrlScheme` and Facebook's `appID`/`clientToken`/`scheme`) and into `.env` (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`) and the API's `.env` (`GOOGLE_CLIENT_ID`, `FACEBOOK_APP_ID`, `APPLE_CLIENT_ID`).
 
+## Dev builds (EAS)
+
+`eas.json` defines three build profiles: `development` (dev client, internal distribution, iOS simulator build), `development-device` (same but for a physical iOS device — needs a provisioning profile, `eas build` will prompt to set one up), and `preview`/`production` (store-distributable, no dev client). `app.json` carries the EAS `projectId` (`extra.eas.projectId`, `owner: "arden28"`) and the app identifiers (`ios.bundleIdentifier` / `android.package`, both `com.elikiafund.mobile`) that EAS needs to build native binaries.
+
+```
+npx expo install expo-dev-client   # already installed — reinstall after any Expo SDK bump
+eas build --profile development --platform android   # or ios / all
+eas build:run -p android           # installs the finished build on a connected device/emulator
+npx expo start --dev-client        # once the dev client is installed, this is your day-to-day dev server
+```
+
+The dev client is a real native binary (unlike Expo Go) — rebuild it with `eas build` whenever you add/remove a native module (e.g. upgrading `@react-native-google-signin/google-signin`), not just `npx expo start`. Until the Google/Facebook `REPLACE_WITH_...` placeholders above are filled with real credentials, the native modules will load correctly in a dev client (fixing the Expo Go `TurboModuleRegistry` error) but the actual sign-in call will still fail — that's a separate, expected step.
+
 ## Structure
 
 - `src/app/` — Expo Router screens (file-based). Three-way split via `Stack.Protected` in `src/app/_layout.tsx`: `login.tsx` (unauthenticated) → `onboarding.tsx` (authenticated but no company yet — gated on `user.onboarding_completed_at`, not on relation presence) → `(tabs)/` + `vault-activate.tsx` + `vault-unlock.tsx` (fully onboarded).

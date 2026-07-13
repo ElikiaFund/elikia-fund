@@ -1,0 +1,41 @@
+{
+  "cli": {
+    "version": ">= 20.1.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "RCT_USE_PREBUILT_RNCORE": "0"
+      }
+    },
+    "development-device": {
+      "extends": "development",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "RCT_USE_PREBUILT_RNCORE": "0"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "RCT_USE_PREBUILT_RNCORE": "0"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
