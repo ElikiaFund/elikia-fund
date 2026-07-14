@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Http\Requests\Onboarding;
+namespace App\Http\Requests\Profile;
 
-use App\Models\Company;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
-class CreateCompanyRequest extends FormRequest
+class UpdateProfileRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -26,8 +26,9 @@ class CreateCompanyRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'string', Rule::in(Company::CATEGORIES)],
-            'other_category' => ['nullable', 'string', 'max:255', 'required_if:category,autre'],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->user()->id)],
+            'current_password' => ['required_with:password', 'string'],
+            'password' => ['nullable', 'confirmed', Password::defaults()],
         ];
     }
 }

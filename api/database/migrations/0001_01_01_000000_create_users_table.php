@@ -17,7 +17,6 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password')->nullable();
-            $table->boolean('is_admin')->default(false);
             $table->string('avatar_url')->nullable();
             $table->string('google_id')->nullable()->unique();
             $table->string('apple_id')->nullable()->unique();

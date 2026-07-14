@@ -6,6 +6,8 @@ use App\Models\Company;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\GroupMember;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Vault;
@@ -21,11 +23,27 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(PermissionSeeder::class);
+        $this->call(SettingsSeeder::class);
+        $this->call(ScoringCriteriaSeeder::class);
+
+        $superAdmin = Role::create(['name' => 'Super Admin', 'description' => 'Accès complet au back-office.']);
+        $superAdmin->permissions()->sync(Permission::pluck('id'));
+
+        $support = Role::create(['name' => 'Support', 'description' => 'Accès en lecture seule.']);
+        $support->permissions()->sync(Permission::whereIn('key', ['users.view', 'transactions.view', 'groups.view', 'companies.view'])->pluck('id'));
+
         // Back-office admin login (dev only — password is "password", see api/README.md).
         User::factory()->create([
             'name' => 'Admin Elikia Fund',
             'email' => 'admin@elikia-fund.test',
-            'is_admin' => true,
+            'role_id' => $superAdmin->id,
+        ]);
+
+        User::factory()->create([
+            'name' => 'Support Elikia Fund',
+            'email' => 'support@elikia-fund.test',
+            'role_id' => $support->id,
         ]);
 
         $users = User::factory()

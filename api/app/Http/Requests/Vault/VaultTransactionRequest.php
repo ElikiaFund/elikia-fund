@@ -1,13 +1,12 @@
 <?php
 
-namespace App\Http\Requests\Onboarding;
+namespace App\Http\Requests\Vault;
 
-use App\Models\Company;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class CreateCompanyRequest extends FormRequest
+class VaultTransactionRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -25,9 +24,9 @@ class CreateCompanyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'string', Rule::in(Company::CATEGORIES)],
-            'other_category' => ['nullable', 'string', 'max:255', 'required_if:category,autre'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'pin' => ['required', 'digits:4'],
+            'payment_method' => ['required', 'string', Rule::in(['mtn_momo', 'airtel_money'])],
         ];
     }
 }

@@ -1,13 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Onboarding;
+namespace App\Http\Requests\Admin;
 
-use App\Models\Company;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class CreateCompanyRequest extends FormRequest
+class UpdateScoringCriterionRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -25,9 +23,12 @@ class CreateCompanyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'string', Rule::in(Company::CATEGORIES)],
-            'other_category' => ['nullable', 'string', 'max:255', 'required_if:category,autre'],
+            'weight' => ['required', 'integer', 'min:0', 'max:100'],
+            'is_active' => ['required', 'boolean'],
+            'thresholds' => ['required', 'array', 'min:1'],
+            'thresholds.*.min' => ['required', 'numeric'],
+            'thresholds.*.max' => ['nullable', 'numeric'],
+            'thresholds.*.points' => ['required', 'integer', 'min:0', 'max:100'],
         ];
     }
 }

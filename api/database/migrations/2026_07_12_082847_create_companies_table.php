@@ -15,7 +15,20 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
             $table->string('name');
-            $table->enum('category', ['commerce', 'agriculture', 'services', 'transport', 'artisanat', 'autre']);
+            $table->enum('category', [
+                'commerce',
+                'agriculture',
+                'artisanat',
+                'restauration',
+                'transport',
+                'services',
+                'beaute_bien_etre',
+                'sante',
+                'education',
+                'technologie',
+                'autre',
+            ]);
+            $table->string('other_category')->nullable();
             $table->timestamps();
         });
     }

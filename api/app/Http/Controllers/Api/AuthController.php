@@ -6,15 +6,44 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\AppleLoginRequest;
 use App\Http\Requests\Auth\FacebookLoginRequest;
 use App\Http\Requests\Auth\GoogleLoginRequest;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterRequest;
 use App\Models\User;
 use App\Services\SocialAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 
 class AuthController extends Controller
 {
     public function __construct(private readonly SocialAuthService $socialAuth) {}
+
+    public function register(RegisterRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $user = User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => $validated['password'], // 'hashed' cast on the model hashes this on write.
+        ]);
+
+        return $this->tokenResponse($user);
+    }
+
+    public function login(LoginRequest $request): JsonResponse
+    {
+        $validated = $request->validated();
+
+        $user = User::where('email', $validated['email'])->first();
+
+        if (! $user || ! $user->password || ! Hash::check($validated['password'], $user->password)) {
+            return response()->json(['message' => 'Identifiants invalides.'], 422);
+        }
+
+        return $this->tokenResponse($user);
+    }
 
     public function google(GoogleLoginRequest $request): JsonResponse
     {
@@ -62,7 +91,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user()->load('company'));
+        return response()->json($request->user()->load('company', 'role'));
     }
 
     /**

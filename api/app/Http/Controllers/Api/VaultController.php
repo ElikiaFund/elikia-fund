@@ -4,14 +4,27 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Vault\SetVaultPinRequest;
+use App\Http\Requests\Vault\VaultTransactionRequest;
 use App\Http\Requests\Vault\VerifyVaultPinRequest;
 use App\Models\Vault;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class VaultController extends Controller
 {
+    /**
+     * Mocked payment gateway — no real MTN/Airtel API integration yet, see api/README.md.
+     * Human-readable label stored on the movement note for display purposes.
+     *
+     * @var array<string, string>
+     */
+    private const PAYMENT_METHOD_LABELS = [
+        'mtn_momo' => 'MTN Mobile Money',
+        'airtel_money' => 'Airtel Money',
+    ];
+
     /**
      * POST /vault/activate — first-time vault activation: creates the vault and sets its 4-digit PIN.
      */
@@ -50,21 +63,98 @@ class VaultController extends Controller
         return response()->json(['message' => 'Code PIN vérifié.']);
     }
 
-    // TODO (Day 2): GET /vault — balance + movement history for the authenticated user.
-    public function show(Request $request)
+    /**
+     * GET /vault — lets the client know upfront whether a vault exists (and its balance),
+     * so it can route straight to activation or to PIN unlock without guessing.
+     */
+    public function show(Request $request): JsonResponse
     {
-        //
+        $vault = $request->user()->vault;
+
+        if (! $vault) {
+            return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
+        }
+
+        return response()->json($vault);
     }
 
-    // TODO (Day 2): POST /vault/deposit — mock deposit; must re-verify `pin` against vault.pin_hash before recording the movement.
-    public function deposit(Request $request)
+    /**
+     * POST /vault/deposit — mocked mobile money deposit (see api/README.md for what's real vs.
+     * staged here). Re-verifies the PIN, then credits the balance and records the movement.
+     */
+    public function deposit(VaultTransactionRequest $request): JsonResponse
     {
-        //
+        $vault = $this->vaultForVerifiedPin($request);
+
+        if ($vault instanceof JsonResponse) {
+            return $vault;
+        }
+
+        $amount = $request->validated('amount');
+        $methodLabel = self::PAYMENT_METHOD_LABELS[$request->validated('payment_method')];
+
+        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel) {
+            $vault->increment('balance', $amount);
+
+            return $vault->movements()->create([
+                'type' => 'deposit',
+                'amount' => $amount,
+                'note' => "Dépôt via {$methodLabel} (simulation).",
+            ]);
+        });
+
+        return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }
 
-    // TODO (Day 2): POST /vault/withdraw — mock withdraw; must re-verify `pin` against vault.pin_hash before recording the movement.
-    public function withdraw(Request $request)
+    /**
+     * POST /vault/withdraw — mocked mobile money withdrawal (see api/README.md). Re-verifies
+     * the PIN, checks sufficient balance, then debits and records the movement.
+     */
+    public function withdraw(VaultTransactionRequest $request): JsonResponse
     {
-        //
+        $vault = $this->vaultForVerifiedPin($request);
+
+        if ($vault instanceof JsonResponse) {
+            return $vault;
+        }
+
+        $amount = $request->validated('amount');
+
+        if ($amount > $vault->balance) {
+            return response()->json(['message' => 'Solde insuffisant.'], 422);
+        }
+
+        $methodLabel = self::PAYMENT_METHOD_LABELS[$request->validated('payment_method')];
+
+        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel) {
+            $vault->decrement('balance', $amount);
+
+            return $vault->movements()->create([
+                'type' => 'withdraw',
+                'amount' => $amount,
+                'note' => "Retrait via {$methodLabel} (simulation).",
+            ]);
+        });
+
+        return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
+    }
+
+    /**
+     * Shared PIN re-verification for deposit/withdraw. Returns the vault on success, or a
+     * ready-to-return error JsonResponse on failure.
+     */
+    private function vaultForVerifiedPin(VaultTransactionRequest $request): Vault|JsonResponse
+    {
+        $vault = $request->user()->vault;
+
+        if (! $vault || ! $vault->hasPinSet()) {
+            return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
+        }
+
+        if (! Hash::check($request->validated('pin'), $vault->pin_hash)) {
+            return response()->json(['message' => 'Code PIN incorrect.'], 422);
+        }
+
+        return $vault;
     }
 }

@@ -41,6 +41,8 @@ class SocialAuthService
      */
     public function verifyFacebookToken(string $accessToken): array
     {
+        $this->assertFacebookTokenBelongsToThisApp($accessToken);
+
         $response = Http::get('https://graph.facebook.com/me', [
             'fields' => 'id,name,email,picture',
             'access_token' => $accessToken,
@@ -58,6 +60,28 @@ class SocialAuthService
             'name' => $payload['name'] ?? null,
             'avatar_url' => $payload['picture']['data']['url'] ?? null,
         ];
+    }
+
+    /**
+     * Guard against token substitution: verify the access token was issued to THIS
+     * app (not a valid Facebook token for some other app) before trusting it, via
+     * Facebook's debug_token endpoint.
+     */
+    private function assertFacebookTokenBelongsToThisApp(string $accessToken): void
+    {
+        $appId = config('services.facebook.app_id');
+        $appSecret = config('services.facebook.app_secret');
+
+        $response = Http::get('https://graph.facebook.com/debug_token', [
+            'input_token' => $accessToken,
+            'access_token' => "{$appId}|{$appSecret}",
+        ]);
+
+        $data = $response->json('data');
+
+        if ($response->failed() || ! ($data['is_valid'] ?? false) || ($data['app_id'] ?? null) !== $appId) {
+            throw new RuntimeException('Jeton Facebook invalide.');
+        }
     }
 
     /**
