@@ -30,6 +30,14 @@ module.exports = {
           { SKAdNetworkIdentifier: 'n38lu8286q.skadnetwork' },
         ],
         ITSAppUsesNonExemptEncryption: false,
+        // EXPO_PUBLIC_API_URL points at a plain-HTTP LAN IP during local dev (see
+        // .env.example) — iOS blocks non-HTTPS requests by default (App Transport Security).
+        // NSAllowsLocalNetworking only relaxes this for local-network addresses, not the
+        // public internet, so it doesn't need justification in App Review the way
+        // NSAllowsArbitraryLoads would.
+        NSAppTransportSecurity: {
+          NSAllowsLocalNetworking: true,
+        },
       },
     },
     android: {
@@ -41,7 +49,10 @@ module.exports = {
         monochromeImage: './assets/images/android-icon-monochrome.png',
       },
       predictiveBackGestureEnabled: false,
-      permissions: ['android.permission.INTERNET'],
+      // expo-notifications' own config plugin does NOT add POST_NOTIFICATIONS itself (checked
+      // its source) — without this, Android 13+ (API 33) can never prompt for notification
+      // access at all, so push notifications silently never work on those devices.
+      permissions: ['android.permission.INTERNET', 'android.permission.POST_NOTIFICATIONS'],
     },
     web: {
       output: 'static',
@@ -57,7 +68,15 @@ module.exports = {
           imageWidth: 76,
         },
       ],
-      'expo-secure-store',
+      [
+        'expo-secure-store',
+        {
+          // Injected unconditionally regardless of whether biometric-gated storage is actually
+          // used (this app's auth token storage isn't) — without this it defaults to a generic
+          // English string, inconsistent with the rest of the app's French copy.
+          faceIDPermission: "Elikia Fund utilise Face ID pour protéger l'accès à vos identifiants enregistrés.",
+        },
+      ],
       'expo-sqlite',
       // Adds the com.apple.developer.applesignin entitlement — without this in `plugins`,
       // Sign in with Apple fails on a real device even though the JS call compiles fine.
@@ -66,12 +85,22 @@ module.exports = {
         'expo-camera',
         {
           cameraPermission: "Elikia Fund utilise l'appareil photo pour scanner les codes QR d'invitation aux tontines.",
+          // The app only ever scans QR codes (no photo/video capture) — without this, the
+          // plugin still injects a generic English NSMicrophoneUsageDescription and requests
+          // RECORD_AUDIO on Android for a capability the app never uses.
+          microphonePermission: false,
+          recordAudioAndroid: false,
         },
       ],
       [
         'expo-image-picker',
         {
           photosPermission: 'Elikia Fund accède à vos photos pour vous permettre de choisir une photo de profil.',
+          // The avatar picker only ever calls launchImageLibraryAsync, never the camera — leave
+          // cameraPermission unset (not false: this plugin runs after expo-camera above and
+          // `false` would delete the QR-scanning camera permission it just set). Microphone is
+          // genuinely unused by either plugin, so it's safe to drop entirely here.
+          microphonePermission: false,
         },
       ],
       [
@@ -113,6 +142,11 @@ module.exports = {
               { name: 'RecaptchaInterop', modular_headers: true },
               { name: 'AppCheckCore', modular_headers: true },
             ],
+          },
+          android: {
+            // Same reason as NSAllowsLocalNetworking above — Android 9+ blocks plain-HTTP
+            // traffic by default, which breaks EXPO_PUBLIC_API_URL against a LAN dev server.
+            usesCleartextTraffic: true,
           },
         },
       ],
