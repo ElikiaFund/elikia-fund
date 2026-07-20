@@ -22,7 +22,7 @@ module.exports = {
     userInterfaceStyle: 'automatic',
     owner: 'arden28',
     ios: {
-      icon: './assets/expo.icon',
+      icon: './assets/images/icon.png',
       bundleIdentifier: 'com.elikiafund.mobile',
       infoPlist: {
         SKAdNetworkItems: [

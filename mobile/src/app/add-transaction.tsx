@@ -1,3 +1,4 @@
+import NetInfo from '@react-native-community/netinfo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,16 +10,19 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useSync } from '@/context/sync-context';
-import { insertTransaction } from '@/db/database';
+import { cacheSyncedTransaction, insertTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
 import { productService, type Product } from '@/services/productService';
+import { transactionService } from '@/services/transactionService';
 
 type TransactionType = 'income' | 'expense';
 
 export default function AddTransactionScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { user } = useAuth();
   const { syncNow } = useSync();
   const params = useLocalSearchParams<{ type?: string }>();
   const [type, setType] = useState<TransactionType>(params.type === 'income' ? 'income' : 'expense');
@@ -73,27 +77,42 @@ export default function AddTransactionScreen() {
   }
 
   async function handleSubmit() {
-    if (!category) {
+    if (!category || !user) {
       return;
     }
 
     setIsSubmitting(true);
 
     const now = new Date().toISOString();
+    const base = {
+      uuid: Crypto.randomUUID(),
+      type,
+      amount: amountValue,
+      category,
+      note: note.trim() || null,
+      product_name: selectedProduct?.name ?? null,
+      quantity: selectedProduct ? quantity : null,
+      occurred_at: now,
+    };
 
     try {
-      await insertTransaction({
-        uuid: Crypto.randomUUID(),
-        type,
-        amount: amountValue,
-        category,
-        note: note.trim() || null,
-        product_name: selectedProduct?.name ?? null,
-        quantity: selectedProduct ? quantity : null,
-        occurred_at: now,
-        created_at: now,
-        synced: 0,
-      });
+      const netState = await NetInfo.fetch();
+
+      // Online: write straight to the server, then mirror into SQLite so it's still there next
+      // time the device has no connection. Falls through to the offline path below if the
+      // request itself fails despite a reachable network (e.g. the API is down).
+      if (netState.isConnected) {
+        try {
+          await transactionService.create(base);
+          await cacheSyncedTransaction({ ...base, user_id: user.id, created_at: now });
+          router.back();
+          return;
+        } catch {
+          // fall through
+        }
+      }
+
+      await insertTransaction({ ...base, user_id: user.id, created_at: now, synced: 0 });
       router.back();
       syncNow();
     } finally {

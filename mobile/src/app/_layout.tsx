@@ -65,7 +65,11 @@ function RootNavigator() {
   }
 
   return (
-    <Stack screenOptions={{ headerShadowVisible: false }}>
+    // headerBackButtonDisplayMode: 'minimal' — otherwise the back button's label defaults to
+    // the *previous* screen's title, and falls back to the literal route name ("(tabs)",
+    // "group/[id]") for any screen that doesn't set an explicit title (most of the modal/detail
+    // screens here use headerShown: false and rely on their own custom header instead).
+    <Stack screenOptions={{ headerShadowVisible: false, headerBackButtonDisplayMode: 'minimal' }}>
       <Stack.Protected guard={!isAuthenticated}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
       </Stack.Protected>
@@ -87,6 +91,7 @@ function RootNavigator() {
         <Stack.Screen name="edit-profile" options={{ title: 'Modifier le profil' }} />
         <Stack.Screen name="products" options={{ title: 'Produits & services' }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="security-pin" options={{ title: 'Sécurité et code PIN' }} />
         <Stack.Screen name="group-report" options={{ title: 'Rapport de tontine' }} />
       </Stack.Protected>
     </Stack>

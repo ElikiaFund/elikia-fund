@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 
+import { backfillLegacyUserId } from '@/db/database';
 import { registerForPushNotifications } from '@/lib/push-notifications';
 import { setApiAuthToken } from '@/services/apiService';
 import { authService, type AuthResponse, type AuthUser } from '@/services/authService';
@@ -11,8 +12,8 @@ type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  register: (name: string, email: string, password: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, phone: string, password: string) => Promise<void>;
+  login: (phone: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   loginWithApple: (identityToken: string, name?: string) => Promise<void>;
   loginWithFacebook: (accessToken: string) => Promise<void>;
@@ -37,8 +38,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setApiAuthToken(token);
 
       try {
-        setUser(await authService.me());
+        const restoredUser = await authService.me();
+        setUser(restoredUser);
         registerForPushNotifications().catch(() => {});
+        backfillLegacyUserId(restoredUser.id).catch(() => {});
       } catch {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setApiAuthToken(null);
@@ -53,14 +56,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setApiAuthToken(token);
     setUser(user);
     registerForPushNotifications().catch(() => {});
+    backfillLegacyUserId(user.id).catch(() => {});
   }
 
-  async function register(name: string, email: string, password: string) {
-    await applySession(await authService.register(name, email, password));
+  async function register(name: string, phone: string, password: string) {
+    await applySession(await authService.register(name, phone, password));
   }
 
-  async function login(email: string, password: string) {
-    await applySession(await authService.login(email, password));
+  async function login(phone: string, password: string) {
+    await applySession(await authService.login(phone, password));
   }
 
   async function loginWithGoogle(idToken: string) {

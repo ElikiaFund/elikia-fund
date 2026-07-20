@@ -16,19 +16,24 @@ type SyncContextValue = {
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: PropsWithChildren) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false);
 
   const refreshPendingCount = useCallback(() => {
-    getPendingSyncCount()
+    if (!user) {
+      setPendingCount(0);
+      return;
+    }
+
+    getPendingSyncCount(user.id)
       .then(setPendingCount)
       .catch(() => {});
-  }, []);
+  }, [user]);
 
   const syncNow = useCallback(async () => {
-    if (isSyncingRef.current || !isAuthenticated) {
+    if (isSyncingRef.current || !isAuthenticated || !user) {
       return;
     }
 
@@ -42,7 +47,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
     setIsSyncing(true);
 
     try {
-      await flushSyncQueue();
+      await flushSyncQueue(user.id);
     } catch {
       // Offline mid-flush or the API rejected the batch — the queue is untouched, next trigger retries.
     } finally {
@@ -50,7 +55,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
       setIsSyncing(false);
       refreshPendingCount();
     }
-  }, [isAuthenticated, refreshPendingCount]);
+  }, [isAuthenticated, user, refreshPendingCount]);
 
   useEffect(() => {
     refreshPendingCount();

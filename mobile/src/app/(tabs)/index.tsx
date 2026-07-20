@@ -7,9 +7,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useSync } from '@/context/sync-context';
-import { listTransactions, type LocalTransaction } from '@/db/database';
+import { type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
+import { loadTransactions } from '@/lib/transactions';
 import { creditScoreService, type CreditScore } from '@/services/creditScoreService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
@@ -24,6 +26,7 @@ const VERDICT_LABELS: Record<CreditScore['verdict'], string> = {
 export default function CashflowScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { user } = useAuth();
   const { pendingCount, isSyncing, syncNow, refreshPendingCount } = useSync();
   const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,11 +34,15 @@ export default function CashflowScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!user) {
+        return;
+      }
+
       let cancelled = false;
       setIsLoading(true);
       refreshPendingCount();
 
-      listTransactions()
+      loadTransactions(user.id)
         .then((result) => {
           if (!cancelled) {
             setTransactions(result);
@@ -50,7 +57,7 @@ export default function CashflowScreen() {
       return () => {
         cancelled = true;
       };
-    }, [refreshPendingCount]),
+    }, [user, refreshPendingCount]),
   );
 
   useEffect(() => {

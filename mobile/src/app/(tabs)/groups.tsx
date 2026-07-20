@@ -137,7 +137,7 @@ export default function GroupsScreen() {
           <View style={[styles.offlineBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <Ionicons name="cloud-offline-outline" size={16} color={theme.textSecondary} />
             <ThemedText type="small" themeColor="textSecondary" style={styles.offlineBannerText}>
-              Hors ligne — dernières tontines connues affichées.
+              Hors ligne, dernières tontines connues affichées.
             </ThemedText>
           </View>
         )}
@@ -159,49 +159,53 @@ export default function GroupsScreen() {
           </Pressable>
         </View>
 
-        {groups.map((group) => (
-          <Pressable
-            key={group.id}
-            onPress={() => router.push({ pathname: '/group/[id]', params: { id: String(group.id) } })}
-            style={({ pressed }) => [
-              styles.card,
-              { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-              pressed && { backgroundColor: theme.backgroundSelected },
-            ]}
-          >
-            <View style={styles.cardTop}>
-              <View style={styles.cardHeading}>
-                <ThemedText type="smallBold" numberOfLines={1}>
-                  {group.name}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {FREQUENCY_LABELS[group.frequency]} · {currency.format(Number(group.contribution_amount))}
-                </ThemedText>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: group.has_paid_current_cycle ? theme.income : theme.backgroundSelected },
-                ]}
-              >
-                <ThemedText
-                  type="small"
-                  style={{ color: group.has_paid_current_cycle ? theme.tintForeground : theme.textSecondary }}
-                >
-                  {group.has_paid_current_cycle ? 'À jour' : 'En attente'}
-                </ThemedText>
-              </View>
-            </View>
+        {groups.map((group) => {
+          const isPending = group.pivot?.status === 'pending';
 
-            <View style={styles.cardBottom}>
-              <AvatarStack members={group.members ?? []} theme={theme} />
-              <ThemedText type="small" themeColor="textSecondary">
-                {group.members_count} membre{(group.members_count ?? 0) > 1 ? 's' : ''}
-              </ThemedText>
-              <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} style={styles.chevron} />
-            </View>
-          </Pressable>
-        ))}
+          return (
+            <Pressable
+              key={group.id}
+              onPress={() => router.push({ pathname: '/group/[id]', params: { id: String(group.id) } })}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                pressed && { backgroundColor: theme.backgroundSelected },
+              ]}
+            >
+              <View style={styles.cardTop}>
+                <View style={styles.cardHeading}>
+                  <ThemedText type="smallBold" numberOfLines={1}>
+                    {group.name}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {FREQUENCY_LABELS[group.frequency]} · {currency.format(Number(group.contribution_amount))}
+                  </ThemedText>
+                </View>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    { backgroundColor: isPending ? theme.backgroundSelected : group.has_paid_current_cycle ? theme.income : theme.backgroundSelected },
+                  ]}
+                >
+                  <ThemedText
+                    type="small"
+                    style={{ color: isPending ? theme.tint : group.has_paid_current_cycle ? theme.tintForeground : theme.textSecondary }}
+                  >
+                    {isPending ? 'Demande en attente' : group.has_paid_current_cycle ? 'À jour' : 'En attente'}
+                  </ThemedText>
+                </View>
+              </View>
+
+              <View style={styles.cardBottom}>
+                <AvatarStack members={group.members ?? []} theme={theme} />
+                <ThemedText type="small" themeColor="textSecondary">
+                  {group.members_count} membre{(group.members_count ?? 0) > 1 ? 's' : ''}
+                </ThemedText>
+                <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} style={styles.chevron} />
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </ThemedView>
   );

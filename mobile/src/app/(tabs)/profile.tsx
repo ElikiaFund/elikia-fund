@@ -104,7 +104,7 @@ export default function ProfileScreen() {
           <ProfileRow
             icon="shield-checkmark-outline"
             label="Sécurité et code PIN"
-            onPress={comingSoon}
+            onPress={() => router.push('/security-pin')}
             last={!hasCatalog}
           />
           {hasCatalog && (

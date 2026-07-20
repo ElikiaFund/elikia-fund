@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { formatCycleLabel } from '@/lib/cycle-format';
 import { buildTontineReportHtml, printAndShareHtml } from '@/lib/pdf';
 import { groupService, type GroupReport } from '@/services/groupService';
 
@@ -95,7 +96,7 @@ export default function GroupReportScreen() {
             {report.group_name}
           </ThemedText>
           <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-            Cycle {report.cycle_period}
+            {formatCycleLabel(report, report.frequency)}
           </ThemedText>
 
           <View style={styles.statsRow}>

@@ -16,6 +16,12 @@ const TYPE_ICONS: Record<AppNotification['type'], keyof typeof Ionicons.glyphMap
   late_payment: 'alert-circle-outline',
   late_payment_summary: 'alert-circle-outline',
   cycle_report: 'document-text-outline',
+  vault_deposit_succeeded: 'arrow-up-circle-outline',
+  vault_deposit_failed: 'close-circle-outline',
+  vault_withdraw_succeeded: 'arrow-down-circle-outline',
+  vault_withdraw_failed: 'close-circle-outline',
+  contribution_succeeded: 'checkmark-circle-outline',
+  contribution_failed: 'close-circle-outline',
 };
 
 export default function NotificationsScreen() {

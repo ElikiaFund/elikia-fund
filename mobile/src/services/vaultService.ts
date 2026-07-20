@@ -32,6 +32,12 @@ export const vaultService = {
     return apiService.post('/vault/pin/verify', { pin }).then((r) => r.data);
   },
 
+  updatePin(currentPin: string, newPin: string) {
+    return apiService
+      .put('/vault/pin', { current_pin: currentPin, pin: newPin, pin_confirmation: newPin })
+      .then((r) => r.data);
+  },
+
   /** Returns the vault, or null if the user hasn't activated one yet. */
   async getVault(): Promise<Vault | null> {
     try {

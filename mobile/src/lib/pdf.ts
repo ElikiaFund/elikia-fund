@@ -96,7 +96,7 @@ function documentHeader(title: string, subtitle: string): string {
 function documentFooter(): string {
   return `
     <div class="footer">
-      <span>Elikia Fund — document généré automatiquement, à titre informatif.</span>
+      <span>Elikia Fund, document généré automatiquement, à titre informatif.</span>
       <span>elikia-fund.test</span>
     </div>
   `;

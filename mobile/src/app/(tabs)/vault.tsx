@@ -167,7 +167,7 @@ export default function VaultScreen() {
           <View style={[styles.offlineBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <Ionicons name="cloud-offline-outline" size={16} color={theme.textSecondary} />
             <ThemedText type="small" themeColor="textSecondary" style={styles.offlineBannerText}>
-              Hors ligne — dernières données connues affichées. Les dépôts et retraits nécessitent une connexion.
+              Hors ligne, dernières données connues affichées. Les dépôts et retraits nécessitent une connexion.
             </ThemedText>
           </View>
         )}
@@ -192,7 +192,7 @@ export default function VaultScreen() {
             icon="arrow-down-circle-outline"
             label="Retirer"
             disabled={isOffline}
-            onPress={() => router.push('/vault-transaction?type=withdraw')}
+            onPress={() => router.push({ pathname: '/vault-transaction', params: { type: 'withdraw', balance: vault.balance } })}
           />
         </View>
 

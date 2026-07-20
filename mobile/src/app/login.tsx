@@ -1,7 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { AccessToken, LoginManager } from 'react-native-fbsdk-next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,9 +10,11 @@ import { AppleLogo } from '@/components/brand/apple-logo';
 import { FacebookLogo } from '@/components/brand/facebook-logo';
 import { GoogleLogo } from '@/components/brand/google-logo';
 import { FormField } from '@/components/form-field';
+import { SelectSheet } from '@/components/select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Wordmark } from '@/components/wordmark';
+import { COUNTRIES, DEFAULT_COUNTRY, formatLocalNumber, sanitizeLocalNumber, toE164, type Country } from '@/constants/countries';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
@@ -22,20 +25,25 @@ GoogleSignin.configure({
 });
 
 type Mode = 'login' | 'signup';
-type LoadingAction = 'email' | 'google' | 'apple' | 'facebook';
+type LoadingAction = 'phone' | 'google' | 'apple' | 'facebook';
 
 export default function LoginScreen() {
   const theme = useTheme();
   const { register, login, loginWithGoogle, loginWithApple, loginWithFacebook } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [isCountrySheetOpen, setIsCountrySheetOpen] = useState(false);
+  const [localNumber, setLocalNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loadingAction, setLoadingAction] = useState<LoadingAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isSubmitting = loadingAction !== null;
-  const canSubmitEmail = email.trim().length > 0 && password.length > 0 && (mode === 'login' || name.trim().length > 0);
+  const canSubmitPhone =
+    sanitizeLocalNumber(localNumber, country).length === country.localLength &&
+    password.length > 0 &&
+    (mode === 'login' || name.trim().length > 0);
 
   async function handle(action: LoadingAction, run: () => Promise<void>) {
     setError(null);
@@ -55,12 +63,14 @@ export default function LoginScreen() {
     setError(null);
   }
 
-  async function handleEmailAuth() {
-    await handle('email', async () => {
+  async function handlePhoneAuth() {
+    await handle('phone', async () => {
+      const phone = toE164(localNumber, country);
+
       if (mode === 'signup') {
-        await register(name.trim(), email.trim(), password);
+        await register(name.trim(), phone, password);
       } else {
-        await login(email.trim(), password);
+        await login(phone, password);
       }
     });
   }
@@ -148,15 +158,28 @@ export default function LoginScreen() {
                 {mode === 'signup' && (
                   <FormField label="Nom complet" placeholder="Votre nom" autoCapitalize="words" value={name} onChangeText={setName} />
                 )}
-                <FormField
-                  label="Adresse e-mail"
-                  placeholder="vous@exemple.com"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  value={email}
-                  onChangeText={setEmail}
-                />
+                <View style={styles.field}>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
+                    Numéro de téléphone
+                  </ThemedText>
+                  <View
+                    style={[styles.phoneRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+                  >
+                    <Pressable onPress={() => setIsCountrySheetOpen(true)} style={styles.countryButton} hitSlop={8}>
+                      <ThemedText type="smallBold">{country.dialCode}</ThemedText>
+                      <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
+                    </Pressable>
+                    <View style={[styles.phoneDivider, { backgroundColor: theme.border }]} />
+                    <TextInput
+                      value={formatLocalNumber(localNumber, country)}
+                      onChangeText={(text) => setLocalNumber(sanitizeLocalNumber(text, country))}
+                      placeholder={country.placeholder}
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="phone-pad"
+                      style={[styles.phoneInput, { color: theme.text }]}
+                    />
+                  </View>
+                </View>
                 <FormField
                   label="Mot de passe"
                   placeholder="••••••••"
@@ -167,16 +190,16 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
-                onPress={handleEmailAuth}
-                disabled={!canSubmitEmail || isSubmitting}
+                onPress={handlePhoneAuth}
+                disabled={!canSubmitPhone || isSubmitting}
                 style={({ pressed }) => [
                   styles.primaryButton,
                   { backgroundColor: theme.tint },
                   pressed && styles.primaryButtonPressed,
-                  (!canSubmitEmail || isSubmitting) && styles.buttonDisabled,
+                  (!canSubmitPhone || isSubmitting) && styles.buttonDisabled,
                 ]}
               >
-                {loadingAction === 'email' ? (
+                {loadingAction === 'phone' ? (
                   <ActivityIndicator color={theme.tintForeground} />
                 ) : (
                   <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
@@ -184,6 +207,21 @@ export default function LoginScreen() {
                   </ThemedText>
                 )}
               </Pressable>
+
+              <SelectSheet
+                visible={isCountrySheetOpen}
+                title="Choisissez votre pays"
+                options={COUNTRIES.map((c) => ({ label: `${c.name} (${c.dialCode})`, value: c.iso2 }))}
+                selectedValue={country.iso2}
+                onSelect={(iso2) => {
+                  const next = COUNTRIES.find((c) => c.iso2 === iso2);
+                  if (next) {
+                    setCountry(next);
+                    setLocalNumber('');
+                  }
+                }}
+                onClose={() => setIsCountrySheetOpen(false)}
+              />
 
               <View style={styles.divider}>
                 <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
@@ -332,6 +370,36 @@ const styles = StyleSheet.create({
   form: {
     gap: Spacing.three,
     marginBottom: Spacing.three,
+  },
+  field: {
+    gap: Spacing.one,
+  },
+  fieldLabel: {
+    marginLeft: Spacing.one,
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+  },
+  countryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+  },
+  phoneDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginVertical: Spacing.two,
+  },
+  phoneInput: {
+    flex: 1,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    fontSize: 16,
   },
   primaryButton: {
     borderRadius: 14,

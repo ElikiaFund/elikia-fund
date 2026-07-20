@@ -10,7 +10,8 @@ export type Company = {
 export type AuthUser = {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   avatar_url: string | null;
   is_admin: boolean;
   onboarding_completed_at: string | null;
@@ -23,12 +24,12 @@ export type AuthResponse = {
 };
 
 export const authService = {
-  register(name: string, email: string, password: string) {
-    return apiService.post<AuthResponse>('/auth/register', { name, email, password }).then((r) => r.data);
+  register(name: string, phone: string, password: string) {
+    return apiService.post<AuthResponse>('/auth/register', { name, phone, password }).then((r) => r.data);
   },
 
-  login(email: string, password: string) {
-    return apiService.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data);
+  login(phone: string, password: string) {
+    return apiService.post<AuthResponse>('/auth/login', { phone, password }).then((r) => r.data);
   },
 
   loginWithGoogle(idToken: string) {

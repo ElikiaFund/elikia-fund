@@ -20,13 +20,14 @@ const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: '
 export default function VaultTransactionScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; balance?: string }>();
   const kind: TransactionKind = params.type === 'withdraw' ? 'withdraw' : 'deposit';
+  const availableBalance = params.balance ? Number(params.balance) : null;
 
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod | null>(null);
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState('+242 ');
   const [pin, setPin] = useState('');
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,12 @@ export default function VaultTransactionScreen() {
   const amountValue = Number(amount.replace(',', '.'));
   const title = kind === 'deposit' ? 'Déposer' : 'Retirer';
   const isPending = resultStatus === 'processing';
+  const exceedsBalance = kind === 'withdraw' && availableBalance !== null && amountValue > availableBalance;
+
+  function handlePhoneChange(text: string) {
+    // Keep the +242 country prefix locked in place — only track the local digits.
+    setPhone(text.startsWith('+242 ') ? text : `+242 ${text.replace(/^\+?242\s?/, '')}`);
+  }
 
   async function handlePinChange(text: string) {
     setPin(text);
@@ -102,10 +109,26 @@ export default function VaultTransactionScreen() {
                 />
               </View>
 
+              {kind === 'withdraw' && availableBalance !== null && (
+                <ThemedText
+                  type="small"
+                  themeColor={exceedsBalance ? undefined : 'textSecondary'}
+                  style={[styles.balanceHint, exceedsBalance && { color: theme.danger }]}
+                >
+                  {exceedsBalance
+                    ? `Solde insuffisant · disponible ${currency.format(availableBalance)}`
+                    : `Solde disponible : ${currency.format(availableBalance)}`}
+                </ThemedText>
+              )}
+
               <Pressable
                 onPress={() => setStep('method')}
-                disabled={!(amountValue > 0)}
-                style={[styles.primaryButton, { backgroundColor: theme.tint }, !(amountValue > 0) && styles.buttonDisabled]}
+                disabled={!(amountValue > 0) || exceedsBalance}
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: theme.tint },
+                  (!(amountValue > 0) || exceedsBalance) && styles.buttonDisabled,
+                ]}
               >
                 <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
                   Continuer
@@ -162,7 +185,7 @@ export default function VaultTransactionScreen() {
               <View style={[styles.phoneRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
                 <TextInput
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={handlePhoneChange}
                   placeholder="+242 06 000 00 00"
                   placeholderTextColor={theme.textSecondary}
                   keyboardType="phone-pad"
@@ -173,8 +196,12 @@ export default function VaultTransactionScreen() {
 
               <Pressable
                 onPress={() => setStep('pin')}
-                disabled={phone.trim().length < 8}
-                style={[styles.primaryButton, { backgroundColor: theme.tint }, phone.trim().length < 8 && styles.buttonDisabled]}
+                disabled={phone.replace('+242 ', '').trim().length < 6}
+                style={[
+                  styles.primaryButton,
+                  { backgroundColor: theme.tint },
+                  phone.replace('+242 ', '').trim().length < 6 && styles.buttonDisabled,
+                ]}
               >
                 <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
                   Continuer
@@ -309,6 +336,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     marginBottom: Spacing.six,
     maxWidth: 300,
+  },
+  balanceHint: {
+    marginTop: -Spacing.four,
+    marginBottom: Spacing.four,
   },
   amountRow: {
     flexDirection: 'row',

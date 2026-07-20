@@ -11,9 +11,10 @@ import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel, EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { listTransactions, type LocalTransaction } from '@/db/database';
+import { type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
 import { buildTransactionsStatementHtml, printAndShareHtml } from '@/lib/pdf';
+import { loadTransactions } from '@/lib/transactions';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -62,10 +63,14 @@ export default function TransactionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!user) {
+        return;
+      }
+
       let cancelled = false;
       setIsLoading(true);
 
-      listTransactions()
+      loadTransactions(user.id)
         .then((result) => {
           if (!cancelled) {
             setTransactions(result);
@@ -80,7 +85,7 @@ export default function TransactionsScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [user]),
   );
 
   const availableCategories = useMemo(() => {
