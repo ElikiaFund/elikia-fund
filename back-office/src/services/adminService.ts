@@ -289,6 +289,8 @@ export const adminService = {
     secret_key?: string
     webhook_secret?: string
     is_enabled?: boolean
+    /** Required (and re-verified server-side) when switching mode from 'sandbox' to 'live'. */
+    password?: string
   }) {
     return apiService.put<YabetoSettings>('/admin/settings/yabeto', data).then((r) => r.data)
   },

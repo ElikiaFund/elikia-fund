@@ -2,6 +2,7 @@ import { CheckIcon, CopyIcon, PlugZapIcon } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 
+import { ConfirmLiveModeDialog } from '@/components/settings/confirm-live-mode-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +25,7 @@ export function PaymentsTab() {
   const [isTesting, setIsTesting] = useState(false)
   const [isRegisteringWebhook, setIsRegisteringWebhook] = useState(false)
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null)
+  const [isConfirmLiveOpen, setIsConfirmLiveOpen] = useState(false)
 
   useEffect(() => {
     fetchSettings()
@@ -42,8 +44,23 @@ export function PaymentsTab() {
       .finally(() => setIsLoading(false))
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     event.preventDefault()
+
+    // Switching sandbox -> live is a sensitive action (real money moves from then on) — gate it
+    // behind a password re-check dialog instead of saving straight away.
+    if (mode === 'live' && settings?.mode !== 'live') {
+      setIsConfirmLiveOpen(true)
+      return
+    }
+
+    saveSettings().catch(() => {
+      // Already surfaced via toast inside saveSettings — the rethrow there exists only so the
+      // ConfirmLiveModeDialog path (below) can decide whether to close itself.
+    })
+  }
+
+  async function saveSettings(password?: string) {
     setIsSaving(true)
 
     try {
@@ -53,6 +70,7 @@ export function PaymentsTab() {
         ...(secretKey ? { secret_key: secretKey } : {}),
         ...(webhookSecret ? { webhook_secret: webhookSecret } : {}),
         is_enabled: isEnabled,
+        ...(password ? { password } : {}),
       })
       setSettings(updated)
       setSecretKey('')
@@ -60,6 +78,7 @@ export function PaymentsTab() {
       toast.success('Configuration Yabeto Pay enregistrée.')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Une erreur est survenue.')
+      throw e
     } finally {
       setIsSaving(false)
     }
@@ -233,6 +252,12 @@ export function PaymentsTab() {
           </Button>
         </CardFooter>
       </Card>
+
+      <ConfirmLiveModeDialog
+        open={isConfirmLiveOpen}
+        onOpenChange={setIsConfirmLiveOpen}
+        onConfirm={(password) => saveSettings(password)}
+      />
     </div>
   )
 }
