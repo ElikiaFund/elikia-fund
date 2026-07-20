@@ -1,11 +1,24 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { SyncProvider } from '@/context/sync-context';
 import { VaultProvider } from '@/context/vault-context';
 import { initDatabase } from '@/db/database';
+
+// Must run once at module scope, before any component mounts, so a notification that arrives
+// while the app is foregrounded still shows a banner instead of being silently swallowed.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -18,9 +31,11 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <AuthProvider>
-        <VaultProvider>
-          <RootNavigator />
-        </VaultProvider>
+        <SyncProvider>
+          <VaultProvider>
+            <RootNavigator />
+          </VaultProvider>
+        </SyncProvider>
       </AuthProvider>
     </ThemeProvider>
   );
@@ -28,7 +43,22 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const router = useRouter();
   const needsOnboarding = isAuthenticated && !user?.onboarding_completed_at;
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as { group_id?: number } | undefined;
+
+      if (data?.group_id) {
+        router.push({ pathname: '/group/[id]', params: { id: String(data.group_id) } });
+      } else {
+        router.push('/notifications');
+      }
+    });
+
+    return () => subscription.remove();
+  }, [router]);
 
   if (isLoading) {
     return null;
@@ -55,6 +85,9 @@ function RootNavigator() {
         <Stack.Screen name="join-group" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="group/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="edit-profile" options={{ title: 'Modifier le profil' }} />
+        <Stack.Screen name="products" options={{ title: 'Produits & services' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+        <Stack.Screen name="group-report" options={{ title: 'Rapport de tontine' }} />
       </Stack.Protected>
     </Stack>
   );

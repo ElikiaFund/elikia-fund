@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
+import { useSync } from '@/context/sync-context';
 import { listTransactions, type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
 import { creditScoreService, type CreditScore } from '@/services/creditScoreService';
@@ -23,6 +24,7 @@ const VERDICT_LABELS: Record<CreditScore['verdict'], string> = {
 export default function CashflowScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { pendingCount, isSyncing, syncNow, refreshPendingCount } = useSync();
   const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [creditScore, setCreditScore] = useState<CreditScore | null>(null);
@@ -31,6 +33,7 @@ export default function CashflowScreen() {
     useCallback(() => {
       let cancelled = false;
       setIsLoading(true);
+      refreshPendingCount();
 
       listTransactions()
         .then((result) => {
@@ -47,7 +50,7 @@ export default function CashflowScreen() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [refreshPendingCount]),
   );
 
   useEffect(() => {
@@ -85,6 +88,30 @@ export default function CashflowScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {pendingCount > 0 && (
+          <Pressable
+            onPress={syncNow}
+            disabled={isSyncing}
+            style={[styles.syncBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color={theme.textSecondary} />
+            ) : (
+              <Ionicons name="cloud-upload-outline" size={16} color={theme.textSecondary} />
+            )}
+            <ThemedText type="small" themeColor="textSecondary" style={styles.syncBannerText}>
+              {isSyncing
+                ? 'Synchronisation en cours…'
+                : `${pendingCount} transaction${pendingCount > 1 ? 's' : ''} en attente de synchronisation`}
+            </ThemedText>
+            {!isSyncing && (
+              <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                Réessayer
+              </ThemedText>
+            )}
+          </Pressable>
+        )}
+
         <View style={styles.balanceCard}>
           <ThemedText type="small" themeColor="textSecondary">
             Solde net
@@ -222,6 +249,19 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: Spacing.four,
+  },
+  syncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.four,
+  },
+  syncBannerText: {
+    flex: 1,
   },
   balanceCard: {
     marginBottom: Spacing.four,

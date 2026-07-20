@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/form-field';
@@ -9,28 +9,67 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
+import { useSync } from '@/context/sync-context';
 import { insertTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
+import { productService, type Product } from '@/services/productService';
 
 type TransactionType = 'income' | 'expense';
 
 export default function AddTransactionScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { syncNow } = useSync();
   const params = useLocalSearchParams<{ type?: string }>();
   const [type, setType] = useState<TransactionType>(params.type === 'income' ? 'income' : 'expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const amountValue = Number(amount.replace(',', '.'));
   const canSubmit = amountValue > 0 && category !== null;
 
+  useEffect(() => {
+    productService
+      .list()
+      .then(setProducts)
+      .catch(() => {
+        // The catalog is optional — a fetch failure just hides the picker.
+      });
+  }, []);
+
   function switchType(next: TransactionType) {
     setType(next);
     setCategory(null);
+  }
+
+  function handleSelectProduct(product: Product) {
+    const isSame = selectedProduct?.id === product.id;
+    const nextProduct = isSame ? null : product;
+
+    setSelectedProduct(nextProduct);
+    setQuantity(1);
+
+    if (nextProduct?.unit_price) {
+      setAmount(String(Number(nextProduct.unit_price)));
+    }
+  }
+
+  function handleChangeQuantity(delta: number) {
+    setQuantity((current) => {
+      const next = Math.max(1, current + delta);
+
+      if (selectedProduct?.unit_price) {
+        setAmount(String(Number(selectedProduct.unit_price) * next));
+      }
+
+      return next;
+    });
   }
 
   async function handleSubmit() {
@@ -49,11 +88,14 @@ export default function AddTransactionScreen() {
         amount: amountValue,
         category,
         note: note.trim() || null,
+        product_name: selectedProduct?.name ?? null,
+        quantity: selectedProduct ? quantity : null,
         occurred_at: now,
         created_at: now,
         synced: 0,
       });
       router.back();
+      syncNow();
     } finally {
       setIsSubmitting(false);
     }
@@ -122,6 +164,54 @@ export default function AddTransactionScreen() {
               );
             })}
           </View>
+
+          {products.length > 0 && (
+            <View style={styles.productSection}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+                Produit ou service (facultatif)
+              </ThemedText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productChips}>
+                {products.map((product) => {
+                  const selected = selectedProduct?.id === product.id;
+
+                  return (
+                    <Pressable
+                      key={product.id}
+                      onPress={() => handleSelectProduct(product)}
+                      style={[
+                        styles.productChip,
+                        { backgroundColor: theme.backgroundElement, borderColor: selected ? theme.tint : theme.border },
+                        selected && { backgroundColor: theme.backgroundSelected },
+                      ]}
+                    >
+                      <ThemedText type="small" themeColor={selected ? 'text' : 'textSecondary'}>
+                        {product.name}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              {selectedProduct && (
+                <View style={[styles.quantityRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Quantité
+                  </ThemedText>
+                  <View style={styles.quantityControls}>
+                    <Pressable onPress={() => handleChangeQuantity(-1)} hitSlop={8} style={styles.quantityButton}>
+                      <Ionicons name="remove-circle-outline" size={24} color={theme.tint} />
+                    </Pressable>
+                    <ThemedText type="smallBold" style={styles.quantityValue}>
+                      {quantity}
+                    </ThemedText>
+                    <Pressable onPress={() => handleChangeQuantity(1)} hitSlop={8} style={styles.quantityButton}>
+                      <Ionicons name="add-circle-outline" size={24} color={theme.tint} />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
 
           <View style={styles.noteField}>
             <FormField label="Note (facultatif)" value={note} onChangeText={setNote} placeholder="Ex. Marché du lundi" />
@@ -214,6 +304,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     alignItems: 'center',
     gap: Spacing.one,
+  },
+  productSection: {
+    marginTop: Spacing.five,
+  },
+  productChips: {
+    gap: Spacing.two,
+    paddingRight: Spacing.four,
+  },
+  productChip: {
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+  },
+  quantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginTop: Spacing.three,
+  },
+  quantityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  quantityButton: {
+    padding: Spacing.half,
+  },
+  quantityValue: {
+    minWidth: 24,
+    textAlign: 'center',
   },
   noteField: {
     marginTop: Spacing.four,

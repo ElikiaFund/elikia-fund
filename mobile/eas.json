@@ -13,24 +13,25 @@
       "env": {
         "RCT_USE_PREBUILT_RNCORE": "0",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "558501910148-j6auglt4p630ks07d82roobc8u5k1k0d.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "558501910148-o9mdcsrb31cs1rrircmj81flo8gti6ot.apps.googleusercontent.com",
         "FACEBOOK_APP_ID": "1553741169527311"
       }
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
       "env": {
         "RCT_USE_PREBUILT_RNCORE": "0",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "558501910148-j6auglt4p630ks07d82roobc8u5k1k0d.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "558501910148-o9mdcsrb31cs1rrircmj81flo8gti6ot.apps.googleusercontent.com",
         "FACEBOOK_APP_ID": "1553741169527311"
       }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production",
       "env": {
         "RCT_USE_PREBUILT_RNCORE": "0",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "558501910148-j6auglt4p630ks07d82roobc8u5k1k0d.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "558501910148-o9mdcsrb31cs1rrircmj81flo8gti6ot.apps.googleusercontent.com",
         "FACEBOOK_APP_ID": "1553741169527311"
       }
     }

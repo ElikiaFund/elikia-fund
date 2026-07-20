@@ -4,7 +4,11 @@
 // every command (expo start, prebuild, eas build), including vars without the
 // EXPO_PUBLIC_ prefix — that prefix only controls what also gets inlined into the
 // client JS bundle.
-const facebookAppId = process.env.FACEBOOK_APP_ID;
+// Not secret (already plaintext in eas.json/.env) — hardcoded as a fallback because some EAS
+// CLI subcommands (e.g. the `eas update:configure` step triggered by installing expo-updates)
+// evaluate this config without the build profile's env vars injected, leaving this undefined
+// and making react-native-fbsdk-next's plugin reject the build for a "missing appID".
+const facebookAppId = process.env.FACEBOOK_APP_ID || '1553741169527311';
 const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 
 module.exports = {
@@ -75,9 +79,13 @@ module.exports = {
         {
           // This plugin hard-requires a value even when only building for Android — an
           // undefined iosUrlScheme crashes config resolution for every platform, not just iOS.
+          // The fallback must be a syntactically valid URL scheme (RFC1738: alphanumeric, '.',
+          // '-', '+' only) — Apple's App Store binary validation rejects underscores, so an
+          // obviously-fake-but-valid placeholder fails safely (Google Sign-In just won't work
+          // on iOS) instead of getting the whole submission rejected.
           iosUrlScheme: googleIosClientId
             ? `com.googleusercontent.apps.${googleIosClientId.replace('.apps.googleusercontent.com', '')}`
-            : 'com.googleusercontent.apps.REPLACE_WITH_YOUR_IOS_CLIENT_ID',
+            : 'com.googleusercontent.apps.replace-with-your-ios-client-id',
         },
       ],
       [
@@ -88,6 +96,12 @@ module.exports = {
           displayName: 'Elikia Fund',
           scheme: facebookAppId ? `fb${facebookAppId}` : undefined,
           isAutoInitEnabled: true,
+        },
+      ],
+      [
+        'expo-notifications',
+        {
+          color: '#1B6F52',
         },
       ],
       [

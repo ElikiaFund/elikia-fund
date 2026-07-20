@@ -7,7 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { groupService, type GroupFrequency } from '@/services/groupService';
+import { groupService, TONTINE_MANAGEMENT_FEE_RATE, type GroupFrequency } from '@/services/groupService';
 
 export default function CreateGroupScreen() {
   const theme = useTheme();
@@ -15,18 +15,21 @@ export default function CreateGroupScreen() {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<GroupFrequency>('monthly');
+  const [maxMembers, setMaxMembers] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const amountValue = Number(amount.replace(',', '.'));
-  const canSubmit = name.trim().length > 0 && amountValue > 0;
+  const maxMembersValue = maxMembers.trim().length > 0 ? Number(maxMembers) : undefined;
+  const canSubmit =
+    name.trim().length > 0 && amountValue > 0 && (maxMembersValue === undefined || maxMembersValue >= 2);
 
   async function handleSubmit() {
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const group = await groupService.create(name.trim(), amountValue, frequency);
+      const group = await groupService.create(name.trim(), amountValue, frequency, maxMembersValue);
       router.replace({ pathname: '/group/[id]', params: { id: String(group.id) } });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
@@ -89,6 +92,30 @@ export default function CreateGroupScreen() {
                 </Pressable>
               </View>
             </View>
+
+            <View>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
+                Nombre de participants (optionnel)
+              </ThemedText>
+              <View style={[styles.amountRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+                <TextInput
+                  value={maxMembers}
+                  onChangeText={(text) => setMaxMembers(text.replace(/[^0-9]/g, ''))}
+                  placeholder="Illimité"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="number-pad"
+                  style={[styles.amountInput, { color: theme.text }]}
+                />
+                <ThemedText themeColor="textSecondary">participants</ThemedText>
+              </View>
+            </View>
+          </View>
+
+          <View style={[styles.feeNotice, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <ThemedText type="small" themeColor="textSecondary">
+              Des frais de gestion de {TONTINE_MANAGEMENT_FEE_RATE * 100}% seront automatiquement retirés de chaque
+              cotisation versée dans cette tontine.
+            </ThemedText>
           </View>
 
           {error && (
@@ -169,6 +196,13 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingVertical: Spacing.two,
     alignItems: 'center',
+  },
+  feeNotice: {
+    marginTop: Spacing.four,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
   },
   errorBox: {
     marginTop: Spacing.four,

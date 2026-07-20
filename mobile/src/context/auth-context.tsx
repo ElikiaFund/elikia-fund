@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 
+import { registerForPushNotifications } from '@/lib/push-notifications';
 import { setApiAuthToken } from '@/services/apiService';
 import { authService, type AuthResponse, type AuthUser } from '@/services/authService';
 
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       try {
         setUser(await authService.me());
+        registerForPushNotifications().catch(() => {});
       } catch {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setApiAuthToken(null);
@@ -50,6 +52,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await SecureStore.setItemAsync(TOKEN_KEY, token);
     setApiAuthToken(token);
     setUser(user);
+    registerForPushNotifications().catch(() => {});
   }
 
   async function register(name: string, email: string, password: string) {

@@ -11,6 +11,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { profileService } from '@/services/profileService';
+import { CATALOG_ENABLED_CATEGORIES } from '@/services/productService';
 
 function initials(name: string) {
   return name
@@ -30,6 +31,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const hasCatalog = user?.company ? (CATALOG_ENABLED_CATEGORIES as readonly string[]).includes(user.company.category) : false;
 
   function handleLogout() {
     Alert.alert('Se déconnecter', 'Voulez-vous vraiment vous déconnecter ?', [
@@ -99,11 +101,19 @@ export default function ProfileScreen() {
 
         <ProfileSection title="Compte">
           <ProfileRow icon="person-outline" label="Informations personnelles" onPress={() => router.push('/edit-profile')} />
-          <ProfileRow icon="shield-checkmark-outline" label="Sécurité et code PIN" onPress={comingSoon} last />
+          <ProfileRow
+            icon="shield-checkmark-outline"
+            label="Sécurité et code PIN"
+            onPress={comingSoon}
+            last={!hasCatalog}
+          />
+          {hasCatalog && (
+            <ProfileRow icon="pricetags-outline" label="Produits & services" onPress={() => router.push('/products')} last />
+          )}
         </ProfileSection>
 
         <ProfileSection title="Préférences">
-          <ProfileRow icon="notifications-outline" label="Notifications" onPress={comingSoon} last />
+          <ProfileRow icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} last />
         </ProfileSection>
 
         <ProfileSection title="Assistance">

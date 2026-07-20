@@ -13,7 +13,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { vaultService, type PaymentMethod } from '@/services/vaultService';
 
 type TransactionKind = 'deposit' | 'withdraw';
-type Step = 'amount' | 'method' | 'pin' | 'success';
+type Step = 'amount' | 'method' | 'phone' | 'pin' | 'success';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 
@@ -26,13 +26,16 @@ export default function VaultTransactionScreen() {
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod | null>(null);
+  const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resultStatus, setResultStatus] = useState<string>('completed');
 
   const amountValue = Number(amount.replace(',', '.'));
   const title = kind === 'deposit' ? 'Déposer' : 'Retirer';
+  const isPending = resultStatus === 'processing';
 
   async function handlePinChange(text: string) {
     setPin(text);
@@ -43,11 +46,11 @@ export default function VaultTransactionScreen() {
       setIsSubmitting(true);
 
       try {
-        if (kind === 'deposit') {
-          await vaultService.deposit(amountValue, text, method);
-        } else {
-          await vaultService.withdraw(amountValue, text, method);
-        }
+        const result =
+          kind === 'deposit'
+            ? await vaultService.deposit(amountValue, text, method, phone)
+            : await vaultService.withdraw(amountValue, text, method, phone);
+        setResultStatus(result.movement.status);
         setStep('success');
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
@@ -66,7 +69,7 @@ export default function VaultTransactionScreen() {
           <View style={styles.headerRow}>
             {step !== 'amount' && step !== 'success' && (
               <Pressable
-                onPress={() => setStep(step === 'pin' ? 'method' : 'amount')}
+                onPress={() => setStep(step === 'pin' ? 'phone' : step === 'phone' ? 'method' : 'amount')}
                 style={styles.backButton}
                 hitSlop={8}
               >
@@ -136,9 +139,42 @@ export default function VaultTransactionScreen() {
               </View>
 
               <Pressable
-                onPress={() => setStep('pin')}
+                onPress={() => setStep('phone')}
                 disabled={!method}
                 style={[styles.primaryButton, { backgroundColor: theme.tint }, !method && styles.buttonDisabled]}
+              >
+                <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+                  Continuer
+                </ThemedText>
+              </Pressable>
+            </View>
+          )}
+
+          {step === 'phone' && (
+            <View style={styles.content}>
+              <ThemedText type="title" style={styles.title}>
+                Numéro Mobile Money
+              </ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+                Le numéro qui recevra la demande de confirmation.
+              </ThemedText>
+
+              <View style={[styles.phoneRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="+242 06 000 00 00"
+                  placeholderTextColor={theme.textSecondary}
+                  keyboardType="phone-pad"
+                  autoFocus
+                  style={[styles.phoneInput, { color: theme.text }]}
+                />
+              </View>
+
+              <Pressable
+                onPress={() => setStep('pin')}
+                disabled={phone.trim().length < 8}
+                style={[styles.primaryButton, { backgroundColor: theme.tint }, phone.trim().length < 8 && styles.buttonDisabled]}
               >
                 <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
                   Continuer
@@ -173,14 +209,20 @@ export default function VaultTransactionScreen() {
 
           {step === 'success' && (
             <View style={styles.content}>
-              <View style={[styles.successBadge, { backgroundColor: theme.tint }]}>
-                <Ionicons name="checkmark" size={32} color={theme.tintForeground} />
+              <View style={[styles.successBadge, { backgroundColor: isPending ? theme.backgroundSelected : theme.tint }]}>
+                <Ionicons
+                  name={isPending ? 'time-outline' : 'checkmark'}
+                  size={32}
+                  color={isPending ? theme.tint : theme.tintForeground}
+                />
               </View>
               <ThemedText type="title" style={styles.title}>
-                {kind === 'deposit' ? 'Dépôt effectué' : 'Retrait effectué'}
+                {isPending ? 'Confirmation en attente' : kind === 'deposit' ? 'Dépôt effectué' : 'Retrait effectué'}
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-                {currency.format(amountValue)} {kind === 'deposit' ? 'ont été ajoutés à' : 'ont été retirés de'} votre coffre.
+                {isPending
+                  ? `Une demande de confirmation a été envoyée au ${phone}. Le coffre se mettra à jour automatiquement une fois le paiement confirmé.`
+                  : `${currency.format(amountValue)} ${kind === 'deposit' ? 'ont été ajoutés à' : 'ont été retirés de'} votre coffre.`}
               </ThemedText>
 
               <Pressable onPress={() => router.back()} style={[styles.primaryButton, { backgroundColor: theme.tint }]}>
@@ -288,6 +330,18 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: Spacing.three,
     marginBottom: Spacing.five,
+  },
+  phoneRow: {
+    width: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.five,
+  },
+  phoneInput: {
+    fontSize: 18,
+    fontWeight: '600',
+    paddingVertical: Spacing.three,
   },
   methodCard: {
     flexDirection: 'row',

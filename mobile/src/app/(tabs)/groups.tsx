@@ -27,7 +27,11 @@ export default function GroupsScreen() {
   const router = useRouter();
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
+  // On a failed refetch (offline), keep whatever list was last loaded instead of wiping it —
+  // an empty response only means "no tontines," a failed request means "we don't know."
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -38,11 +42,18 @@ export default function GroupsScreen() {
         .then((result) => {
           if (!cancelled) {
             setGroups(result);
+            setIsOffline(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setIsOffline(true);
           }
         })
         .finally(() => {
           if (!cancelled) {
             setIsLoading(false);
+            setHasLoadedOnce(true);
           }
         });
 
@@ -52,13 +63,31 @@ export default function GroupsScreen() {
     }, []),
   );
 
-  if (isLoading) {
+  if (isLoading && !hasLoadedOnce) {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.list}>
           <GroupCardSkeleton />
           <GroupCardSkeleton />
           <GroupCardSkeleton />
+        </View>
+      </ThemedView>
+    );
+  }
+
+  if (groups.length === 0 && isOffline) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.emptyContent}>
+          <View style={[styles.badge, { backgroundColor: theme.backgroundElement }]}>
+            <Ionicons name="cloud-offline-outline" size={28} color={theme.textSecondary} />
+          </View>
+          <ThemedText type="title" style={styles.title}>
+            Vous êtes hors ligne
+          </ThemedText>
+          <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+            Les tontines nécessitent une connexion. Reconnectez-vous pour les consulter.
+          </ThemedText>
         </View>
       </ThemedView>
     );
@@ -104,6 +133,15 @@ export default function GroupsScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView contentContainerStyle={styles.list}>
+        {isOffline && (
+          <View style={[styles.offlineBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <Ionicons name="cloud-offline-outline" size={16} color={theme.textSecondary} />
+            <ThemedText type="small" themeColor="textSecondary" style={styles.offlineBannerText}>
+              Hors ligne — dernières tontines connues affichées.
+            </ThemedText>
+          </View>
+        )}
+
         <View style={styles.actionsRow}>
           <Pressable
             style={[styles.smallAction, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
@@ -297,6 +335,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.three,
     marginBottom: Spacing.two,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+  },
+  offlineBannerText: {
+    flex: 1,
   },
   smallAction: {
     flex: 1,

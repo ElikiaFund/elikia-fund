@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Calendar, type DateData } from 'react-native-calendars';
 
 import { SelectSheet, sheetStyles, type SelectOption } from '@/components/select-sheet';
@@ -10,8 +10,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel, EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { listTransactions, type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
+import { buildTransactionsStatementHtml, printAndShareHtml } from '@/lib/pdf';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -42,8 +44,10 @@ const PAGE_SIZE = 10;
 
 export default function TransactionsScreen() {
   const theme = useTheme();
+  const { user } = useAuth();
   const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [typeFilter, setTypeFilter] = useState<TypeFilterValue>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -142,6 +146,32 @@ export default function TransactionsScreen() {
   const typeLabel = TYPE_OPTIONS.find((o) => o.value === typeFilter)?.label ?? 'Tous les types';
   const categoryLabelText = categoryOptions.find((o) => o.value === categoryFilter)?.label ?? 'Toutes les catégories';
 
+  async function handleExportPdf() {
+    setIsExporting(true);
+
+    try {
+      const html = buildTransactionsStatementHtml({
+        userName: user?.name ?? 'Utilisateur Elikia',
+        periodLabel,
+        transactions: filtered.map((t) => ({
+          occurred_at: t.occurred_at,
+          category_label: categoryLabel(t.category),
+          note: t.note,
+          product_name: t.product_name,
+          quantity: t.quantity,
+          type: t.type,
+          amount: t.amount,
+        })),
+      });
+
+      await printAndShareHtml(html, 'Releve-tresorerie-Elikia-Fund.pdf');
+    } catch {
+      Alert.alert('Erreur', "Impossible de générer le relevé. Veuillez réessayer.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   function openPeriodSheet() {
     setCalendarMode(false);
     setDraftStart(customRange?.start ?? null);
@@ -210,10 +240,37 @@ export default function TransactionsScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerRight: () =>
+            isExporting ? (
+              <ActivityIndicator color={theme.tint} style={styles.headerButton} />
+            ) : (
+              <Pressable onPress={handleExportPdf} disabled={filtered.length === 0} hitSlop={8} style={styles.headerButton}>
+                <Ionicons
+                  name="download-outline"
+                  size={22}
+                  color={filtered.length === 0 ? theme.textSecondary : theme.tint}
+                />
+              </Pressable>
+            ),
+        }}
+      />
+
       <View style={styles.filterBar}>
-        <FilterTrigger label={periodLabel} active={periodPreset !== 'all'} onPress={openPeriodSheet} />
-        <FilterTrigger label={typeLabel} active={typeFilter !== 'all'} onPress={() => setActiveSheet('type')} />
-        <FilterTrigger label={categoryLabelText} active={categoryFilter !== 'all'} onPress={() => setActiveSheet('category')} />
+        <FilterTrigger icon="calendar-outline" label={periodLabel} active={periodPreset !== 'all'} onPress={openPeriodSheet} />
+        <FilterTrigger
+          icon="swap-vertical-outline"
+          label={typeLabel}
+          active={typeFilter !== 'all'}
+          onPress={() => setActiveSheet('type')}
+        />
+        <FilterTrigger
+          icon="pricetag-outline"
+          label={categoryLabelText}
+          active={categoryFilter !== 'all'}
+          onPress={() => setActiveSheet('category')}
+        />
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
@@ -230,7 +287,15 @@ export default function TransactionsScreen() {
               <View style={styles.rowContent}>
                 <ThemedText type="smallBold">{categoryLabel(transaction.category)}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  {transaction.note ? `${transaction.note} · ` : ''}
+                  {[
+                    transaction.product_name
+                      ? `${transaction.product_name}${transaction.quantity ? ` × ${transaction.quantity}` : ''}`
+                      : null,
+                    transaction.note,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  {transaction.product_name || transaction.note ? ' · ' : ''}
                   {dateFormatter.format(new Date(transaction.occurred_at))}
                 </ThemedText>
               </View>
@@ -355,7 +420,17 @@ export default function TransactionsScreen() {
   );
 }
 
-function FilterTrigger({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function FilterTrigger({
+  icon,
+  label,
+  active,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   const theme = useTheme();
 
   return (
@@ -363,6 +438,7 @@ function FilterTrigger({ label, active, onPress }: { label: string; active: bool
       onPress={onPress}
       style={[styles.filterTrigger, { backgroundColor: theme.backgroundElement, borderColor: active ? theme.tint : theme.border }]}
     >
+      <Ionicons name={icon} size={13} color={active ? theme.tint : theme.textSecondary} />
       <ThemedText type="small" numberOfLines={1} style={styles.filterTriggerLabel}>
         {label}
       </ThemedText>
@@ -389,6 +465,9 @@ function TransactionRowSkeleton() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  headerButton: {
+    marginRight: Spacing.four,
   },
   filterBar: {
     flexDirection: 'row',

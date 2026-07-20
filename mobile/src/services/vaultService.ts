@@ -12,6 +12,8 @@ export type VaultMovement = {
   type: 'deposit' | 'withdraw';
   amount: string;
   note: string | null;
+  status: string;
+  created_at: string;
 };
 
 export type PaymentMethod = 'mtn_momo' | 'airtel_money';
@@ -43,15 +45,19 @@ export const vaultService = {
     }
   },
 
-  deposit(amount: number, pin: string, paymentMethod: PaymentMethod) {
+  getMovements() {
+    return apiService.get<VaultMovement[]>('/vault/movements').then((r) => r.data);
+  },
+
+  deposit(amount: number, pin: string, paymentMethod: PaymentMethod, phone: string) {
     return apiService
-      .post<VaultTransactionResult>('/vault/deposit', { amount, pin, payment_method: paymentMethod })
+      .post<VaultTransactionResult>('/vault/deposit', { amount, pin, payment_method: paymentMethod, phone })
       .then((r) => r.data);
   },
 
-  withdraw(amount: number, pin: string, paymentMethod: PaymentMethod) {
+  withdraw(amount: number, pin: string, paymentMethod: PaymentMethod, phone: string) {
     return apiService
-      .post<VaultTransactionResult>('/vault/withdraw', { amount, pin, payment_method: paymentMethod })
+      .post<VaultTransactionResult>('/vault/withdraw', { amount, pin, payment_method: paymentMethod, phone })
       .then((r) => r.data);
   },
 };
