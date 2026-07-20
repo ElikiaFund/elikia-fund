@@ -214,12 +214,12 @@ export function PaymentsTab() {
             <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
               <p className="text-sm font-medium">Secret webhook (affiché une seule fois)</p>
               <code className="mt-1 block truncate text-sm">{revealedSecret}</code>
-              <p className="mt-1 text-xs text-muted-foreground">Yabeto Pay ne renverra plus cette valeur — elle est déjà enregistrée automatiquement.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Yabeto Pay ne renverra plus cette valeur, elle est déjà enregistrée automatiquement.</p>
             </div>
           )}
 
           <p className="text-sm text-muted-foreground">
-            {settings.has_webhook_secret ? 'Un secret webhook est déjà enregistré.' : 'Aucun secret webhook enregistré — les paiements resteront en attente jusqu\'à confirmation.'}
+            {settings.has_webhook_secret ? 'Un secret webhook est déjà enregistré.' : 'Aucun secret webhook enregistré, les paiements resteront en attente jusqu\'à confirmation.'}
           </p>
         </CardContent>
         <CardFooter className="gap-2">

@@ -41,7 +41,7 @@ const columns: ColumnDef<AdminGroup>[] = [
   {
     accessorKey: 'members_count',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Membres" />,
-    cell: ({ row }) => (row.original.max_members ? `${row.original.members_count} / ${row.original.max_members}` : row.original.members_count),
+    cell: ({ row }) => `${row.original.members_count} / ${row.original.max_members ?? 1000}`,
     meta: { label: 'Membres' },
   },
   {

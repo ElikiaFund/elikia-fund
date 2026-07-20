@@ -96,11 +96,11 @@ export function CreditScoringTab() {
         <CardContent>
           <form onSubmit={handleThresholdsSubmit} className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="min-review">Score minimum — "À examiner"</Label>
+              <Label htmlFor="min-review">Score minimum "À examiner"</Label>
               <Input id="min-review" type="number" min={0} max={100} value={minReview} onChange={(event) => setMinReview(Number(event.target.value))} className="w-40" />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="min-eligible">Score minimum — "Éligible"</Label>
+              <Label htmlFor="min-eligible">Score minimum "Éligible"</Label>
               <Input id="min-eligible" type="number" min={0} max={100} value={minEligible} onChange={(event) => setMinEligible(Number(event.target.value))} className="w-40" />
             </div>
             <Button type="submit" disabled={isSavingThresholds}>

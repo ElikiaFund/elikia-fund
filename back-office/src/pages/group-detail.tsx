@@ -120,7 +120,7 @@ export function GroupDetailPage() {
                   <CardDescription>Membres</CardDescription>
                   <CardTitle className="text-2xl">
                     {group.members_count}
-                    {group.max_members && <span className="text-lg text-muted-foreground"> / {group.max_members}</span>}
+                    <span className="text-lg text-muted-foreground"> / {group.max_members ?? 1000}</span>
                   </CardTitle>
                 </CardHeader>
               </Card>
