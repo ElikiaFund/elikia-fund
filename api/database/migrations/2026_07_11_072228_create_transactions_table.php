@@ -19,6 +19,8 @@ return new class extends Migration
             $table->decimal('amount', 12, 2);
             $table->string('category');
             $table->text('note')->nullable();
+            $table->string('product_name')->nullable();
+            $table->unsignedInteger('quantity')->nullable();
             $table->dateTime('occurred_at');
             $table->timestamps();
         });

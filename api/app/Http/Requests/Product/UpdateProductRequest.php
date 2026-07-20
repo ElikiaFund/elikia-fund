@@ -1,12 +1,11 @@
 <?php
 
-namespace App\Http\Requests\Group;
+namespace App\Http\Requests\Product;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class CreateGroupRequest extends FormRequest
+class UpdateProductRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -25,9 +24,8 @@ class CreateGroupRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'contribution_amount' => ['required', 'numeric', 'min:1'],
-            'frequency' => ['required', 'string', Rule::in(['weekly', 'monthly'])],
-            'max_members' => ['nullable', 'integer', 'min:2', 'max:100'],
+            'category' => ['nullable', 'string', 'max:255'],
+            'unit_price' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 }

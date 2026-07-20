@@ -42,4 +42,20 @@ class ProfileController extends Controller
 
         return response()->json($user);
     }
+
+    /**
+     * POST /me/push-token — register/refresh this device's Expo push token. Called on login and
+     * app start; overwrites any previous token (single-device model, same simplicity tradeoff as
+     * the rest of this codebase — see CLAUDE.md's "keep it dumb" conflict rule for cash flow sync).
+     */
+    public function registerPushToken(Request $request): JsonResponse
+    {
+        $request->validate([
+            'push_token' => ['required', 'string', 'max:255'],
+        ]);
+
+        $request->user()->forceFill(['push_token' => $request->string('push_token')])->save();
+
+        return response()->json(['message' => 'Jeton de notification enregistré.']);
+    }
 }

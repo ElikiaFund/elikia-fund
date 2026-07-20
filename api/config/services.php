@@ -48,4 +48,16 @@ return [
         'client_id' => env('APPLE_CLIENT_ID'),
     ],
 
+    // Mobile money PSP (vault deposits/withdrawals, tontine contributions) — see yabeto.md at
+    // the repo root and app/Services/Payment/. These are the infra-level defaults; an admin can
+    // override mode/account_id/keys at runtime from the back-office (Paramètres > Paiements),
+    // which is why App\Services\Payment\YabetoConfig checks the `yabeto_settings` table first
+    // and only falls back to these env values.
+    'yabeto' => [
+        'mode' => env('YABETO_MODE', 'sandbox'),
+        'secret_key' => env('YABETO_SECRET_KEY'),
+        'account_id' => env('YABETO_ACCOUNT_ID'),
+        'webhook_secret' => env('YABETO_WEBHOOK_SECRET'),
+    ],
+
 ];

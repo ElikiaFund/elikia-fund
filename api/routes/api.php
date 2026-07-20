@@ -12,15 +12,23 @@ use App\Http\Controllers\Api\Admin\SettingController;
 use App\Http\Controllers\Api\Admin\StatsController;
 use App\Http\Controllers\Api\Admin\TransactionController as AdminTransactionController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\Admin\YabetoSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CreditScoreController as MeCreditScoreController;
 use App\Http\Controllers\Api\GroupController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OnboardingController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\VaultController;
+use App\Http\Controllers\Api\YabetoWebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Yabeto Pay webhook — public (Yabeto isn't a Sanctum-authenticated user), signature-verified
+// inside the controller itself. See yabeto.md §7 and App\Services\Payment\YabetoWebhookVerifier.
+Route::post('/webhooks/yabeto', YabetoWebhookController::class);
 
 // Mobile app auth — OAuth ("continuer avec Google/Apple/Facebook") + email/password.
 Route::middleware('throttle:10,1')->group(function () {
@@ -39,7 +47,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::put('/me', [ProfileController::class, 'update']);
     Route::post('/me/avatar', [ProfileController::class, 'uploadAvatar']);
+    Route::post('/me/push-token', [ProfileController::class, 'registerPushToken']);
     Route::get('/me/credit-score', MeCreditScoreController::class);
+    Route::get('/me/notifications', [NotificationController::class, 'index']);
+    Route::post('/me/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('/me/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     Route::post('/onboarding/company', [OnboardingController::class, 'createCompany']);
 
@@ -50,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vault/activate', [VaultController::class, 'activate']);
     Route::post('/vault/pin/verify', [VaultController::class, 'verifyPin'])->middleware('throttle:5,1');
     Route::get('/vault', [VaultController::class, 'show']);
+    Route::get('/vault/movements', [VaultController::class, 'movements']);
     Route::post('/vault/deposit', [VaultController::class, 'deposit']);
     Route::post('/vault/withdraw', [VaultController::class, 'withdraw']);
 
@@ -58,6 +71,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/groups/{group}', [GroupController::class, 'show']);
     Route::post('/groups/join', [GroupController::class, 'join']);
     Route::post('/groups/{group}/contribute', [GroupController::class, 'contribute']);
+    Route::get('/groups/{group}/report', [GroupController::class, 'report']);
+
+    Route::get('/products', [ProductController::class, 'index']);
+    Route::post('/products', [ProductController::class, 'store']);
+    Route::put('/products/{product}', [ProductController::class, 'update']);
+    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
 
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/stats', StatsController::class);
@@ -97,5 +116,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/scoring-criteria', [ScoringCriterionController::class, 'index']);
         Route::put('/scoring-criteria/{scoringCriterion}', [ScoringCriterionController::class, 'update'])->middleware('permission:settings.manage');
+
+        Route::get('/settings/yabeto', [YabetoSettingController::class, 'show']);
+        Route::put('/settings/yabeto', [YabetoSettingController::class, 'update'])->middleware('permission:settings.manage');
+        Route::post('/settings/yabeto/test-connection', [YabetoSettingController::class, 'testConnection'])->middleware('permission:settings.manage');
+        Route::post('/settings/yabeto/register-webhook', [YabetoSettingController::class, 'registerWebhook'])->middleware('permission:settings.manage');
     });
 });

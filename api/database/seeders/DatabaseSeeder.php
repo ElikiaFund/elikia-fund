@@ -7,10 +7,12 @@ use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Vault;
+use Database\Factories\ProductFactory;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -51,8 +53,14 @@ class DatabaseSeeder extends Seeder
             ->create()
             ->each(function (User $user) {
                 if (fake()->boolean(70)) {
-                    Company::factory()->create(['user_id' => $user->id]);
+                    $company = Company::factory()->create(['user_id' => $user->id]);
                     $user->forceFill(['onboarding_completed_at' => now()])->save();
+
+                    if (array_key_exists($company->category, ProductFactory::CATALOG)) {
+                        foreach (ProductFactory::CATALOG[$company->category] as $item) {
+                            Product::factory()->create($item + ['user_id' => $user->id]);
+                        }
+                    }
                 }
 
                 $vault = Vault::factory()->make(['user_id' => $user->id]);

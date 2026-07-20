@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('apple_id')->nullable()->unique();
             $table->string('facebook_id')->nullable()->unique();
             $table->timestamp('onboarding_completed_at')->nullable();
+            $table->string('push_token')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

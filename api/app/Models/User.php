@@ -16,8 +16,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'avatar_url', 'google_id', 'apple_id', 'facebook_id', 'role_id'])]
-#[Hidden(['password', 'remember_token'])]
+#[Fillable(['name', 'email', 'password', 'avatar_url', 'google_id', 'apple_id', 'facebook_id', 'role_id', 'push_token'])]
+#[Hidden(['password', 'remember_token', 'push_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -85,5 +85,15 @@ class User extends Authenticatable
     public function contributions(): HasMany
     {
         return $this->hasMany(Contribution::class);
+    }
+
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class);
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class)->latest();
     }
 }

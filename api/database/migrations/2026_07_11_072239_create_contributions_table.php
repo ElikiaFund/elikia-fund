@@ -16,8 +16,13 @@ return new class extends Migration
             $table->foreignId('group_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->decimal('amount', 12, 2);
+            $table->decimal('fee_amount', 12, 2)->default(0);
+            $table->decimal('net_amount', 12, 2);
             $table->string('cycle_period');
             $table->dateTime('paid_at');
+            $table->string('provider')->nullable();
+            $table->string('status')->default('succeeded');
+            $table->string('yabeto_reference')->nullable();
             $table->timestamps();
         });
     }

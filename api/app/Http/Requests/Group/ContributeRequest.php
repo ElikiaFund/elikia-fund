@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Requests\Vault;
+namespace App\Http\Requests\Group;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class VaultTransactionRequest extends FormRequest
+class ContributeRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -24,12 +24,9 @@ class VaultTransactionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'numeric', 'min:1'],
-            'pin' => ['required', 'digits:4'],
-            'payment_method' => ['required', 'string', Rule::in(['mtn_momo', 'airtel_money'])],
-            // Only actually required when Yabeto is enabled — enforced in VaultController, not
-            // here, so the simulated path (the default) doesn't force every dev/demo user to
-            // type a phone number for a mock transaction.
+            // Only actually required when Yabeto is enabled — enforced in GroupController, same
+            // reasoning as VaultTransactionRequest::phone.
+            'payment_method' => ['nullable', 'string', Rule::in(['mtn_momo', 'airtel_money'])],
             'phone' => ['nullable', 'string', 'max:30'],
         ];
     }

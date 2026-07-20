@@ -20,11 +20,15 @@ class ContributionFactory extends Factory
     public function definition(): array
     {
         $paidAt = fake()->dateTimeBetween('-90 days', 'now');
+        $amount = fake()->randomElement([10000, 15000, 20000, 25000, 50000]);
+        $feeAmount = round($amount * 0.03, 2);
 
         return [
             'group_id' => Group::factory(),
             'user_id' => User::factory(),
-            'amount' => fake()->randomElement([10000, 15000, 20000, 25000, 50000]),
+            'amount' => $amount,
+            'fee_amount' => $feeAmount,
+            'net_amount' => $amount - $feeAmount,
             'cycle_period' => $paidAt->format('Y-m'),
             'paid_at' => $paidAt,
         ];

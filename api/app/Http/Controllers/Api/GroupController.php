@@ -3,17 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Group\ContributeRequest;
 use App\Http\Requests\Group\CreateGroupRequest;
 use App\Http\Requests\Group\JoinGroupRequest;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\User;
+use App\Services\Payment\YabetoRequestException;
+use App\Services\Payment\YabetoService;
+use App\Services\TontineReportService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class GroupController extends Controller
 {
+    /**
+     * Percentage withheld from every contribution as a tontine management fee.
+     */
+    private const MANAGEMENT_FEE_RATE = 0.03;
+
+    public function __construct(private readonly YabetoService $yabeto) {}
+
     /**
      * GET /groups — tontines the authenticated user belongs to.
      */
@@ -39,6 +52,7 @@ class GroupController extends Controller
             'name' => $request->validated('name'),
             'contribution_amount' => $request->validated('contribution_amount'),
             'frequency' => $request->validated('frequency'),
+            'max_members' => $request->validated('max_members'),
             'invite_code' => $this->generateInviteCode(),
             'owner_id' => $user->id,
         ]);
@@ -78,40 +92,124 @@ class GroupController extends Controller
             return response()->json(['message' => 'Vous êtes déjà membre de cette tontine.'], 409);
         }
 
+        if ($group->max_members !== null && $group->members()->count() >= $group->max_members) {
+            return response()->json(['message' => 'Cette tontine a atteint son nombre maximum de participants.'], 409);
+        }
+
         $group->members()->attach($user->id, ['joined_at' => now()]);
 
         return response()->json($this->withCycleStatus($group->load('owner', 'members'), $user));
     }
 
     /**
-     * POST /groups/{group}/contribute — record a mock contribution for the current cycle.
+     * POST /groups/{group}/contribute — contribution for the current cycle. Runs a real Yabeto
+     * Pay payment (Payment Intent create+confirm) when the provider is enabled, or falls back to
+     * the simulated instant-paid path otherwise (see api/README.md).
      */
-    public function contribute(Request $request, Group $group): JsonResponse
+    public function contribute(ContributeRequest $request, Group $group): JsonResponse
     {
         $user = $request->user();
 
         abort_unless($group->members()->where('users.id', $user->id)->exists(), 403);
 
-        $cyclePeriod = $this->currentCyclePeriod($group);
+        $cyclePeriod = $group->currentCyclePeriod();
 
-        $alreadyPaid = $group->contributions()
+        $existing = $group->contributions()
             ->where('user_id', $user->id)
             ->where('cycle_period', $cyclePeriod)
-            ->exists();
+            ->latest()
+            ->first();
 
-        if ($alreadyPaid) {
+        if ($existing?->status === 'succeeded') {
             return response()->json(['message' => 'Vous avez déjà cotisé pour ce cycle.'], 409);
+        }
+
+        if ($existing?->status === 'processing') {
+            return response()->json(['message' => 'Une cotisation est déjà en cours de confirmation pour ce cycle.'], 409);
+        }
+
+        $amount = (float) $group->contribution_amount;
+        $feeAmount = round($amount * self::MANAGEMENT_FEE_RATE, 2);
+
+        if (! $this->yabeto->isEnabled()) {
+            $contribution = Contribution::create([
+                'group_id' => $group->id,
+                'user_id' => $user->id,
+                'amount' => $amount,
+                'fee_amount' => $feeAmount,
+                'net_amount' => $amount - $feeAmount,
+                'cycle_period' => $cyclePeriod,
+                'paid_at' => now(),
+                'status' => 'succeeded',
+            ]);
+
+            return response()->json($contribution->load('user'), 201);
+        }
+
+        $paymentMethod = $request->validated('payment_method');
+        $phone = $request->validated('phone');
+
+        if (! $paymentMethod || ! $phone) {
+            return response()->json(['message' => 'Méthode de paiement et numéro de téléphone requis.'], 422);
+        }
+
+        try {
+            $intent = $this->yabeto->createPaymentIntent(
+                (int) round($amount),
+                "Cotisation tontine « {$group->name} »",
+                ['group_id' => $group->id, 'user_id' => $user->id],
+            );
+
+            $result = $this->yabeto->confirmPaymentIntent(
+                $intent->id,
+                $intent->clientSecret ?? '',
+                $phone,
+                YabetoService::OPERATOR_MAP[$paymentMethod],
+                $user->name,
+                '',
+            );
+        } catch (YabetoRequestException|ConnectionException $e) {
+            Log::warning('Yabeto contribution request failed', ['message' => $e->getMessage()]);
+
+            return response()->json(['message' => "Le paiement n'a pas pu être initié. Veuillez réessayer."], 502);
         }
 
         $contribution = Contribution::create([
             'group_id' => $group->id,
             'user_id' => $user->id,
-            'amount' => $group->contribution_amount,
+            'amount' => $amount,
+            'fee_amount' => $feeAmount,
+            'net_amount' => $amount - $feeAmount,
             'cycle_period' => $cyclePeriod,
             'paid_at' => now(),
+            'provider' => 'yabeto',
+            'status' => $result->status,
+            'yabeto_reference' => $result->id,
         ]);
 
+        if ($result->failed()) {
+            return response()->json([
+                'message' => $result->failureMessage ?? 'Le paiement a échoué.',
+                'contribution' => $contribution->load('user'),
+            ], 422);
+        }
+
         return response()->json($contribution->load('user'), 201);
+    }
+
+    /**
+     * GET /groups/{group}/report — cycle report (defaults to the most recently completed
+     * cycle; pass ?cycle=YYYY-MM or ?cycle=YYYY-\WWW to inspect a different one).
+     */
+    public function report(Request $request, Group $group, TontineReportService $reports): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless($group->members()->where('users.id', $user->id)->exists(), 403);
+
+        $cyclePeriod = $request->query('cycle');
+
+        return response()->json($reports->generate($group, is_string($cyclePeriod) ? $cyclePeriod : null));
     }
 
     private function generateInviteCode(): string
@@ -123,21 +221,13 @@ class GroupController extends Controller
         return $code;
     }
 
-    /**
-     * The identifier for "this billing cycle" — monthly groups key by calendar month,
-     * weekly groups by ISO week, so contribute() can dedupe per member per cycle.
-     */
-    private function currentCyclePeriod(Group $group): string
-    {
-        return $group->frequency === 'weekly' ? now()->format('o-\WW') : now()->format('Y-m');
-    }
-
     private function withCycleStatus(Group $group, User $user): Group
     {
-        $group->current_cycle_period = $this->currentCyclePeriod($group);
+        $group->current_cycle_period = $group->currentCyclePeriod();
         $group->has_paid_current_cycle = $group->contributions()
             ->where('user_id', $user->id)
             ->where('cycle_period', $group->current_cycle_period)
+            ->where('status', 'succeeded')
             ->exists();
 
         return $group;

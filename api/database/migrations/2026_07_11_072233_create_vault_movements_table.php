@@ -17,6 +17,9 @@ return new class extends Migration
             $table->enum('type', ['deposit', 'withdraw']);
             $table->decimal('amount', 12, 2);
             $table->text('note')->nullable();
+            $table->string('provider')->nullable();
+            $table->string('status')->default('completed');
+            $table->string('yabeto_reference')->nullable();
             $table->timestamps();
         });
     }

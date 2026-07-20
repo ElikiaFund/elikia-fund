@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('name');
             $table->decimal('contribution_amount', 12, 2);
             $table->enum('frequency', ['weekly', 'monthly']);
+            $table->unsignedInteger('max_members')->nullable();
             $table->string('invite_code')->unique();
             $table->foreignId('owner_id')->constrained('users')->cascadeOnDelete();
             $table->timestamps();
