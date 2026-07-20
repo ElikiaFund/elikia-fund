@@ -121,7 +121,7 @@ export function PaymentsTab() {
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4" autoComplete="off">
             <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
               <div>
                 <p className="text-sm font-medium">Activer Yabeto Pay</p>
@@ -147,7 +147,15 @@ export function PaymentsTab() {
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="yabeto-account">Identifiant de compte (account ID)</Label>
-                <Input id="yabeto-account" value={accountId} onChange={(event) => setAccountId(event.target.value)} placeholder="acct_..." />
+                <Input
+                  id="yabeto-account"
+                  value={accountId}
+                  onChange={(event) => setAccountId(event.target.value)}
+                  placeholder="acct_..."
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
+                />
               </div>
             </div>
 
@@ -160,6 +168,9 @@ export function PaymentsTab() {
                   value={secretKey}
                   onChange={(event) => setSecretKey(event.target.value)}
                   placeholder={settings.has_secret_key ? '•••••••••••• (configurée)' : 'sk_test_...'}
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
                 />
                 <p className="text-xs text-muted-foreground">Laissez vide pour conserver la clé actuellement enregistrée.</p>
               </div>
@@ -171,6 +182,9 @@ export function PaymentsTab() {
                   value={webhookSecret}
                   onChange={(event) => setWebhookSecret(event.target.value)}
                   placeholder={settings.has_webhook_secret ? '•••••••••••• (configuré)' : 'whsec_...'}
+                  autoComplete="new-password"
+                  data-1p-ignore
+                  data-lpignore="true"
                 />
                 <p className="text-xs text-muted-foreground">Rempli automatiquement par "Enregistrer le webhook" ci-dessous.</p>
               </div>

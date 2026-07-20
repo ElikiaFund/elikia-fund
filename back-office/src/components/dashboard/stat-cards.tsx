@@ -79,17 +79,17 @@ export function StatCards({ current, previous }: StatCardsProps) {
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
       {stats.map((stat) => (
-        <Card key={stat.label} className="@container/card">
+        <Card key={stat.label} className="@container/card min-w-0">
           <CardHeader>
-            <CardDescription>{stat.label}</CardDescription>
-            <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">{stat.value}</CardTitle>
+            <CardDescription className="truncate">{stat.label}</CardDescription>
+            <CardTitle className="truncate text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">{stat.value}</CardTitle>
             <CardAction>
               <TrendBadge value={stat.change} />
             </CardAction>
           </CardHeader>
-          <CardFooter className="text-sm text-muted-foreground">{stat.footer}</CardFooter>
+          <CardFooter className="truncate text-sm text-muted-foreground">{stat.footer}</CardFooter>
         </Card>
       ))}
     </div>
