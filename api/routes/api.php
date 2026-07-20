@@ -69,11 +69,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/groups', [GroupController::class, 'index']);
     Route::post('/groups', [GroupController::class, 'store']);
-    Route::get('/groups/{group}', [GroupController::class, 'show']);
+    Route::get('/groups/preview/{inviteCode}', [GroupController::class, 'preview']);
     Route::post('/groups/join', [GroupController::class, 'join']);
+    Route::get('/groups/{group}', [GroupController::class, 'show']);
     Route::post('/groups/{group}/contribute', [GroupController::class, 'contribute']);
     Route::post('/groups/{group}/contributions/{contribution}/refresh-status', [GroupController::class, 'refreshContributionStatus']);
     Route::get('/groups/{group}/report', [GroupController::class, 'report']);
+    Route::get('/groups/{group}/requests', [GroupController::class, 'requests']);
+    Route::post('/groups/{group}/requests/{user}/approve', [GroupController::class, 'approveRequest']);
+    Route::post('/groups/{group}/requests/{user}/decline', [GroupController::class, 'declineRequest']);
+    Route::put('/groups/{group}/recipient-order', [GroupController::class, 'updateRecipientOrder']);
+    Route::put('/groups/{group}/cycle-recipient', [GroupController::class, 'designateRecipient']);
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);

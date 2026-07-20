@@ -28,6 +28,10 @@ class CreateGroupRequest extends FormRequest
             'contribution_amount' => ['required', 'numeric', 'min:1'],
             'frequency' => ['required', 'string', Rule::in(['weekly', 'monthly'])],
             'max_members' => ['nullable', 'integer', 'min:2', 'max:1000'],
+            // Weekly: ISO day-of-week (1=Monday..7=Sunday). Monthly: day-of-month (1-31).
+            'contribution_day' => ['nullable', 'integer', 'min:1', 'max:31'],
+            'contribution_time' => ['nullable', 'date_format:H:i'],
+            'recipient_mode' => ['nullable', 'string', Rule::in(['predefined', 'join_order', 'random', 'admin'])],
         ];
     }
 }

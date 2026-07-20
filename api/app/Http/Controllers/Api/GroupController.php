@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Group\ContributeRequest;
 use App\Http\Requests\Group\CreateGroupRequest;
+use App\Http\Requests\Group\DesignateRecipientRequest;
 use App\Http\Requests\Group\JoinGroupRequest;
+use App\Http\Requests\Group\UpdateRecipientOrderRequest;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\User;
+use App\Services\GroupCycleRecipientService;
+use App\Services\GroupMembershipNotificationService;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use App\Services\PaymentNotificationService;
@@ -16,6 +20,7 @@ use App\Services\TontineReportService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -29,6 +34,8 @@ class GroupController extends Controller
     public function __construct(
         private readonly YabetoService $yabeto,
         private readonly PaymentNotificationService $paymentNotifications,
+        private readonly GroupMembershipNotificationService $membershipNotifications,
+        private readonly GroupCycleRecipientService $cycleRecipients,
     ) {}
 
     /**
@@ -57,31 +64,65 @@ class GroupController extends Controller
             'contribution_amount' => $request->validated('contribution_amount'),
             'frequency' => $request->validated('frequency'),
             'max_members' => $request->validated('max_members'),
+            'contribution_day' => $request->validated('contribution_day'),
+            'contribution_time' => $request->validated('contribution_time'),
+            'recipient_mode' => $request->validated('recipient_mode') ?? 'join_order',
             'invite_code' => $this->generateInviteCode(),
             'owner_id' => $user->id,
         ]);
 
-        $group->members()->attach($user->id, ['joined_at' => now()]);
+        $group->members()->attach($user->id, ['status' => 'approved', 'joined_at' => now(), 'approved_at' => now()]);
 
         return response()->json($this->withCycleStatus($group->load('owner', 'members'), $user), 201);
     }
 
     /**
-     * GET /groups/{group} — detail: members, contribution status for the current cycle.
+     * GET /groups/preview/{inviteCode} — read-only group info shown before requesting to join,
+     * so a scanning/typing user sees what they're about to ask to join.
+     */
+    public function preview(Request $request, string $inviteCode): JsonResponse
+    {
+        $user = $request->user();
+        $group = Group::where('invite_code', strtoupper($inviteCode))->with('owner')->withCount('members')->first();
+
+        if (! $group) {
+            return response()->json(['message' => "Code d'invitation invalide."], 404);
+        }
+
+        $membership = DB::table('group_members')->where('group_id', $group->id)->where('user_id', $user->id)->first();
+
+        $group->membership_status = $membership?->status;
+        $group->schedule_label = $group->scheduleLabel();
+
+        return response()->json($group);
+    }
+
+    /**
+     * GET /groups/{group} — detail: members, contribution status for the current cycle. A
+     * pending join request can view the group (to see its "en attente" state) but not a full
+     * approved-member view — the mobile client branches on membership_status.
      */
     public function show(Request $request, Group $group): JsonResponse
     {
         $user = $request->user();
+        $membership = DB::table('group_members')->where('group_id', $group->id)->where('user_id', $user->id)->first();
 
-        abort_unless($group->members()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($membership, 403);
 
-        return response()->json(
-            $this->withCycleStatus($group->load('owner', 'members', 'contributions.user'), $user)
-        );
+        $group->membership_status = $membership->status;
+        $group->load('owner', 'members', 'contributions.user');
+
+        if ($group->owner_id === $user->id) {
+            $group->load('pendingMembers');
+        }
+
+        return response()->json($this->withCycleStatus($group, $user));
     }
 
     /**
-     * POST /groups/join — join a tontine via its invite code.
+     * POST /groups/join — request to join a tontine via its invite code. Membership starts
+     * 'pending' — the owner must approve before the requester can contribute (see
+     * approveRequest/declineRequest below).
      */
     public function join(JoinGroupRequest $request): JsonResponse
     {
@@ -92,17 +133,115 @@ class GroupController extends Controller
             return response()->json(['message' => "Code d'invitation invalide."], 404);
         }
 
-        if ($group->members()->where('users.id', $user->id)->exists()) {
+        $existing = DB::table('group_members')->where('group_id', $group->id)->where('user_id', $user->id)->first();
+
+        if ($existing?->status === 'approved') {
             return response()->json(['message' => 'Vous êtes déjà membre de cette tontine.'], 409);
+        }
+
+        if ($existing?->status === 'pending') {
+            return response()->json(['message' => "Votre demande d'adhésion est déjà en attente d'approbation."], 409);
         }
 
         if ($group->max_members !== null && $group->members()->count() >= $group->max_members) {
             return response()->json(['message' => 'Cette tontine a atteint son nombre maximum de participants.'], 409);
         }
 
-        $group->members()->attach($user->id, ['joined_at' => now()]);
+        $group->pendingMembers()->attach($user->id, ['status' => 'pending', 'joined_at' => now()]);
 
-        return response()->json($this->withCycleStatus($group->load('owner', 'members'), $user));
+        $this->membershipNotifications->joinRequested($group, $user);
+
+        $group->membership_status = 'pending';
+
+        return response()->json($group->load('owner'));
+    }
+
+    /**
+     * GET /groups/{group}/requests — pending join requests, owner-only.
+     */
+    public function requests(Request $request, Group $group): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        return response()->json($group->pendingMembers()->get());
+    }
+
+    /**
+     * POST /groups/{group}/requests/{user}/approve — owner approves a pending join request.
+     */
+    public function approveRequest(Request $request, Group $group, User $user): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        $updated = DB::table('group_members')
+            ->where('group_id', $group->id)
+            ->where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'approved', 'approved_at' => now(), 'updated_at' => now()]);
+
+        abort_unless($updated > 0, 404);
+
+        $this->membershipNotifications->joinApproved($user, $group);
+
+        return response()->json(['message' => 'Demande approuvée.']);
+    }
+
+    /**
+     * POST /groups/{group}/requests/{user}/decline — owner declines a pending join request.
+     */
+    public function declineRequest(Request $request, Group $group, User $user): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        $deleted = DB::table('group_members')
+            ->where('group_id', $group->id)
+            ->where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->delete();
+
+        abort_unless($deleted > 0, 404);
+
+        $this->membershipNotifications->joinDeclined($user, $group);
+
+        return response()->json(['message' => 'Demande refusée.']);
+    }
+
+    /**
+     * PUT /groups/{group}/recipient-order — owner sets the fixed rotation order for
+     * recipient_mode = 'predefined'. Must contain exactly the group's current approved members.
+     */
+    public function updateRecipientOrder(UpdateRecipientOrderRequest $request, Group $group): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        $order = $request->validated('order');
+        $memberIds = $group->members()->pluck('users.id')->sort()->values()->all();
+
+        if (collect($order)->sort()->values()->all() !== $memberIds) {
+            return response()->json(['message' => "L'ordre doit contenir exactement les membres actuels de la tontine."], 422);
+        }
+
+        $group->update(['recipient_order' => $order]);
+
+        return response()->json($group->fresh());
+    }
+
+    /**
+     * PUT /groups/{group}/cycle-recipient — owner manually designates the current cycle's
+     * recipient. Only meaningful for recipient_mode = 'admin', but always allowed as an explicit
+     * override of any mode's automatic pick.
+     */
+    public function designateRecipient(DesignateRecipientRequest $request, Group $group): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        $recipient = User::findOrFail($request->validated('user_id'));
+
+        abort_unless($group->members()->where('users.id', $recipient->id)->exists(), 422);
+
+        $cycleRecipient = $this->cycleRecipients->designate($group, $group->currentCyclePeriod(), $recipient);
+
+        return response()->json($cycleRecipient->load('user'));
     }
 
     /**
@@ -279,6 +418,18 @@ class GroupController extends Controller
             ->where('cycle_period', $group->current_cycle_period)
             ->where('status', 'succeeded')
             ->exists();
+        $group->cycle_ends_at = $group->cycleEndsAt()->toIso8601String();
+        $group->schedule_label = $group->scheduleLabel();
+
+        if ($group->relationLoaded('members') && $group->members->isNotEmpty()) {
+            $group->current_cycle_recipient = $this->cycleRecipients
+                ->resolveFor($group, $group->current_cycle_period)
+                ->load('user');
+        }
+
+        if ($group->owner_id === $user->id) {
+            $group->pending_requests_count = $group->pendingMembers()->count();
+        }
 
         return $group;
     }

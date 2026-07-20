@@ -11,7 +11,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['uuid', 'name', 'contribution_amount', 'frequency', 'max_members', 'invite_code', 'owner_id'])]
+#[Fillable([
+    'uuid', 'name', 'contribution_amount', 'frequency', 'max_members', 'invite_code', 'owner_id',
+    'contribution_day', 'contribution_time', 'recipient_mode', 'recipient_order',
+])]
 class Group extends Model
 {
     /** @use HasFactory<GroupFactory> */
@@ -21,6 +24,7 @@ class Group extends Model
     {
         return [
             'contribution_amount' => 'decimal:2',
+            'recipient_order' => 'array',
         ];
     }
 
@@ -29,14 +33,30 @@ class Group extends Model
         return $this->belongsTo(User::class, 'owner_id');
     }
 
+    /** Approved members only — pending join requests can't contribute or count toward max_members. */
     public function members(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'group_members')->withPivot('joined_at');
+        return $this->belongsToMany(User::class, 'group_members')
+            ->withPivot('joined_at', 'status', 'approved_at')
+            ->wherePivot('status', 'approved');
+    }
+
+    /** Join requests awaiting the owner's approve/decline decision. */
+    public function pendingMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'group_members')
+            ->withPivot('joined_at', 'status')
+            ->wherePivot('status', 'pending');
     }
 
     public function contributions(): HasMany
     {
         return $this->hasMany(Contribution::class);
+    }
+
+    public function cycleRecipients(): HasMany
+    {
+        return $this->hasMany(GroupCycleRecipient::class);
     }
 
     public function notifications(): HasMany
@@ -64,9 +84,44 @@ class Group extends Model
         return $this->frequency === 'weekly' ? $date->format('o-\WW') : $date->format('Y-m');
     }
 
-    /** End of the current calendar week/month — used to schedule contribution reminders. */
+    /**
+     * The scheduled due-moment for this cycle's contribution. Defaults to the plain calendar
+     * week/month boundary when the creator hasn't set a specific contribution_day/time.
+     */
     public function cycleEndsAt(): Carbon
     {
-        return $this->frequency === 'weekly' ? now()->endOfWeek() : now()->endOfMonth();
+        if ($this->contribution_day === null) {
+            return $this->frequency === 'weekly' ? now()->endOfWeek() : now()->endOfMonth();
+        }
+
+        $target = $this->frequency === 'weekly'
+            ? now()->startOfWeek()->addDays($this->contribution_day - 1)
+            : now()->startOfMonth()->addDays(min($this->contribution_day, now()->daysInMonth) - 1);
+
+        if ($this->contribution_time) {
+            [$hour, $minute] = explode(':', $this->contribution_time);
+            $target->setTime((int) $hour, (int) $minute);
+        }
+
+        return $target;
+    }
+
+    /** Human-readable French label for the configured schedule, e.g. "Tous les lundis à 18h00". */
+    public function scheduleLabel(): ?string
+    {
+        if ($this->contribution_day === null) {
+            return null;
+        }
+
+        $time = $this->contribution_time ? Carbon::parse($this->contribution_time)->format('H\hi') : null;
+
+        if ($this->frequency === 'weekly') {
+            $days = [1 => 'lundis', 2 => 'mardis', 3 => 'mercredis', 4 => 'jeudis', 5 => 'vendredis', 6 => 'samedis', 7 => 'dimanches'];
+            $day = $days[$this->contribution_day] ?? null;
+
+            return $day ? "Tous les {$day}".($time ? " à {$time}" : '') : null;
+        }
+
+        return "Le {$this->contribution_day} du mois".($time ? " à {$time}" : '');
     }
 }

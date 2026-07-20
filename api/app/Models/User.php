@@ -72,9 +72,11 @@ class User extends Authenticatable
         return $this->hasOne(Vault::class);
     }
 
+    /** Every group this user has a membership row for — pending requests included, so the
+     * mobile "Mes tontines" list can show a pending badge instead of hiding the request. */
     public function groups(): BelongsToMany
     {
-        return $this->belongsToMany(Group::class, 'group_members')->withPivot('joined_at');
+        return $this->belongsToMany(Group::class, 'group_members')->withPivot('joined_at', 'status', 'approved_at');
     }
 
     public function ownedGroups(): HasMany
