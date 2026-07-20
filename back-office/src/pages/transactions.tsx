@@ -37,6 +37,21 @@ const columns: ColumnDef<AdminTransaction>[] = [
     meta: { label: 'Catégorie' },
   },
   {
+    id: 'product',
+    accessorFn: (row) => (row.product_name ? `${row.product_name}${row.quantity ? ` × ${row.quantity}` : ''}` : ''),
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Produit" />,
+    cell: ({ row }) =>
+      row.original.product_name ? (
+        <span className="text-muted-foreground">
+          {row.original.product_name}
+          {row.original.quantity ? ` × ${row.original.quantity}` : ''}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+    meta: { label: 'Produit' },
+  },
+  {
     accessorKey: 'amount',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Montant" />,
     cell: ({ row }) => currency.format(Number(row.original.amount)),
@@ -82,7 +97,13 @@ export function TransactionsPage() {
     ...columns,
     {
       id: 'actions',
-      cell: ({ row }) => <DataTableRowActions itemLabel={`la transaction de ${row.original.user.name}`} onDelete={() => handleDelete(row.original.id)} />,
+      cell: ({ row }) => (
+        <DataTableRowActions
+          itemLabel={`la transaction de ${row.original.user.name}`}
+          confirmValue={currency.format(Number(row.original.amount))}
+          onDelete={() => handleDelete(row.original.id)}
+        />
+      ),
     },
   ]
 

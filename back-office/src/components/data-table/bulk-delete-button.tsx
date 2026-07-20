@@ -1,19 +1,10 @@
 import { TrashIcon } from 'lucide-react'
 import { useState } from 'react'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { ConfirmDeleteDialog } from '@/components/data-table/confirm-delete-dialog'
+import { Button } from '@/components/ui/button'
+
+const BULK_CONFIRM_KEYWORD = 'SUPPRIMER'
 
 type BulkDeleteButtonProps = {
   count: number
@@ -22,42 +13,23 @@ type BulkDeleteButtonProps = {
 }
 
 export function BulkDeleteButton({ count, itemLabelPlural, onConfirm }: BulkDeleteButtonProps) {
-  const [open, setOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  async function handleConfirm() {
-    setIsDeleting(true);
-
-    try {
-      await onConfirm();
-      setOpen(false);
-    } finally {
-      setIsDeleting(false);
-    }
-  }
+  const [open, setOpen] = useState(false)
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="sm">
-          <TrashIcon />
-          Supprimer ({count})
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            Supprimer {count} {itemLabelPlural} ?
-          </AlertDialogTitle>
-          <AlertDialogDescription>Cette action est irréversible.</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
-          <AlertDialogAction onClick={handleConfirm} disabled={isDeleting} className={cn(buttonVariants({ variant: 'destructive' }))}>
-            {isDeleting ? 'Suppression…' : 'Supprimer'}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <>
+      <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
+        <TrashIcon />
+        Supprimer ({count})
+      </Button>
+
+      <ConfirmDeleteDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`Supprimer ${count} ${itemLabelPlural} ?`}
+        description={`Cette action est irréversible. Tapez ${BULK_CONFIRM_KEYWORD} pour confirmer la suppression groupée.`}
+        confirmValue={BULK_CONFIRM_KEYWORD}
+        onConfirm={onConfirm}
+      />
+    </>
   )
 }

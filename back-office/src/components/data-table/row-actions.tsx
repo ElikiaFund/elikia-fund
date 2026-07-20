@@ -1,39 +1,19 @@
 import { MoreHorizontalIcon, TrashIcon } from 'lucide-react'
 import { useState } from 'react'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { ConfirmDeleteDialog } from '@/components/data-table/confirm-delete-dialog'
+import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 
 type DataTableRowActionsProps = {
   itemLabel: string
+  /** The value the admin must type to confirm — defaults to itemLabel (e.g. a record's name); pass a formatted amount for transactions. */
+  confirmValue?: string
   onDelete: () => Promise<void>
 }
 
-export function DataTableRowActions({ itemLabel, onDelete }: DataTableRowActionsProps) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  async function handleConfirm() {
-    setIsDeleting(true);
-
-    try {
-      await onDelete();
-      setConfirmOpen(false);
-    } finally {
-      setIsDeleting(false);
-    }
-  }
+export function DataTableRowActions({ itemLabel, confirmValue, onDelete }: DataTableRowActionsProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
     <>
@@ -52,20 +32,14 @@ export function DataTableRowActions({ itemLabel, onDelete }: DataTableRowActions
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer {itemLabel} ?</AlertDialogTitle>
-            <AlertDialogDescription>Cette action est irréversible.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm} disabled={isDeleting} className={cn(buttonVariants({ variant: 'destructive' }))}>
-              {isDeleting ? 'Suppression…' : 'Supprimer'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`Supprimer ${itemLabel} ?`}
+        description="Cette action est irréversible."
+        confirmValue={confirmValue ?? itemLabel}
+        onConfirm={onDelete}
+      />
     </>
   )
 }

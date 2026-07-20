@@ -45,6 +45,7 @@ export function DashboardPage() {
               tontine: group.name,
               member: userNameById.get(c.user_id) ?? 'Membre',
               amount: Number(c.amount),
+              feeAmount: Number(c.fee_amount),
               date: new Date(c.paid_at),
             })),
           ),

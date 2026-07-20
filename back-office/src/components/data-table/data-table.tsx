@@ -14,12 +14,17 @@ import {
 } from '@tanstack/react-table'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { DataTablePagination } from '@/components/data-table/pagination'
 import { type FacetedFilterConfig, DataTableToolbar } from '@/components/data-table/toolbar'
 import '@/components/data-table/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
+
+// Cells in these columns stop click propagation so interacting with them doesn't also trigger row navigation.
+const NON_NAVIGATING_COLUMN_IDS = new Set(['select', 'actions'])
 
 type DataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[]
@@ -28,9 +33,12 @@ type DataTableProps<TData, TValue> = {
   searchPlaceholder?: string
   facetedFilters?: FacetedFilterConfig[]
   bulkActions?: (selectedRows: TData[], clearSelection: () => void) => ReactNode
+  /** When set, clicking a row (outside the select checkbox / actions cells) navigates here. */
+  getRowHref?: (row: TData) => string
 }
 
-export function DataTable<TData, TValue>({ columns, data, isLoading, searchPlaceholder, facetedFilters, bulkActions }: DataTableProps<TData, TValue>) {
+export function DataTable<TData, TValue>({ columns, data, isLoading, searchPlaceholder, facetedFilters, bulkActions, getRowHref }: DataTableProps<TData, TValue>) {
+  const navigate = useNavigate()
   const [rowSelection, setRowSelection] = useState({})
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -85,10 +93,20 @@ export function DataTable<TData, TValue>({ columns, data, isLoading, searchPlace
               ))
             ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-                  ))}
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                  className={cn(getRowHref && 'cursor-pointer')}
+                  onClick={() => getRowHref && navigate(getRowHref(row.original))}>
+                  {row.getVisibleCells().map((cell) =>
+                    NON_NAVIGATING_COLUMN_IDS.has(cell.column.id) ? (
+                      <TableCell key={cell.id} onClick={(event) => event.stopPropagation()}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ) : (
+                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    ),
+                  )}
                 </TableRow>
               ))
             ) : (

@@ -61,3 +61,31 @@ export function aggregateByTontine(contributions: Contribution[], limit = 5) {
     .sort((a, b) => b.total - a.total)
     .slice(0, limit)
 }
+
+/** Transaction count per day — a proxy for account activity/engagement. */
+export function aggregateCountByDay(transactions: Transaction[]) {
+  const byDay = new Map<string, number>()
+
+  for (const t of transactions) {
+    const key = format(t.date, 'yyyy-MM-dd')
+    byDay.set(key, (byDay.get(key) ?? 0) + 1)
+  }
+
+  return Array.from(byDay.entries())
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/** Ranked spend-by-category breakdown — reuses the tontines chart's `{tontine, total}` shape (relabeled). */
+export function aggregateByCategory(transactions: Transaction[], limit = 5) {
+  const byCategory = new Map<string, number>()
+
+  for (const t of transactions) {
+    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount)
+  }
+
+  return Array.from(byCategory.entries())
+    .map(([tontine, total]) => ({ tontine, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit)
+}

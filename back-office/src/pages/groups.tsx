@@ -41,6 +41,7 @@ const columns: ColumnDef<AdminGroup>[] = [
   {
     accessorKey: 'members_count',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Membres" />,
+    cell: ({ row }) => (row.original.max_members ? `${row.original.members_count} / ${row.original.max_members}` : row.original.members_count),
     meta: { label: 'Membres' },
   },
   {
@@ -92,6 +93,7 @@ export function GroupsPage() {
       columns={columnsWithActions}
       data={groups}
       isLoading={isLoading}
+      getRowHref={(row) => `/tontines/${row.id}`}
       searchPlaceholder="Rechercher une tontine…"
       facetedFilters={[
         {

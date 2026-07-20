@@ -11,6 +11,7 @@ type AuthContextValue = {
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  updateUser: (user: AdminUser) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: user !== null, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: user !== null, login, logout, updateUser: setUser }}>
       {children}
     </AuthContext.Provider>
   )

@@ -39,6 +39,9 @@ export function StatCards({ current, previous }: StatCardsProps) {
   const cotisations = current.contributions.reduce((sum, c) => sum + c.amount, 0)
   const previousCotisations = previous.contributions.reduce((sum, c) => sum + c.amount, 0)
 
+  const managementFees = current.contributions.reduce((sum, c) => sum + c.feeAmount, 0)
+  const previousManagementFees = previous.contributions.reduce((sum, c) => sum + c.feeAmount, 0)
+
   const activeTontines = new Set(current.contributions.map((c) => c.tontine)).size
   const previousActiveTontines = new Set(previous.contributions.map((c) => c.tontine)).size
 
@@ -67,10 +70,16 @@ export function StatCards({ current, previous }: StatCardsProps) {
       change: trend(activeTontines, previousActiveTontines),
       footer: 'Avec au moins une cotisation',
     },
+    {
+      label: 'Frais de gestion collectés',
+      value: currency.format(managementFees),
+      change: trend(managementFees, previousManagementFees),
+      footer: '3% de chaque cotisation de tontine',
+    },
   ]
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
       {stats.map((stat) => (
         <Card key={stat.label} className="@container/card">
           <CardHeader>

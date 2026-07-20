@@ -1,4 +1,5 @@
-import { EllipsisVerticalIcon, LogOutIcon } from "lucide-react"
+import { EllipsisVerticalIcon, LogOutIcon, UserCircleIcon } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -29,6 +30,7 @@ function initials(name: string) {
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   if (!user) {
     return null
@@ -73,6 +75,10 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate('/profil')}>
+              <UserCircleIcon />
+              Mon profil
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={logout}>
               <LogOutIcon />
               Se déconnecter

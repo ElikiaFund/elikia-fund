@@ -11,7 +11,7 @@ import { DataTableRowActions } from '@/components/data-table/row-actions'
 import { createSelectColumn } from '@/components/data-table/select-column'
 import { facetedFilterFn } from '@/components/data-table/types'
 import { Badge } from '@/components/ui/badge'
-import { COMPANY_CATEGORY_LABELS, COMPANY_CATEGORY_OPTIONS } from '@/lib/company-categories'
+import { COMPANY_CATEGORY_OPTIONS, formatCompanyCategory } from '@/lib/company-categories'
 import { adminService, type AdminCompanyWithOwner } from '@/services/adminService'
 
 const columns: ColumnDef<AdminCompanyWithOwner>[] = [
@@ -24,7 +24,9 @@ const columns: ColumnDef<AdminCompanyWithOwner>[] = [
   {
     accessorKey: 'category',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Catégorie" />,
-    cell: ({ row }) => <Badge variant="outline">{COMPANY_CATEGORY_LABELS[row.original.category] ?? row.original.category}</Badge>,
+    cell: ({ row }) => (
+      <Badge variant="outline">{formatCompanyCategory(row.original.category, row.original.other_category)}</Badge>
+    ),
     filterFn: facetedFilterFn,
     meta: { label: 'Catégorie' },
   },
@@ -77,6 +79,7 @@ export function CompaniesPage() {
       columns={columnsWithActions}
       data={companies}
       isLoading={isLoading}
+      getRowHref={(row) => `/entreprises/${row.id}`}
       searchPlaceholder="Rechercher une entreprise…"
       facetedFilters={[{ columnId: 'category', title: 'Catégorie', options: COMPANY_CATEGORY_OPTIONS }]}
       bulkActions={(rows, clearSelection) => (

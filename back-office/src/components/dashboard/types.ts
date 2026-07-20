@@ -12,6 +12,7 @@ export type Contribution = {
   tontine: string
   member: string
   amount: number
+  feeAmount: number
   date: Date
 }
 

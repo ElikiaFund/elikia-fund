@@ -4,19 +4,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 
 const chartConfig = {
-  total: { label: 'Cotisations', color: 'var(--chart-3)' },
+  total: { label: 'Total', color: 'var(--chart-3)' },
 } satisfies ChartConfig
 
 type TontinesChartProps = {
   data: { tontine: string; total: number }[]
+  title?: string
+  description?: string
 }
 
-export function TontinesChart({ data }: TontinesChartProps) {
+// Generic ranked horizontal bar chart — the `tontine` field name is a historical leftover from
+// its first use case (cotisations par tontine); other callers repurpose it for member names,
+// categories, etc. `title`/`description` let each caller label it correctly.
+export function TontinesChart({ data, title = 'Cotisations par tontine', description = 'Top 5 sur la période sélectionnée' }: TontinesChartProps) {
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Cotisations par tontine</CardTitle>
-        <CardDescription>Top 5 sur la période sélectionnée</CardDescription>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="aspect-auto h-[280px] w-full">

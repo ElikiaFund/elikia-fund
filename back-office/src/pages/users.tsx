@@ -82,6 +82,7 @@ export function UsersPage() {
       columns={columnsWithActions}
       data={users}
       isLoading={isLoading}
+      getRowHref={(row) => `/utilisateurs/${row.id}`}
       searchPlaceholder="Rechercher un utilisateur…"
       facetedFilters={[
         {
