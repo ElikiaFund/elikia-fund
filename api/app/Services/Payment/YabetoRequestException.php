@@ -14,24 +14,28 @@ class YabetoRequestException extends Exception
     }
 
     /**
-     * A message safe/useful to show an admin — Yabeto's documented error shape is
-     * `{"error": {"message": "...", "code": "..."}}` (yabeto.md §"Error Response Structure"),
-     * but falls back to a status-code-based guess when the body doesn't match (some endpoints
-     * — e.g. validation errors — use a different shape).
+     * A message safe/useful to show an admin. Yabeto's documented error shape is
+     * `{"error": {"message": "...", "code": "..."}}` (yabeto.md §"Error Response Structure") —
+     * when present, that actual detail is shown ahead of any status-code guess of ours, since
+     * Yabeto's own explanation is strictly more reliable than us pattern-matching on a status
+     * code alone (a 404 can mean "bad account id", but just as easily "this route isn't real as
+     * documented" — see yabeto.md §9 for how unreliable some of Yabeto's own endpoint docs are).
      */
     public function userMessage(): string
     {
         $body = $this->response->json();
         $detail = $body['error']['message'] ?? $body['message'] ?? null;
 
+        if ($detail) {
+            return "Yabeto a répondu : {$detail} (HTTP {$this->response->status()})";
+        }
+
         return match ($this->response->status()) {
             401 => 'Clé secrète refusée (401) — vérifiez qu\'elle correspond au mode sélectionné (sandbox/live).',
             403 => 'Accès refusé (403) — ce compte n\'est peut-être pas autorisé pour cette opération.',
-            404 => 'Identifiant de compte introuvable (404) — vérifiez l\'account ID.',
+            404 => "Ressource introuvable (404) — soit une valeur saisie est incorrecte, soit cet endpoint Yabeto n'existe pas tel que documenté (voir yabeto.md §9).",
             429 => 'Trop de requêtes envoyées à Yabeto (429) — réessayez dans un instant.',
-            default => $detail
-                ? "Yabeto a répondu : {$detail} (HTTP {$this->response->status()})"
-                : "Yabeto a refusé la requête (HTTP {$this->response->status()}).",
+            default => "Yabeto a refusé la requête (HTTP {$this->response->status()}).",
         };
     }
 }

@@ -118,7 +118,26 @@ class YabetoService
 
     /**
      * Lightweight credential check for the back-office "Tester la connexion" button — lists
-     * webhooks (a safe, read-only, auth-requiring call) rather than creating anything.
+     * payment intents (a safe, read-only, auth-requiring call that doesn't need `accountId` in
+     * the URL — Yabeto derives the merchant from the secret key itself, per the `accountId`
+     * field Yabeto echoes back in payment intent responses) rather than creating anything.
+     *
+     * Deliberately *not* using the account-scoped webhooks list (`/account/{id}/webhooks`) for
+     * this — that path is the least corroborated one in Yabeto's docs (only shown once, never
+     * referenced by the official PHP SDK), so a 404 there is as likely to mean "this route
+     * doesn't exist as documented" as "this accountId is wrong". See yabeto.md §9.
+     */
+    public function listPaymentIntents(int $limit = 3): array
+    {
+        $response = $this->client->get('/payment-intents', ['limit' => $limit]);
+        $this->assertSuccessful($response);
+
+        return $response->json('data', []);
+    }
+
+    /**
+     * Lists webhooks registered for the account — used by the "Enregistrer le webhook" flow's
+     * own bookkeeping, not for the connection test (see listPaymentIntents() above).
      */
     public function listWebhooks(): array
     {

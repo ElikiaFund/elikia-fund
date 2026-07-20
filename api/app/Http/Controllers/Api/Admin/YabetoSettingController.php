@@ -49,16 +49,17 @@ class YabetoSettingController extends Controller
 
     /**
      * POST /admin/settings/yabeto/test-connection — a safe, read-only authenticated call
-     * (listing webhooks) to confirm the currently-saved credentials actually work.
+     * (listing payment intents) to confirm the currently-saved secret key actually works.
+     * Doesn't require `account_id` — Yabeto derives the merchant from the key itself.
      */
     public function testConnection(): JsonResponse
     {
-        if (! $this->config->secretKey || ! $this->config->accountId) {
-            return response()->json(['success' => false, 'message' => 'Identifiant de compte et clé secrète requis.'], 422);
+        if (! $this->config->secretKey) {
+            return response()->json(['success' => false, 'message' => 'Clé secrète requise.'], 422);
         }
 
         try {
-            $this->yabeto->listWebhooks();
+            $this->yabeto->listPaymentIntents();
 
             return response()->json(['success' => true, 'message' => 'Connexion à Yabeto Pay réussie.']);
         } catch (YabetoRequestException $e) {
@@ -83,8 +84,10 @@ class YabetoSettingController extends Controller
      */
     public function registerWebhook(): JsonResponse
     {
+        // Unlike testConnection(), this call is genuinely account-scoped
+        // (POST /account/{accountId}/webhooks) — both are required here.
         if (! $this->config->secretKey || ! $this->config->accountId) {
-            return response()->json(['message' => 'Identifiant de compte et clé secrète requis.'], 422);
+            return response()->json(['message' => "Identifiant de compte et clé secrète requis pour l'enregistrement du webhook."], 422);
         }
 
         try {
