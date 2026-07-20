@@ -10,6 +10,7 @@ use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -33,12 +34,35 @@ class YabetoSettingController extends Controller
      * Accepts a partial payload — `secret_key`/`webhook_secret` are only overwritten when a
      * non-empty value is actually submitted, so toggling `is_enabled` doesn't force re-pasting
      * keys the admin already saved.
+     *
+     * Switching mode from 'sandbox' to 'live' is a sensitive action (every deposit/withdraw/
+     * contribution moves real money from then on) — the back-office gates it behind a password
+     * re-check dialog, but that's only a client-side UX flow; this re-verifies the password
+     * server-side too, exactly like the step-up check used for destructive deletes
+     * (Admin\AuthController@verifyPassword), so the requirement can't be bypassed by calling
+     * this endpoint directly.
      */
     public function update(UpdateYabetoSettingsRequest $request): JsonResponse
     {
         $setting = YabetoSetting::current();
+        $validated = $request->validated();
 
-        $data = collect($request->validated())
+        $switchingToLive = ($validated['mode'] ?? $setting->mode) === 'live' && $setting->mode !== 'live';
+
+        if ($switchingToLive) {
+            $password = $validated['password'] ?? null;
+
+            if (! $password) {
+                return response()->json(['message' => 'Mot de passe requis pour activer le mode Live.'], 422);
+            }
+
+            if (! $request->user()->password || ! Hash::check($password, $request->user()->password)) {
+                return response()->json(['message' => 'Mot de passe incorrect.'], 422);
+            }
+        }
+
+        $data = collect($validated)
+            ->except(['password'])
             ->reject(fn ($value, $key) => in_array($key, ['secret_key', 'webhook_secret'], true) && blank($value))
             ->all();
 

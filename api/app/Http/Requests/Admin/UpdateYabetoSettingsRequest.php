@@ -31,6 +31,10 @@ class UpdateYabetoSettingsRequest extends FormRequest
             'secret_key' => ['sometimes', 'nullable', 'string', 'max:255'],
             'webhook_secret' => ['sometimes', 'nullable', 'string', 'max:255'],
             'is_enabled' => ['sometimes', 'boolean'],
+            // Required only when switching from 'sandbox' to 'live' — enforced (not just
+            // validated) in Admin\YabetoSettingController@update, since whether it's required
+            // depends on the currently-stored mode, not just this request's payload.
+            'password' => ['sometimes', 'nullable', 'string'],
         ];
     }
 }
