@@ -75,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/groups/{group}/contribute', [GroupController::class, 'contribute']);
     Route::post('/groups/{group}/contributions/{contribution}/refresh-status', [GroupController::class, 'refreshContributionStatus']);
     Route::get('/groups/{group}/report', [GroupController::class, 'report']);
+    Route::get('/groups/{group}/cycles', [GroupController::class, 'cycles']);
     Route::get('/groups/{group}/requests', [GroupController::class, 'requests']);
     Route::post('/groups/{group}/requests/{user}/approve', [GroupController::class, 'approveRequest']);
     Route::post('/groups/{group}/requests/{user}/decline', [GroupController::class, 'declineRequest']);

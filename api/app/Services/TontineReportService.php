@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Group;
+use Carbon\Carbon;
 
 /**
  * Computes a tontine cycle report live from contributions/members data — same "computed, not
@@ -14,18 +15,28 @@ class TontineReportService
     public function generate(Group $group, ?string $cyclePeriod = null): array
     {
         $cyclePeriod ??= $group->previousCyclePeriod();
+        $cycleEnd = $group->cycleBoundsFor($cyclePeriod)['end'];
 
         // Only `succeeded` contributions count as "paid" — a failed or still-`processing` Yabeto
         // attempt isn't money in hand yet, see GroupController::contribute().
         $contributions = $group->contributions()->where('cycle_period', $cyclePeriod)->where('status', 'succeeded')->with('user')->get();
         $paidUserIds = $contributions->pluck('user_id');
-        $members = $group->members;
+
+        // Only members who had already joined by the time this cycle ended are "eligible" for
+        // it — otherwise a member who joins today shows up as "late" for every cycle that
+        // happened before they were even part of the tontine.
+        $members = $group->members->filter(
+            fn ($member) => $member->pivot->approved_at && Carbon::parse($member->pivot->approved_at)->lte($cycleEnd)
+        );
         $lateMembers = $members->whereNotIn('id', $paidUserIds);
 
         return [
             'group_id' => $group->id,
             'group_name' => $group->name,
+            'frequency' => $group->frequency,
             'cycle_period' => $cyclePeriod,
+            'starts_at' => $group->cycleBoundsFor($cyclePeriod)['start']->toDateString(),
+            'ends_at' => $cycleEnd->toDateString(),
             'members_count' => $members->count(),
             'paid_count' => $paidUserIds->unique()->count(),
             'late_count' => $lateMembers->count(),

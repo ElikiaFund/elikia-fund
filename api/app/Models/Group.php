@@ -85,6 +85,26 @@ class Group extends Model
     }
 
     /**
+     * The reverse of cyclePeriodFor() — the calendar start/end of a given cycle_period string,
+     * e.g. "2026-W20" -> the Monday-Sunday of ISO week 20, or "2026-05" -> the full month of May.
+     * Used to figure out who was actually a member during a given cycle (see TontineReportService)
+     * and to label cycles for display (e.g. "10 au 17 mai 2026").
+     */
+    public function cycleBoundsFor(string $cyclePeriod): array
+    {
+        if ($this->frequency === 'weekly') {
+            [$year, $week] = sscanf($cyclePeriod, '%d-W%d');
+            $start = Carbon::now()->setISODate($year, $week)->startOfDay();
+
+            return ['start' => $start, 'end' => $start->copy()->endOfWeek()];
+        }
+
+        $start = Carbon::createFromFormat('Y-m-d', "{$cyclePeriod}-01")->startOfMonth();
+
+        return ['start' => $start, 'end' => $start->copy()->endOfMonth()];
+    }
+
+    /**
      * The scheduled due-moment for this cycle's contribution. Defaults to the plain calendar
      * week/month boundary when the creator hasn't set a specific contribution_day/time.
      */

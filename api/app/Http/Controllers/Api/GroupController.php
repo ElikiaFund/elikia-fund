@@ -17,6 +17,7 @@ use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use App\Services\PaymentNotificationService;
 use App\Services\TontineReportService;
+use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -399,6 +400,60 @@ class GroupController extends Controller
         $cyclePeriod = $request->query('cycle');
 
         return response()->json($reports->generate($group, is_string($cyclePeriod) ? $cyclePeriod : null));
+    }
+
+    /**
+     * GET /groups/{group}/cycles — every cycle since the tontine was created, most recent first,
+     * so the mobile group detail screen can list them (e.g. "10 au 17 mai 2026") and let a member
+     * open any one via GET /groups/{group}/report?cycle=. Capped to the last 52 cycles so a
+     * long-running weekly tontine doesn't return an unbounded list.
+     */
+    public function cycles(Request $request, Group $group): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless($group->members()->where('users.id', $user->id)->exists(), 403);
+
+        $periods = [];
+        $cursor = $group->created_at->copy();
+        $now = now();
+
+        while ($cursor->lte($now) && count($periods) < 52) {
+            $period = $group->cyclePeriodFor($cursor);
+
+            if (! in_array($period, $periods, true)) {
+                $periods[] = $period;
+            }
+
+            $cursor = $group->frequency === 'weekly' ? $cursor->addWeek() : $cursor->addMonthNoOverflow();
+        }
+
+        $periods = array_reverse($periods);
+        $currentPeriod = $group->currentCyclePeriod();
+        $members = $group->members;
+
+        $paidCounts = $group->contributions()
+            ->whereIn('cycle_period', $periods)
+            ->where('status', 'succeeded')
+            ->get()
+            ->groupBy('cycle_period')
+            ->map(fn ($rows) => $rows->pluck('user_id')->unique()->count());
+
+        return response()->json(collect($periods)->map(function (string $period) use ($group, $members, $paidCounts, $currentPeriod) {
+            $bounds = $group->cycleBoundsFor($period);
+            $eligibleCount = $members->filter(
+                fn ($member) => $member->pivot->approved_at && Carbon::parse($member->pivot->approved_at)->lte($bounds['end'])
+            )->count();
+
+            return [
+                'cycle_period' => $period,
+                'starts_at' => $bounds['start']->toDateString(),
+                'ends_at' => $bounds['end']->toDateString(),
+                'is_current' => $period === $currentPeriod,
+                'paid_count' => $paidCounts[$period] ?? 0,
+                'members_count' => $eligibleCount,
+            ];
+        })->values());
     }
 
     private function generateInviteCode(): string
