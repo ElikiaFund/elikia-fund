@@ -61,10 +61,17 @@ class YabetoSettingController extends Controller
             $this->yabeto->listWebhooks();
 
             return response()->json(['success' => true, 'message' => 'Connexion à Yabeto Pay réussie.']);
-        } catch (YabetoRequestException|ConnectionException $e) {
+        } catch (YabetoRequestException $e) {
             Log::warning('Yabeto test connection failed', ['message' => $e->getMessage()]);
 
-            return response()->json(['success' => false, 'message' => 'Échec de connexion — vérifiez vos identifiants.'], 422);
+            return response()->json(['success' => false, 'message' => $e->userMessage()], 422);
+        } catch (ConnectionException $e) {
+            Log::warning('Yabeto test connection could not reach the API', ['message' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => "Le serveur n'a pas pu joindre Yabeto Pay (réseau/DNS/SSL sortant) — ce n'est pas un problème d'identifiants. Vérifiez la connectivité sortante de l'hébergeur de l'API.",
+            ], 422);
         }
     }
 
@@ -85,10 +92,16 @@ class YabetoSettingController extends Controller
                 url('/api/webhooks/yabeto'),
                 ['intent.completed', 'disbursement.completed'],
             );
-        } catch (YabetoRequestException|ConnectionException $e) {
+        } catch (YabetoRequestException $e) {
             Log::warning('Yabeto webhook registration failed', ['message' => $e->getMessage()]);
 
-            return response()->json(['message' => "Échec de l'enregistrement du webhook."], 422);
+            return response()->json(['message' => $e->userMessage()], 422);
+        } catch (ConnectionException $e) {
+            Log::warning('Yabeto webhook registration could not reach the API', ['message' => $e->getMessage()]);
+
+            return response()->json([
+                'message' => "Le serveur n'a pas pu joindre Yabeto Pay (réseau/DNS/SSL sortant).",
+            ], 422);
         }
 
         $secret = $result['secret'] ?? null;
