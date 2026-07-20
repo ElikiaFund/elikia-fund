@@ -27,7 +27,7 @@ class CreateGroupRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'contribution_amount' => ['required', 'numeric', 'min:1'],
             'frequency' => ['required', 'string', Rule::in(['weekly', 'monthly'])],
-            'max_members' => ['nullable', 'integer', 'min:2', 'max:100'],
+            'max_members' => ['nullable', 'integer', 'min:2', 'max:1000'],
         ];
     }
 }
