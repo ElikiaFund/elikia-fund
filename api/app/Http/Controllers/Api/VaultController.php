@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Vault\SetVaultPinRequest;
+use App\Http\Requests\Vault\UpdateVaultPinRequest;
 use App\Http\Requests\Vault\VaultTransactionRequest;
 use App\Http\Requests\Vault\VerifyVaultPinRequest;
 use App\Models\Vault;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\PaymentNotificationService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +30,10 @@ class VaultController extends Controller
         'airtel_money' => 'Airtel Money',
     ];
 
-    public function __construct(private readonly YabetoService $yabeto) {}
+    public function __construct(
+        private readonly YabetoService $yabeto,
+        private readonly PaymentNotificationService $paymentNotifications,
+    ) {}
 
     /**
      * POST /vault/activate — first-time vault activation: creates the vault and sets its 4-digit PIN.
@@ -66,6 +71,29 @@ class VaultController extends Controller
         }
 
         return response()->json(['message' => 'Code PIN vérifié.']);
+    }
+
+    /**
+     * PUT /vault/pin — change the PIN, re-verifying the current one first. Powers the mobile
+     * "Sécurité et code PIN" screen.
+     */
+    public function updatePin(UpdateVaultPinRequest $request): JsonResponse
+    {
+        $vault = $request->user()->vault;
+
+        if (! $vault || ! $vault->hasPinSet()) {
+            return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
+        }
+
+        if (! Hash::check($request->validated('current_pin'), $vault->pin_hash)) {
+            return response()->json(['message' => 'Code PIN actuel incorrect.'], 422);
+        }
+
+        $vault->pin_hash = Hash::make($request->validated('pin'));
+        $vault->pin_set_at = now();
+        $vault->save();
+
+        return response()->json(['message' => 'Code PIN mis à jour.']);
     }
 
     /**
@@ -175,6 +203,8 @@ class VaultController extends Controller
             ]);
         });
 
+        $this->paymentNotifications->depositSucceeded($vault->user, $amount);
+
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }
 
@@ -190,6 +220,8 @@ class VaultController extends Controller
                 'status' => 'completed',
             ]);
         });
+
+        $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }
@@ -223,6 +255,8 @@ class VaultController extends Controller
         }
 
         if ($result->failed()) {
+            $this->paymentNotifications->depositFailed($vault->user, $amount, $result->failureMessage);
+
             return response()->json(['message' => $result->failureMessage ?? 'Le paiement a échoué.'], 422);
         }
 
@@ -237,6 +271,7 @@ class VaultController extends Controller
 
         if ($result->succeeded()) {
             $vault->increment('balance', $amount);
+            $this->paymentNotifications->depositSucceeded($vault->user, $amount);
         }
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
@@ -264,6 +299,8 @@ class VaultController extends Controller
         }
 
         if ($result->failed()) {
+            $this->paymentNotifications->withdrawFailed($vault->user, $amount, $result->failureMessage);
+
             return response()->json(['message' => $result->failureMessage ?? 'Le retrait a échoué.'], 422);
         }
 
@@ -279,6 +316,10 @@ class VaultController extends Controller
                 'yabeto_reference' => $result->id,
             ]);
         });
+
+        if ($result->succeeded()) {
+            $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
+        }
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }

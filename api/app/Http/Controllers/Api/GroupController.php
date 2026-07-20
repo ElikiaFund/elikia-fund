@@ -11,6 +11,7 @@ use App\Models\Group;
 use App\Models\User;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\PaymentNotificationService;
 use App\Services\TontineReportService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
@@ -25,7 +26,10 @@ class GroupController extends Controller
      */
     private const MANAGEMENT_FEE_RATE = 0.03;
 
-    public function __construct(private readonly YabetoService $yabeto) {}
+    public function __construct(
+        private readonly YabetoService $yabeto,
+        private readonly PaymentNotificationService $paymentNotifications,
+    ) {}
 
     /**
      * GET /groups — tontines the authenticated user belongs to.
@@ -143,6 +147,8 @@ class GroupController extends Controller
                 'status' => 'succeeded',
             ]);
 
+            $this->paymentNotifications->contributionSucceeded($user, $group, $amount);
+
             return response()->json($contribution->load('user'), 201);
         }
 
@@ -188,13 +194,57 @@ class GroupController extends Controller
         ]);
 
         if ($result->failed()) {
+            $this->paymentNotifications->contributionFailed($user, $group, $amount, $result->failureMessage);
+
             return response()->json([
                 'message' => $result->failureMessage ?? 'Le paiement a échoué.',
                 'contribution' => $contribution->load('user'),
             ], 422);
         }
 
+        if ($result->succeeded()) {
+            $this->paymentNotifications->contributionSucceeded($user, $group, $amount);
+        }
+
         return response()->json($contribution->load('user'), 201);
+    }
+
+    /**
+     * POST /groups/{group}/contributions/{contribution}/refresh-status — manual fallback for a
+     * contribution stuck `processing` (e.g. the confirmation webhook never arrived — see
+     * yabeto.md §5.3, `getPaymentIntent` is documented specifically for this). Only the member
+     * who made the contribution can trigger it.
+     */
+    public function refreshContributionStatus(Request $request, Group $group, Contribution $contribution): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless($contribution->group_id === $group->id, 404);
+        abort_unless($contribution->user_id === $user->id, 403);
+
+        if (! $this->yabeto->isEnabled() || $contribution->status !== 'processing' || ! $contribution->yabeto_reference) {
+            return response()->json($contribution->load('user'));
+        }
+
+        try {
+            $result = $this->yabeto->getPaymentIntent($contribution->yabeto_reference);
+        } catch (YabetoRequestException|ConnectionException $e) {
+            Log::warning('Yabeto contribution status refresh failed', ['message' => $e->getMessage()]);
+
+            return response()->json($contribution->load('user'));
+        }
+
+        if ($result->status !== $contribution->status) {
+            $contribution->update(['status' => $result->status]);
+
+            if ($result->succeeded()) {
+                $this->paymentNotifications->contributionSucceeded($user, $group, (float) $contribution->amount);
+            } elseif ($result->failed()) {
+                $this->paymentNotifications->contributionFailed($user, $group, (float) $contribution->amount, $result->failureMessage);
+            }
+        }
+
+        return response()->json($contribution->fresh()->load('user'));
     }
 
     /**

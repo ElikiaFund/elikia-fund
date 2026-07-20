@@ -61,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/vault/activate', [VaultController::class, 'activate']);
     Route::post('/vault/pin/verify', [VaultController::class, 'verifyPin'])->middleware('throttle:5,1');
+    Route::put('/vault/pin', [VaultController::class, 'updatePin'])->middleware('throttle:5,1');
     Route::get('/vault', [VaultController::class, 'show']);
     Route::get('/vault/movements', [VaultController::class, 'movements']);
     Route::post('/vault/deposit', [VaultController::class, 'deposit']);
@@ -71,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/groups/{group}', [GroupController::class, 'show']);
     Route::post('/groups/join', [GroupController::class, 'join']);
     Route::post('/groups/{group}/contribute', [GroupController::class, 'contribute']);
+    Route::post('/groups/{group}/contributions/{contribution}/refresh-status', [GroupController::class, 'refreshContributionStatus']);
     Route::get('/groups/{group}/report', [GroupController::class, 'report']);
 
     Route::get('/products', [ProductController::class, 'index']);

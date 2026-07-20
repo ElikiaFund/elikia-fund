@@ -7,6 +7,7 @@ use App\Models\Contribution;
 use App\Models\VaultMovement;
 use App\Services\Payment\YabetoConfig;
 use App\Services\Payment\YabetoWebhookVerifier;
+use App\Services\PaymentNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ class YabetoWebhookController extends Controller
     public function __construct(
         private readonly YabetoWebhookVerifier $verifier,
         private readonly YabetoConfig $config,
+        private readonly PaymentNotificationService $paymentNotifications,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -81,7 +83,19 @@ class YabetoWebhookController extends Controller
             return;
         }
 
-        Contribution::where('yabeto_reference', $reference)->update(['status' => $status]);
+        $contribution = Contribution::with(['user', 'group'])->where('yabeto_reference', $reference)->first();
+
+        if (! $contribution || $contribution->status === $status) {
+            return;
+        }
+
+        $contribution->update(['status' => $status]);
+
+        if ($status === 'succeeded') {
+            $this->paymentNotifications->contributionSucceeded($contribution->user, $contribution->group, (float) $contribution->amount);
+        } elseif ($status === 'failed') {
+            $this->paymentNotifications->contributionFailed($contribution->user, $contribution->group, (float) $contribution->amount);
+        }
     }
 
     private function finalizeDeposit(VaultMovement $movement, string $status): void
@@ -97,6 +111,12 @@ class YabetoWebhookController extends Controller
 
             $movement->update(['status' => $status]);
         });
+
+        if ($status === 'succeeded') {
+            $this->paymentNotifications->depositSucceeded($movement->vault->user, (float) $movement->amount);
+        } elseif ($status === 'failed') {
+            $this->paymentNotifications->depositFailed($movement->vault->user, (float) $movement->amount);
+        }
     }
 
     private function resolveDisbursement(string $reference, string $status): void
@@ -116,5 +136,11 @@ class YabetoWebhookController extends Controller
 
             $movement->update(['status' => $status]);
         });
+
+        if ($status === 'succeeded') {
+            $this->paymentNotifications->withdrawSucceeded($movement->vault->user, (float) $movement->amount);
+        } elseif ($status === 'failed') {
+            $this->paymentNotifications->withdrawFailed($movement->vault->user, (float) $movement->amount);
+        }
     }
 }
