@@ -14,7 +14,11 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('email')->unique();
+            // Nullable/unique independently — phone is now the primary login identifier for the
+            // classic register/login flow, email stays for OAuth (Google/Apple/Facebook always
+            // supply one, even if it's a provider-relay address) and is no longer required.
+            $table->string('email')->nullable()->unique();
+            $table->string('phone')->nullable()->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password')->nullable();
             $table->string('avatar_url')->nullable();

@@ -25,7 +25,7 @@ class AuthController extends Controller
 
         $user = User::create([
             'name' => $validated['name'],
-            'email' => $validated['email'],
+            'phone' => $validated['phone'],
             'password' => $validated['password'], // 'hashed' cast on the model hashes this on write.
         ]);
 
@@ -36,7 +36,7 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        $user = User::where('email', $validated['email'])->first();
+        $user = User::where('phone', $validated['phone'])->first();
 
         if (! $user || ! $user->password || ! Hash::check($validated['password'], $user->password)) {
             return response()->json(['message' => 'Identifiants invalides.'], 422);
