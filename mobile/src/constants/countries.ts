@@ -50,3 +50,14 @@ export function formatLocalNumber(raw: string, country: Country): string {
 export function toE164(raw: string, country: Country): string {
   return `${country.dialCode}${sanitizeLocalNumber(raw, country)}`;
 }
+
+/** Reverse of toE164 — splits a stored E.164 number back into its country and local digits, for pre-filling an edit form. Falls back to DEFAULT_COUNTRY with an empty number when null/unrecognized. */
+export function parsePhone(e164: string | null | undefined): { country: Country; localNumber: string } {
+  const country = e164 ? COUNTRIES.find((c) => e164.startsWith(c.dialCode)) : undefined;
+
+  if (!country || !e164) {
+    return { country: DEFAULT_COUNTRY, localNumber: '' };
+  }
+
+  return { country, localNumber: e164.slice(country.dialCode.length) };
+}

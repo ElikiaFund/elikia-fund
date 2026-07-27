@@ -1,0 +1,9 @@
+# EAS Build only needs mobile/ — exclude the sibling apps entirely.
+# (api/public/storage is a symlink created by `php artisan storage:link`;
+# EAS's archiver doesn't see api/.gitignore since api/ isn't an ancestor of
+# mobile/, and Windows can't recreate the symlink without elevated
+# privileges, which crashed the upload. Excluding api/ wholesale avoids that
+# and any similar issue in back-office/ or website/.)
+api/
+back-office/
+website/

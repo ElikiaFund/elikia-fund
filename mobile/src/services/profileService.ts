@@ -4,6 +4,7 @@ import type { AuthUser } from '@/services/authService';
 export type UpdateProfilePayload = {
   name: string;
   email: string;
+  phone: string | null;
   currentPassword?: string;
   password?: string;
   passwordConfirmation?: string;
@@ -15,6 +16,7 @@ export const profileService = {
       .put<AuthUser>('/me', {
         name: payload.name,
         email: payload.email,
+        phone: payload.phone,
         current_password: payload.currentPassword,
         password: payload.password,
         password_confirmation: payload.passwordConfirmation,

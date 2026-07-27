@@ -20,7 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     // Only the back-office web app needs CORS (native mobile requests aren't browser-origin-checked).
-    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:5173')],
+    'allowed_origins' => [env('FRONTEND_URL', 'https://console.elikiafund.com')],
 
     'allowed_origins_patterns' => [],
 

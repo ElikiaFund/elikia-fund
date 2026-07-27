@@ -27,6 +27,9 @@ class UpdateProfileRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->user()->id)],
+            // Same permissive E.164-ish pattern as RegisterRequest — nullable since OAuth-only
+            // accounts may not have one yet.
+            'phone' => ['nullable', 'string', 'regex:/^\+[1-9]\d{6,14}$/', Rule::unique('users', 'phone')->ignore($this->user()->id)],
             'current_password' => ['required_with:password', 'string'],
             'password' => ['nullable', 'confirmed', Password::defaults()],
         ];

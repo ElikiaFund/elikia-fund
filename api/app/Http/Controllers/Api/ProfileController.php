@@ -24,6 +24,7 @@ class ProfileController extends Controller
 
         $user->name = $request->validated('name');
         $user->email = $request->validated('email');
+        $user->phone = $request->validated('phone');
         $user->save();
 
         return response()->json($user->load('company', 'role'));

@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'https://elikia.mova-mobility.com/api'
+const API_URL = import.meta.env.VITE_API_URL ?? 'https://api.elikiafund.com/api'
 
 export const apiService = axios.create({
   baseURL: API_URL,
