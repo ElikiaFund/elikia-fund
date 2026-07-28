@@ -38,13 +38,13 @@ class DatabaseSeeder extends Seeder
         // Back-office admin login (dev only — password is "password", see api/README.md).
         User::factory()->create([
             'name' => 'Admin Elikia Fund',
-            'email' => 'admin@elikia-fund.test',
+            'email' => 'admin@elikiafund.com',
             'role_id' => $superAdmin->id,
         ]);
 
         User::factory()->create([
             'name' => 'Support Elikia Fund',
-            'email' => 'support@elikia-fund.test',
+            'email' => 'support@elikiafund.com',
             'role_id' => $support->id,
         ]);
 

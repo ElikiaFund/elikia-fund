@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Profile\UpdateCashSessionSettingsRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,5 +59,17 @@ class ProfileController extends Controller
         $request->user()->forceFill(['push_token' => $request->string('push_token')])->save();
 
         return response()->json(['message' => 'Jeton de notification enregistré.']);
+    }
+
+    /**
+     * PUT /me/cash-session-settings — the user's own cash-session cadence + reminder config.
+     * The reminder itself is scheduled entirely on-device (local notification); this endpoint
+     * exists so the config syncs across devices and survives a reinstall.
+     */
+    public function updateCashSessionSettings(UpdateCashSessionSettingsRequest $request): JsonResponse
+    {
+        $request->user()->update($request->validated());
+
+        return response()->json($request->user());
     }
 }

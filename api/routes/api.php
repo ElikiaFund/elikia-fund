@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Admin\TransactionController as AdminTransactionCont
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\YabetoSettingController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CashSessionController;
 use App\Http\Controllers\Api\CreditScoreController as MeCreditScoreController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\NotificationController;
@@ -48,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/me', [ProfileController::class, 'update']);
     Route::post('/me/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::post('/me/push-token', [ProfileController::class, 'registerPushToken']);
+    Route::put('/me/cash-session-settings', [ProfileController::class, 'updateCashSessionSettings']);
     Route::get('/me/credit-score', MeCreditScoreController::class);
     Route::get('/me/notifications', [NotificationController::class, 'index']);
     Route::post('/me/notifications/read-all', [NotificationController::class, 'markAllRead']);
@@ -58,6 +60,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::post('/transactions', [TransactionController::class, 'store']);
     Route::post('/sync', SyncController::class);
+
+    Route::get('/cash-sessions', [CashSessionController::class, 'index']);
+    Route::get('/cash-sessions/current', [CashSessionController::class, 'current']);
+    Route::post('/cash-sessions/close', [CashSessionController::class, 'store']);
 
     Route::post('/vault/activate', [VaultController::class, 'activate']);
     Route::post('/vault/pin/verify', [VaultController::class, 'verifyPin'])->middleware('throttle:5,1');

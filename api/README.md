@@ -16,7 +16,7 @@ See the root [`fintech-mvp-one-week-plan.md`](../fintech-mvp-one-week-plan.md) f
 2. `composer install`
 3. `cp .env.example .env` and fill in `DB_USERNAME` / `DB_PASSWORD` for your MySQL install, plus `GOOGLE_CLIENT_ID` / `FACEBOOK_APP_ID` / `APPLE_CLIENT_ID` once you have them (see Auth below), and `YABETO_*` if you have real Yabeto Pay sandbox credentials (optional — see Payments below).
 4. `php artisan key:generate`
-5. `php artisan migrate:fresh --seed` (seeds two staff logins — `admin@elikia-fund.test` / `password` with the Super Admin role, `support@elikia-fund.test` / `password` with the read-only Support role, both dev only — plus ~30 realistic consumer users with transactions, vaults, companies, products, and 5 tontines with contributions; `APP_FAKER_LOCALE=fr_FR` gives French names)
+5. `php artisan migrate:fresh --seed` (seeds two staff logins — `admin@elikiafund.com` / `password` with the Super Admin role, `support@elikiafund.com` / `password` with the read-only Support role, both dev only — plus ~30 realistic consumer users with transactions, vaults, companies, products, and 5 tontines with contributions; `APP_FAKER_LOCALE=fr_FR` gives French names)
 6. `php artisan storage:link` (serves uploaded avatars from `storage/app/public`)
 7. `php artisan serve`
 

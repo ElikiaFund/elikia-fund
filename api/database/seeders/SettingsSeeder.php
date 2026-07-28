@@ -14,7 +14,7 @@ class SettingsSeeder extends Seeder
     {
         Setting::updateOrCreate(
             ['key' => 'platform'],
-            ['value' => ['name' => 'Elikia Fund', 'support_email' => 'support@elikia-fund.test']]
+            ['value' => ['name' => 'Elikia Fund', 'support_email' => 'support@elikiafund.com']]
         );
 
         Setting::updateOrCreate(

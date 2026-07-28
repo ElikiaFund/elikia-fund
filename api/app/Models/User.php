@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Carbon\Carbon;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -16,7 +17,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'phone', 'password', 'avatar_url', 'google_id', 'apple_id', 'facebook_id', 'role_id', 'push_token'])]
+#[Fillable([
+    'name', 'email', 'phone', 'password', 'avatar_url', 'google_id', 'apple_id', 'facebook_id', 'role_id', 'push_token',
+    'cash_session_frequency', 'cash_session_day', 'cash_session_reminder_time', 'cash_session_reminders_enabled',
+])]
 #[Hidden(['password', 'remember_token', 'push_token'])]
 class User extends Authenticatable
 {
@@ -37,6 +41,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'onboarding_completed_at' => 'datetime',
+            'cash_session_reminders_enabled' => 'boolean',
         ];
     }
 
@@ -97,5 +102,25 @@ class User extends Authenticatable
     public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class)->latest();
+    }
+
+    public function cashSessions(): HasMany
+    {
+        return $this->hasMany(CashSession::class);
+    }
+
+    /** Human-readable French label for the configured cash-session cadence, e.g. "Tous les jours à 20h00". */
+    public function cashSessionScheduleLabel(): ?string
+    {
+        $time = $this->cash_session_reminder_time ? Carbon::parse($this->cash_session_reminder_time)->format('H\hi') : null;
+
+        if ($this->cash_session_frequency === 'weekly') {
+            $days = [1 => 'lundis', 2 => 'mardis', 3 => 'mercredis', 4 => 'jeudis', 5 => 'vendredis', 6 => 'samedis', 7 => 'dimanches'];
+            $day = $days[$this->cash_session_day] ?? null;
+
+            return $day ? "Tous les {$day}".($time ? " à {$time}" : '') : null;
+        }
+
+        return 'Tous les jours'.($time ? " à {$time}" : '');
     }
 }
