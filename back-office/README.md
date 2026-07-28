@@ -9,7 +9,7 @@ Vite + React + TypeScript + shadcn/ui (Radix base, Nova preset) + Tailwind CSS v
 3. Seed the API (`cd ../api && php artisan migrate:fresh --seed && php artisan storage:link`) so there's real data to look at and avatar uploads work.
 4. `npm run dev`
 
-Log in with a seeded staff account (see `../api/README.md`): `admin@elikia-fund.test` / `password` (Super Admin) or `support@elikia-fund.test` / `password` (read-only Support role, useful for testing permission gating).
+Log in with a seeded staff account (see `../api/README.md`): `admin@elikiafund.com` / `password` (Super Admin) or `support@elikiafund.com` / `password` (read-only Support role, useful for testing permission gating).
 
 ## Structure
 
