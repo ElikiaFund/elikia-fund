@@ -47,8 +47,8 @@ class ProductFactory extends Factory
         return [
             'user_id' => User::factory(),
             'name' => $item['name'],
-            'category' => $item['category'],
-            'unit_price' => $item['unit_price'],
+            'sell_price' => $item['unit_price'],
+            'cost_price' => round($item['unit_price'] * fake()->randomFloat(2, 0.5, 0.8), 2),
         ];
     }
 }

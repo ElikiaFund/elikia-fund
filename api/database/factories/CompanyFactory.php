@@ -18,10 +18,14 @@ class CompanyFactory extends Factory
      */
     public function definition(): array
     {
+        $department = fake()->randomElement(Company::DEPARTMENTS);
+
         return [
             'user_id' => User::factory(),
             'name' => fake()->company(),
             'category' => fake()->randomElement(Company::CATEGORIES),
+            'department' => $department,
+            'city' => Company::DEPARTMENT_CAPITALS[$department],
         ];
     }
 }

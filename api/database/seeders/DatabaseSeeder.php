@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\Permission;
 use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\User;
@@ -57,8 +58,21 @@ class DatabaseSeeder extends Seeder
                     $user->forceFill(['onboarding_completed_at' => now()])->save();
 
                     if (array_key_exists($company->category, ProductFactory::CATALOG)) {
+                        ProductCategory::seedDefaultsFor($company);
+                        $tracksStock = $company->category !== 'services';
+
                         foreach (ProductFactory::CATALOG[$company->category] as $item) {
-                            Product::factory()->create($item + ['user_id' => $user->id]);
+                            $categoryId = ProductCategory::where('user_id', $user->id)->where('name', $item['category'])->value('id');
+
+                            Product::factory()->create([
+                                'user_id' => $user->id,
+                                'name' => $item['name'],
+                                'category_id' => $categoryId,
+                                'sell_price' => $item['unit_price'],
+                                'cost_price' => round($item['unit_price'] * fake()->randomFloat(2, 0.5, 0.8), 2),
+                                'tracks_stock' => $tracksStock,
+                                'stock_quantity' => $tracksStock ? fake()->numberBetween(0, 50) : 0,
+                            ]);
                         }
                     }
                 }

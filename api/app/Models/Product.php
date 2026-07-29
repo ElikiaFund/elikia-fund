@@ -7,8 +7,9 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'name', 'category', 'unit_price'])]
+#[Fillable(['user_id', 'name', 'category_id', 'sell_price', 'cost_price', 'tracks_stock', 'stock_quantity', 'low_stock_threshold'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -17,12 +18,24 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'unit_price' => 'decimal:2',
+            'sell_price' => 'decimal:2',
+            'cost_price' => 'decimal:2',
+            'tracks_stock' => 'boolean',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ProductCategory::class, 'category_id');
+    }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
     }
 }

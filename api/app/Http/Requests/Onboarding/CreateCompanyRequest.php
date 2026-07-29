@@ -28,6 +28,9 @@ class CreateCompanyRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'string', Rule::in(Company::CATEGORIES)],
             'other_category' => ['nullable', 'string', 'max:255', 'required_if:category,autre'],
+            'department' => ['required', 'string', Rule::in(Company::DEPARTMENTS)],
+            // Free text, not Rule::in() — see Company::DEPARTMENT_CAPITALS for why.
+            'city' => ['required', 'string', 'max:255'],
         ];
     }
 }

@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\CreditScoreController as MeCreditScoreController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OnboardingController;
+use App\Http\Controllers\Api\ProductCategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SyncController;
@@ -90,8 +91,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
+    Route::get('/products/{product}', [ProductController::class, 'show']);
     Route::put('/products/{product}', [ProductController::class, 'update']);
     Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+    Route::post('/products/{product}/restock', [ProductController::class, 'restock']);
+    Route::post('/products/{product}/adjust-stock', [ProductController::class, 'adjustStock']);
+    Route::get('/products/{product}/movements', [ProductController::class, 'movements']);
+
+    Route::get('/product-categories', [ProductCategoryController::class, 'index']);
+    Route::post('/product-categories', [ProductCategoryController::class, 'store']);
+    Route::put('/product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
+    Route::delete('/product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
 
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/stats', StatsController::class);

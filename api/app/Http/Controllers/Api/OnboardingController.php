@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Onboarding\CreateCompanyRequest;
+use App\Models\ProductCategory;
 use Illuminate\Http\JsonResponse;
 
 class OnboardingController extends Controller
@@ -20,6 +21,8 @@ class OnboardingController extends Controller
         }
 
         $company = $user->company()->create($request->validated());
+
+        ProductCategory::seedDefaultsFor($company);
 
         $user->forceFill(['onboarding_completed_at' => now()])->save();
 
