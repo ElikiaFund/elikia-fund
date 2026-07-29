@@ -1,78 +1,58 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { Pill } from '@/components/pill';
+import { StatGrid } from '@/components/stat-grid';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { computeProductStats, isLowStock, productMarginPercent } from '@/lib/product-stats';
+import { productCategoryService, type ProductCategory } from '@/services/productCategoryService';
 import { productService, type Product } from '@/services/productService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
+const plainCurrency = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 
 export default function ProductsScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [draftName, setDraftName] = useState('');
-  const [draftCategory, setDraftCategory] = useState('');
-  const [draftPrice, setDraftPrice] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const load = useCallback(() => {
-    setIsLoading(true);
-    productService
-      .list()
-      .then(setProducts)
-      .finally(() => setIsLoading(false));
-  }, []);
+  const [categoryFilter, setCategoryFilter] = useState<number | 'all'>('all');
 
   useFocusEffect(
     useCallback(() => {
-      load();
-    }, [load]),
+      let cancelled = false;
+      setIsLoading(true);
+
+      Promise.all([productService.list(), productCategoryService.list()])
+        .then(([productsResult, categoriesResult]) => {
+          if (!cancelled) {
+            setProducts(productsResult);
+            setCategories(categoriesResult);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsLoading(false);
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, []),
   );
 
-  function resetDraft() {
-    setEditingId(null);
-    setDraftName('');
-    setDraftCategory('');
-    setDraftPrice('');
-  }
-
-  function handleEdit(product: Product) {
-    setEditingId(product.id);
-    setDraftName(product.name);
-    setDraftCategory(product.category ?? '');
-    setDraftPrice(product.unit_price ?? '');
-  }
-
-  async function handleSave() {
-    if (draftName.trim().length === 0) {
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const unitPrice = draftPrice ? Number(draftPrice.replace(',', '.')) : undefined;
-
-      if (editingId) {
-        await productService.update(editingId, draftName.trim(), draftCategory.trim(), unitPrice);
-      } else {
-        await productService.create(draftName.trim(), draftCategory.trim(), unitPrice);
-      }
-
-      resetDraft();
-      load();
-    } catch (e) {
-      Alert.alert('Erreur', e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
-    } finally {
-      setIsSaving(false);
-    }
-  }
+  const stats = useMemo(() => computeProductStats(products), [products]);
+  const filtered = useMemo(
+    () => (categoryFilter === 'all' ? products : products.filter((p) => p.category_id === categoryFilter)),
+    [products, categoryFilter],
+  );
 
   function handleDelete(product: Product) {
     Alert.alert('Supprimer ce produit ?', `"${product.name}" sera retiré de votre catalogue.`, [
@@ -83,10 +63,7 @@ export default function ProductsScreen() {
         onPress: async () => {
           try {
             await productService.remove(product.id);
-            if (editingId === product.id) {
-              resetDraft();
-            }
-            load();
+            setProducts((current) => current.filter((p) => p.id !== product.id));
           } catch (e) {
             Alert.alert('Erreur', e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
           }
@@ -95,108 +72,135 @@ export default function ProductsScreen() {
     ]);
   }
 
+  if (isLoading) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={theme.tint} />
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-            Gérez ce que vous vendez pour le retrouver rapidement lors de la saisie de vos transactions.
+      <Stack.Screen
+        options={{
+          headerRight: () => (
+            <Pressable onPress={() => router.push('/create-product')} hitSlop={8} style={styles.headerButton}>
+              <Ionicons name="add" size={24} color={theme.tint} />
+            </Pressable>
+          ),
+        }}
+      />
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+          Gérez ce que vous vendez, son coût, son prix et son stock.
+        </ThemedText>
+
+        <StatGrid
+          style={styles.statGrid}
+          stats={[
+            { label: 'Valeur du stock', value: `${plainCurrency.format(stats.totalInventoryValue)} FCFA` },
+            {
+              label: 'Stock faible',
+              value: String(stats.lowStockCount),
+              color: stats.lowStockCount > 0 ? theme.danger : undefined,
+            },
+            {
+              label: 'Marge moyenne',
+              value: stats.averageMarginPercent === null ? '—' : `${Math.round(stats.averageMarginPercent)}%`,
+            },
+          ]}
+        />
+
+        <Pressable onPress={() => router.push('/product-categories')} style={styles.categoriesLink}>
+          <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+            Gérer les catégories
           </ThemedText>
+          <Ionicons name="chevron-forward" size={16} color={theme.tint} />
+        </Pressable>
 
-          <View style={[styles.draftCard, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
-            <ThemedText type="smallBold" style={styles.draftTitle}>
-              {editingId ? 'Modifier le produit' : 'Ajouter un produit ou service'}
-            </ThemedText>
-            <TextInput
-              value={draftName}
-              onChangeText={setDraftName}
-              placeholder="Nom (ex. Boisson, Coupe de cheveux)"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
+          <Pill label="Tous" active={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
+          {categories.map((category) => (
+            <Pill
+              key={category.id}
+              label={category.name}
+              active={categoryFilter === category.id}
+              onPress={() => setCategoryFilter(category.id)}
             />
-            <View style={styles.draftRow}>
-              <TextInput
-                value={draftCategory}
-                onChangeText={setDraftCategory}
-                placeholder="Catégorie (ex. Boissons)"
-                placeholderTextColor={theme.textSecondary}
-                style={[styles.input, styles.inputHalf, { color: theme.text, borderColor: theme.border }]}
-              />
-              <TextInput
-                value={draftPrice}
-                onChangeText={setDraftPrice}
-                placeholder="Prix unitaire"
-                placeholderTextColor={theme.textSecondary}
-                keyboardType="decimal-pad"
-                style={[styles.input, styles.inputHalf, { color: theme.text, borderColor: theme.border }]}
-              />
-            </View>
-            <View style={styles.draftActions}>
-              {editingId && (
-                <Pressable onPress={resetDraft} style={[styles.secondaryButton, { borderColor: theme.border }]}>
-                  <ThemedText type="smallBold" themeColor="textSecondary">
-                    Annuler
-                  </ThemedText>
-                </Pressable>
-              )}
-              <Pressable
-                onPress={handleSave}
-                disabled={draftName.trim().length === 0 || isSaving}
-                style={[
-                  styles.primaryButton,
-                  { backgroundColor: theme.tint },
-                  (draftName.trim().length === 0 || isSaving) && styles.buttonDisabled,
-                ]}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color={theme.tintForeground} />
-                ) : (
-                  <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
-                    {editingId ? 'Enregistrer' : 'Ajouter'}
-                  </ThemedText>
-                )}
-              </Pressable>
-            </View>
-          </View>
+          ))}
+        </ScrollView>
 
-          {isLoading ? (
-            <ActivityIndicator color={theme.tint} style={styles.loading} />
-          ) : products.length === 0 ? (
-            <ThemedText themeColor="textSecondary" style={styles.empty}>
-              Aucun produit pour le moment.
+        {filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <View style={[styles.emptyBadge, { backgroundColor: theme.backgroundElement }]}>
+              <Ionicons name="pricetags-outline" size={26} color={theme.tint} />
+            </View>
+            <ThemedText themeColor="textSecondary" style={styles.emptyText}>
+              Aucun produit pour le moment. Ajoutez ce que vous vendez pour suivre vos ventes et vos marges.
             </ThemedText>
-          ) : (
-            <View style={[styles.productList, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
-              {products.map((product, index) => (
-                <View
+          </View>
+        ) : (
+          <View style={[styles.productList, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+            {filtered.map((product, index) => {
+              const margin = productMarginPercent(product);
+              const lowStock = isLowStock(product);
+
+              return (
+                <Pressable
                   key={product.id}
+                  onPress={() => router.push({ pathname: '/product/[id]', params: { id: String(product.id) } })}
+                  onLongPress={() => handleDelete(product)}
                   style={[
                     styles.productRow,
-                    index < products.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+                    index < filtered.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
                   ]}
                 >
+                  <View
+                    style={[
+                      styles.productIcon,
+                      { backgroundColor: product.category?.color ? `${product.category.color}22` : theme.backgroundSelected },
+                    ]}
+                  >
+                    <Ionicons
+                      name={(product.category?.icon as keyof typeof Ionicons.glyphMap) ?? 'pricetag-outline'}
+                      size={18}
+                      color={product.category?.color ?? theme.textSecondary}
+                    />
+                  </View>
                   <View style={styles.productInfo}>
                     <ThemedText numberOfLines={1}>{product.name}</ThemedText>
-                    {(product.category || product.unit_price) && (
-                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                        {[product.category, product.unit_price ? currency.format(Number(product.unit_price)) : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </ThemedText>
-                    )}
+                    <View style={styles.productMetaRow}>
+                      {product.sell_price && (
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {currency.format(Number(product.sell_price))}
+                        </ThemedText>
+                      )}
+                      {margin !== null && (
+                        <ThemedText type="small" style={{ color: margin >= 0 ? theme.income : theme.danger }}>
+                          {margin >= 0 ? '+' : ''}
+                          {Math.round(margin)}%
+                        </ThemedText>
+                      )}
+                    </View>
                   </View>
-                  <Pressable onPress={() => handleEdit(product)} hitSlop={8} style={styles.rowAction}>
-                    <Ionicons name="pencil-outline" size={18} color={theme.textSecondary} />
-                  </Pressable>
-                  <Pressable onPress={() => handleDelete(product)} hitSlop={8} style={styles.rowAction}>
-                    <Ionicons name="trash-outline" size={18} color={theme.danger} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+                  <View
+                    style={[
+                      styles.stockBadge,
+                      { backgroundColor: lowStock ? `${theme.danger}1A` : theme.backgroundSelected },
+                    ]}
+                  >
+                    <ThemedText type="small" style={{ color: !product.tracks_stock ? theme.textSecondary : lowStock ? theme.danger : theme.text }}>
+                      {product.tracks_stock ? `${product.stock_quantity} en stock` : 'Service'}
+                    </ThemedText>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -205,8 +209,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  flex: {
-    flex: 1,
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerButton: {
+    marginRight: Spacing.four,
   },
   scrollContent: {
     padding: Spacing.four,
@@ -214,60 +222,19 @@ const styles = StyleSheet.create({
   subtitle: {
     marginBottom: Spacing.four,
   },
-  draftCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 16,
-    padding: Spacing.three,
-    marginBottom: Spacing.five,
-    gap: Spacing.two,
+  statGrid: {
+    marginBottom: Spacing.three,
   },
-  draftTitle: {
-    marginBottom: Spacing.one,
-  },
-  draftRow: {
+  categoriesLink: {
     flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    fontSize: 15,
-  },
-  inputHalf: {
-    flex: 1,
-  },
-  draftActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Spacing.two,
-    marginTop: Spacing.one,
-  },
-  primaryButton: {
-    borderRadius: 12,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing.one,
+    marginBottom: Spacing.three,
   },
-  secondaryButton: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  loading: {
-    marginTop: Spacing.six,
-  },
-  empty: {
-    textAlign: 'center',
-    marginTop: Spacing.six,
+  pillRow: {
+    gap: Spacing.two,
+    paddingRight: Spacing.four,
+    marginBottom: Spacing.three,
   },
   productList: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -281,10 +248,40 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
   },
+  productIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   productInfo: {
     flex: 1,
+    gap: 2,
   },
-  rowAction: {
-    padding: Spacing.one,
+  productMetaRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  stockBadge: {
+    borderRadius: 999,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 4,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: Spacing.six,
+  },
+  emptyBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.three,
+  },
+  emptyText: {
+    textAlign: 'center',
+    maxWidth: 280,
   },
 });

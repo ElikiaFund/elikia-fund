@@ -9,8 +9,21 @@ export type LocalTransaction = {
   note: string | null;
   product_name: string | null;
   quantity: number | null;
+  product_id: number | null;
   occurred_at: string;
   created_at: string;
+  synced: number;
+};
+
+export type LocalCashSession = {
+  uuid: string;
+  user_id: number;
+  period_start: string | null;
+  closed_at: string;
+  expected_balance: number;
+  counted_balance: number;
+  variance: number;
+  notes: string | null;
   synced: number;
 };
 
@@ -47,6 +60,28 @@ export async function initDatabase() {
       payload TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS cash_sessions (
+      uuid TEXT PRIMARY KEY NOT NULL,
+      user_id INTEGER NOT NULL,
+      period_start TEXT,
+      closed_at TEXT NOT NULL,
+      expected_balance REAL NOT NULL,
+      counted_balance REAL NOT NULL,
+      variance REAL NOT NULL,
+      notes TEXT,
+      synced INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS cash_session_sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_uuid TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cash_session_active (
+      user_id INTEGER PRIMARY KEY NOT NULL,
+      started_at TEXT NOT NULL
+    );
   `);
 
   // The device DB predates per-user scoping — on an existing install these columns won't exist
@@ -56,6 +91,8 @@ export async function initDatabase() {
   // opens the app next" is the best available guess, and it beats silently losing the data.
   await addColumnIfMissing(db, 'transactions', 'user_id', 'INTEGER');
   await addColumnIfMissing(db, 'sync_queue', 'user_id', 'INTEGER');
+  // Product-linked sales — added after transactions already existed on-device, same treatment.
+  await addColumnIfMissing(db, 'transactions', 'product_id', 'INTEGER');
 }
 
 async function addColumnIfMissing(db: SQLite.SQLiteDatabase, table: string, column: string, type: string) {
@@ -82,8 +119,8 @@ export async function insertTransaction(transaction: LocalTransaction) {
   const db = await getDb();
 
   await db.runAsync(
-    `INSERT INTO transactions (uuid, user_id, type, amount, category, note, product_name, quantity, occurred_at, created_at, synced)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO transactions (uuid, user_id, type, amount, category, note, product_name, quantity, product_id, occurred_at, created_at, synced)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       transaction.uuid,
       transaction.user_id,
@@ -93,6 +130,7 @@ export async function insertTransaction(transaction: LocalTransaction) {
       transaction.note,
       transaction.product_name,
       transaction.quantity,
+      transaction.product_id,
       transaction.occurred_at,
       transaction.created_at,
       transaction.synced,
@@ -127,12 +165,12 @@ export async function cacheSyncedTransaction(transaction: Omit<LocalTransaction,
   const db = await getDb();
 
   await db.runAsync(
-    `INSERT INTO transactions (uuid, user_id, type, amount, category, note, product_name, quantity, occurred_at, created_at, synced)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `INSERT INTO transactions (uuid, user_id, type, amount, category, note, product_name, quantity, product_id, occurred_at, created_at, synced)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
      ON CONFLICT(uuid) DO UPDATE SET
        type = excluded.type, amount = excluded.amount, category = excluded.category, note = excluded.note,
-       product_name = excluded.product_name, quantity = excluded.quantity, occurred_at = excluded.occurred_at,
-       synced = 1`,
+       product_name = excluded.product_name, quantity = excluded.quantity, product_id = excluded.product_id,
+       occurred_at = excluded.occurred_at, synced = 1`,
     [
       transaction.uuid,
       transaction.user_id,
@@ -142,6 +180,7 @@ export async function cacheSyncedTransaction(transaction: Omit<LocalTransaction,
       transaction.note,
       transaction.product_name,
       transaction.quantity,
+      transaction.product_id,
       transaction.occurred_at,
       transaction.created_at,
     ],
@@ -204,4 +243,171 @@ async function enqueueSync(db: SQLite.SQLiteDatabase, transaction: LocalTransact
     'INSERT INTO sync_queue (transaction_uuid, user_id, payload, created_at) VALUES (?, ?, ?, ?)',
     [transaction.uuid, transaction.user_id, JSON.stringify(transaction), new Date().toISOString()],
   );
+}
+
+// --- Cash sessions --- (unlike transactions/sync_queue, these tables are user_id-scoped from
+// birth — no addColumnIfMissing/backfillLegacyUserId needed, they never predate per-user scoping.
+
+export async function listCashSessions(userId: number): Promise<LocalCashSession[]> {
+  const db = await getDb();
+
+  return db.getAllAsync<LocalCashSession>('SELECT * FROM cash_sessions WHERE user_id = ? ORDER BY closed_at DESC', [userId]);
+}
+
+/** The most recently closed session, or null if the user has never closed one. */
+export async function getLastCashSession(userId: number): Promise<LocalCashSession | null> {
+  const db = await getDb();
+
+  const row = await db.getFirstAsync<LocalCashSession>(
+    'SELECT * FROM cash_sessions WHERE user_id = ? ORDER BY closed_at DESC LIMIT 1',
+    [userId],
+  );
+
+  return row ?? null;
+}
+
+export async function listUnsyncedCashSessions(userId: number): Promise<LocalCashSession[]> {
+  const db = await getDb();
+
+  return db.getAllAsync<LocalCashSession>(
+    'SELECT * FROM cash_sessions WHERE user_id = ? AND synced = 0 ORDER BY closed_at DESC',
+    [userId],
+  );
+}
+
+export async function insertCashSession(session: LocalCashSession) {
+  const db = await getDb();
+
+  await db.runAsync(
+    `INSERT INTO cash_sessions (uuid, user_id, period_start, closed_at, expected_balance, counted_balance, variance, notes, synced)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      session.uuid,
+      session.user_id,
+      session.period_start,
+      session.closed_at,
+      session.expected_balance,
+      session.counted_balance,
+      session.variance,
+      session.notes,
+      session.synced,
+    ],
+  );
+
+  await enqueueCashSessionSync(db, session);
+}
+
+/**
+ * Writes a session already confirmed on the server straight into the local cache — no
+ * sync_queue entry, mirrors cacheSyncedTransaction exactly.
+ */
+export async function cacheSyncedCashSession(session: Omit<LocalCashSession, 'synced'>) {
+  const db = await getDb();
+
+  await db.runAsync(
+    `INSERT INTO cash_sessions (uuid, user_id, period_start, closed_at, expected_balance, counted_balance, variance, notes, synced)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+     ON CONFLICT(uuid) DO UPDATE SET
+       period_start = excluded.period_start, closed_at = excluded.closed_at,
+       expected_balance = excluded.expected_balance, counted_balance = excluded.counted_balance,
+       variance = excluded.variance, notes = excluded.notes, synced = 1`,
+    [
+      session.uuid,
+      session.user_id,
+      session.period_start,
+      session.closed_at,
+      session.expected_balance,
+      session.counted_balance,
+      session.variance,
+      session.notes,
+    ],
+  );
+}
+
+/** Bulk version of cacheSyncedCashSession — mirrors a server-fetched list into the local cache. */
+export async function cacheSyncedCashSessions(sessions: Omit<LocalCashSession, 'synced'>[]) {
+  for (const session of sessions) {
+    await cacheSyncedCashSession(session);
+  }
+}
+
+export type CashSessionSyncQueueEntry = {
+  id: number;
+  session_uuid: string;
+  user_id: number;
+  payload: string;
+  created_at: string;
+};
+
+export async function getPendingCashSessionSyncQueue(userId: number): Promise<CashSessionSyncQueueEntry[]> {
+  const db = await getDb();
+
+  return db.getAllAsync<CashSessionSyncQueueEntry>(
+    'SELECT * FROM cash_session_sync_queue WHERE user_id = ? ORDER BY created_at ASC',
+    [userId],
+  );
+}
+
+export async function markCashSessionsSynced(uuids: string[]): Promise<void> {
+  if (uuids.length === 0) {
+    return;
+  }
+
+  const db = await getDb();
+  const placeholders = uuids.map(() => '?').join(',');
+
+  await db.runAsync(`UPDATE cash_sessions SET synced = 1 WHERE uuid IN (${placeholders})`, uuids);
+}
+
+export async function clearCashSessionSyncQueueEntries(ids: number[]): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const db = await getDb();
+  const placeholders = ids.map(() => '?').join(',');
+
+  await db.runAsync(`DELETE FROM cash_session_sync_queue WHERE id IN (${placeholders})`, ids);
+}
+
+async function enqueueCashSessionSync(db: SQLite.SQLiteDatabase, session: LocalCashSession) {
+  await db.runAsync(
+    'INSERT INTO cash_session_sync_queue (session_uuid, user_id, payload, created_at) VALUES (?, ?, ?, ?)',
+    [session.uuid, session.user_id, JSON.stringify(session), new Date().toISOString()],
+  );
+}
+
+export type LocalActiveCashSession = {
+  user_id: number;
+  started_at: string;
+};
+
+/**
+ * Whether a session is currently "in progress" — purely local, never synced to the backend (the
+ * server only knows about completed checkpoints, see CashSession). One row per user, always
+ * overwritten rather than accumulated, and cleared on logout (see auth-context.tsx) so it can
+ * never survive past the auth session it was started in or leak across accounts on a shared device.
+ */
+export async function getActiveCashSession(userId: number): Promise<LocalActiveCashSession | null> {
+  const db = await getDb();
+
+  const row = await db.getFirstAsync<LocalActiveCashSession>('SELECT * FROM cash_session_active WHERE user_id = ?', [userId]);
+
+  return row ?? null;
+}
+
+export async function setActiveCashSession(userId: number, startedAt: string): Promise<void> {
+  const db = await getDb();
+
+  await db.runAsync(
+    `INSERT INTO cash_session_active (user_id, started_at) VALUES (?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET started_at = excluded.started_at`,
+    [userId, startedAt],
+  );
+}
+
+export async function clearActiveCashSession(userId: number): Promise<void> {
+  const db = await getDb();
+
+  await db.runAsync('DELETE FROM cash_session_active WHERE user_id = ?', [userId]);
 }

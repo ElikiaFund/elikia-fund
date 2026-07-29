@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { StatGrid } from '@/components/stat-grid';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -99,30 +100,14 @@ export default function GroupReportScreen() {
             {formatCycleLabel(report, report.frequency)}
           </ThemedText>
 
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Cotisé (net)
-              </ThemedText>
-              <ThemedText type="smallBold" style={{ color: theme.income }}>
-                {currency.format(report.total_net)}
-              </ThemedText>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Frais de gestion
-              </ThemedText>
-              <ThemedText type="smallBold">{currency.format(report.total_fees)}</ThemedText>
-            </View>
-            <View style={[styles.statCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                Membres à jour
-              </ThemedText>
-              <ThemedText type="smallBold">
-                {report.paid_count} / {report.members_count}
-              </ThemedText>
-            </View>
-          </View>
+          <StatGrid
+            style={styles.statsRow}
+            stats={[
+              { label: 'Cotisé (net)', value: currency.format(report.total_net), color: theme.income },
+              { label: 'Frais de gestion', value: currency.format(report.total_fees) },
+              { label: 'Membres à jour', value: `${report.paid_count} / ${report.members_count}` },
+            ]}
+          />
 
           {report.late_members.length > 0 && (
             <View style={[styles.lateBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.danger }]}>
@@ -202,16 +187,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.four,
   },
   statsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
     marginBottom: Spacing.four,
-  },
-  statCard: {
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: Spacing.three,
-    gap: Spacing.one,
   },
   lateBanner: {
     flexDirection: 'row',

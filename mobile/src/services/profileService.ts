@@ -10,6 +10,13 @@ export type UpdateProfilePayload = {
   passwordConfirmation?: string;
 };
 
+export type UpdateCashSessionSettingsPayload = {
+  cash_session_frequency: 'daily' | 'weekly';
+  cash_session_day: number | null;
+  cash_session_reminder_time: string | null;
+  cash_session_reminders_enabled: boolean;
+};
+
 export const profileService = {
   update(payload: UpdateProfilePayload) {
     return apiService
@@ -22,6 +29,10 @@ export const profileService = {
         password_confirmation: payload.passwordConfirmation,
       })
       .then((r) => r.data);
+  },
+
+  updateCashSessionSettings(payload: UpdateCashSessionSettingsPayload) {
+    return apiService.put<AuthUser>('/me/cash-session-settings', payload).then((r) => r.data);
   },
 
   uploadAvatar(uri: string) {

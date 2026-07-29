@@ -36,7 +36,8 @@ export default function AddTransactionScreen() {
 
   const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   const amountValue = Number(amount.replace(',', '.'));
-  const canSubmit = amountValue > 0 && category !== null;
+  const exceedsStock = type === 'income' && !!selectedProduct?.tracks_stock && quantity > selectedProduct.stock_quantity;
+  const canSubmit = amountValue > 0 && category !== null && !exceedsStock;
 
   useEffect(() => {
     productService
@@ -59,8 +60,8 @@ export default function AddTransactionScreen() {
     setSelectedProduct(nextProduct);
     setQuantity(1);
 
-    if (nextProduct?.unit_price) {
-      setAmount(String(Number(nextProduct.unit_price)));
+    if (nextProduct?.sell_price) {
+      setAmount(String(Number(nextProduct.sell_price)));
     }
   }
 
@@ -68,8 +69,8 @@ export default function AddTransactionScreen() {
     setQuantity((current) => {
       const next = Math.max(1, current + delta);
 
-      if (selectedProduct?.unit_price) {
-        setAmount(String(Number(selectedProduct.unit_price) * next));
+      if (selectedProduct?.sell_price) {
+        setAmount(String(Number(selectedProduct.sell_price) * next));
       }
 
       return next;
@@ -92,6 +93,7 @@ export default function AddTransactionScreen() {
       note: note.trim() || null,
       product_name: selectedProduct?.name ?? null,
       quantity: selectedProduct ? quantity : null,
+      product_id: selectedProduct?.id ?? null,
       occurred_at: now,
     };
 
@@ -229,6 +231,12 @@ export default function AddTransactionScreen() {
                   </View>
                 </View>
               )}
+
+              {exceedsStock && (
+                <ThemedText type="small" style={[styles.stockWarning, { color: theme.danger }]}>
+                  Stock insuffisant ({selectedProduct?.stock_quantity} disponible{(selectedProduct?.stock_quantity ?? 0) > 1 ? 's' : ''})
+                </ThemedText>
+              )}
             </View>
           )}
 
@@ -358,6 +366,10 @@ const styles = StyleSheet.create({
   quantityValue: {
     minWidth: 24,
     textAlign: 'center',
+  },
+  stockWarning: {
+    marginTop: Spacing.two,
+    marginLeft: Spacing.one,
   },
   noteField: {
     marginTop: Spacing.four,

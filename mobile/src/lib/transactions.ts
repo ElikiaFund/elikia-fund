@@ -26,6 +26,7 @@ export async function loadTransactions(userId: number): Promise<LocalTransaction
         note: t.note,
         product_name: t.product_name,
         quantity: t.quantity,
+        product_id: t.product_id,
         occurred_at: t.occurred_at,
         created_at: t.created_at,
         synced: 1,

@@ -113,6 +113,7 @@ export default function ProfileScreen() {
         </ProfileSection>
 
         <ProfileSection title="Préférences">
+          <ProfileRow icon="cash-outline" label="Session de caisse" onPress={() => router.push('/cash-session-settings')} />
           <ProfileRow icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} last />
         </ProfileSection>
 

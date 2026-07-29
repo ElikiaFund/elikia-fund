@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/context/auth-context';
+import { CashSessionProvider } from '@/context/cash-session-context';
 import { SyncProvider } from '@/context/sync-context';
 import { VaultProvider } from '@/context/vault-context';
 import { initDatabase } from '@/db/database';
@@ -32,9 +33,11 @@ export default function RootLayout() {
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <AuthProvider>
         <SyncProvider>
-          <VaultProvider>
-            <RootNavigator />
-          </VaultProvider>
+          <CashSessionProvider>
+            <VaultProvider>
+              <RootNavigator />
+            </VaultProvider>
+          </CashSessionProvider>
         </SyncProvider>
       </AuthProvider>
     </ThemeProvider>
@@ -48,9 +51,11 @@ function RootNavigator() {
 
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as { group_id?: number } | undefined;
+      const data = response.notification.request.content.data as { type?: string; group_id?: number } | undefined;
 
-      if (data?.group_id) {
+      if (data?.type === 'cash_session_reminder') {
+        router.push('/close-cash-session');
+      } else if (data?.group_id) {
         router.push({ pathname: '/group/[id]', params: { id: String(data.group_id) } });
       } else {
         router.push('/notifications');
@@ -90,9 +95,16 @@ function RootNavigator() {
         <Stack.Screen name="group/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="edit-profile" options={{ title: 'Modifier le profil' }} />
         <Stack.Screen name="products" options={{ title: 'Produits & services' }} />
+        <Stack.Screen name="product/[id]" options={{ title: 'Produit' }} />
+        <Stack.Screen name="create-product" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="product-categories" options={{ title: 'Catégories' }} />
+        <Stack.Screen name="restock-product" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="security-pin" options={{ title: 'Sécurité et code PIN' }} />
         <Stack.Screen name="group-report" options={{ title: 'Rapport de tontine' }} />
+        <Stack.Screen name="close-cash-session" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="cash-session-settings" options={{ title: 'Session de caisse' }} />
+        <Stack.Screen name="cash-session-history" options={{ title: 'Historique des clôtures' }} />
       </Stack.Protected>
     </Stack>
   );

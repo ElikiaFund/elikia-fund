@@ -12,6 +12,10 @@ export type RemoteTransaction = {
   note: string | null;
   product_name: string | null;
   quantity: number | null;
+  product_id: number | null;
+  /** Snapshot of the linked product's cost_price at the moment of this transaction — server-set,
+   * never sent by the client. */
+  unit_cost: string | null;
   occurred_at: string;
   created_at: string;
 };
@@ -24,6 +28,7 @@ export type CreateTransactionPayload = {
   note: string | null;
   product_name: string | null;
   quantity: number | null;
+  product_id: number | null;
   occurred_at: string;
 };
 

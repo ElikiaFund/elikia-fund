@@ -8,14 +8,17 @@ import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCashSession } from '@/context/cash-session-context';
 import { useSync } from '@/context/sync-context';
 import { type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
+import { isSessionOverdue } from '@/lib/cash-session-schedule';
 import { loadTransactions } from '@/lib/transactions';
 import { creditScoreService, type CreditScore } from '@/services/creditScoreService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+const timeFormatter = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 const VERDICT_LABELS: Record<CreditScore['verdict'], string> = {
   eligible: 'Éligible au crédit',
@@ -28,6 +31,7 @@ export default function CashflowScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { pendingCount, isSyncing, syncNow, refreshPendingCount } = useSync();
+  const { lastClosedSession, activeSession } = useCashSession();
   const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [creditScore, setCreditScore] = useState<CreditScore | null>(null);
@@ -65,7 +69,9 @@ export default function CashflowScreen() {
   }, []);
 
   const { incomeTotal, expenseTotal } = useMemo(() => {
-    return transactions.reduce(
+    const periodTransactions = transactions.filter((t) => !lastClosedSession || t.occurred_at > lastClosedSession.closed_at);
+
+    return periodTransactions.reduce(
       (totals, transaction) => {
         if (transaction.type === 'income') {
           totals.incomeTotal += transaction.amount;
@@ -76,10 +82,11 @@ export default function CashflowScreen() {
       },
       { incomeTotal: 0, expenseTotal: 0 },
     );
-  }, [transactions]);
+  }, [transactions, lastClosedSession]);
 
-  const balance = incomeTotal - expenseTotal;
+  const balance = (lastClosedSession?.counted_balance ?? 0) + incomeTotal - expenseTotal;
   const recentTransactions = transactions.slice(0, 5);
+  const isOverdue = user ? isSessionOverdue(user, lastClosedSession, new Date()) : false;
 
   if (isLoading) {
     return (
@@ -119,6 +126,21 @@ export default function CashflowScreen() {
           </Pressable>
         )}
 
+        {isOverdue && (
+          <Pressable
+            onPress={() => router.push('/close-cash-session')}
+            style={[styles.overdueBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.tint }]}
+          >
+            <Ionicons name="alarm-outline" size={16} color={theme.tint} />
+            <ThemedText type="small" style={styles.overdueBannerText}>
+              Il est temps de clôturer votre caisse
+            </ThemedText>
+            <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+              Clôturer
+            </ThemedText>
+          </Pressable>
+        )}
+
         <View style={styles.balanceCard}>
           <ThemedText type="small" themeColor="textSecondary">
             Solde net
@@ -126,6 +148,22 @@ export default function CashflowScreen() {
           <ThemedText type="title" style={styles.balance}>
             {currency.format(balance)}
           </ThemedText>
+          <View style={styles.balanceHintRow}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {activeSession
+                ? `Session active depuis ${timeFormatter.format(new Date(activeSession.started_at))}`
+                : lastClosedSession
+                  ? 'Depuis la dernière clôture'
+                  : 'Depuis le début'}
+            </ThemedText>
+            {/* Starting a new session while one is already active is allowed — it doesn't require
+                closing first, it just supersedes the active marker (see cash-session-context.tsx). */}
+            <Pressable onPress={() => router.push(activeSession ? '/close-cash-session?mode=close' : '/close-cash-session?mode=start')}>
+              <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                {activeSession ? 'Clôturer' : 'Démarrer une session'}
+              </ThemedText>
+            </Pressable>
+          </View>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -270,6 +308,19 @@ const styles = StyleSheet.create({
   syncBannerText: {
     flex: 1,
   },
+  overdueBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.four,
+  },
+  overdueBannerText: {
+    flex: 1,
+  },
   balanceCard: {
     marginBottom: Spacing.four,
   },
@@ -277,6 +328,12 @@ const styles = StyleSheet.create({
     fontSize: 40,
     lineHeight: 46,
     marginTop: Spacing.one,
+  },
+  balanceHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
   },
   statsRow: {
     flexDirection: 'row',

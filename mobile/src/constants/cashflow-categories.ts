@@ -15,6 +15,7 @@ export const EXPENSE_CATEGORIES: Category[] = [
   { value: 'logement', label: 'Logement', icon: 'home-outline' },
   { value: 'sante', label: 'Santé', icon: 'medkit-outline' },
   { value: 'fournitures', label: 'Fournitures', icon: 'cube-outline' },
+  { value: 'achat_stock', label: 'Achat de stock', icon: 'archive-outline' },
   { value: 'loisirs', label: 'Loisirs', icon: 'happy-outline' },
   { value: 'autre_depense', label: 'Autre dépense', icon: 'ellipsis-horizontal-outline' },
 ];

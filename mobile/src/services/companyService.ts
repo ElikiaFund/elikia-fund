@@ -31,9 +31,9 @@ export const COMPANY_CATEGORIES: { value: CompanyCategory; label: string; icon: 
 ];
 
 export const companyService = {
-  create(name: string, category: CompanyCategory, otherCategory?: string) {
+  create(name: string, category: CompanyCategory, department: string, city: string, otherCategory?: string) {
     return apiService
-      .post<Company>('/onboarding/company', { name, category, other_category: otherCategory })
+      .post<Company>('/onboarding/company', { name, category, other_category: otherCategory, department, city })
       .then((r) => r.data);
   },
 };

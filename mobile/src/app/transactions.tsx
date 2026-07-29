@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Calendar, type DateData } from 'react-native-calendars';
 
-import { SelectSheet, sheetStyles, type SelectOption } from '@/components/select-sheet';
+import { Pill } from '@/components/pill';
+import { sheetStyles } from '@/components/select-sheet';
 import { Skeleton } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -13,31 +14,53 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
-import { buildTransactionsStatementHtml, printAndShareHtml } from '@/lib/pdf';
+import { buildJournalCaisseHtml, printAndShareHtml } from '@/lib/pdf';
 import { loadTransactions } from '@/lib/transactions';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 const shortDateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+const longDateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 function shortDate(iso: string) {
   return shortDateFormatter.format(new Date(iso));
 }
 
-type TypeFilterValue = 'all' | 'income' | 'expense';
-type PeriodPreset = 'all' | 'today' | 'week' | 'month' | 'custom';
+function toDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
 
-const TYPE_OPTIONS: SelectOption[] = [
-  { label: 'Tous les types', value: 'all' },
+/** Monday of the ISO week containing `date`, at 00:00. */
+function startOfIsoWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfIsoWeek(date: Date): Date {
+  const start = startOfIsoWeek(date);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+type TypeFilterValue = 'all' | 'income' | 'expense';
+type PeriodPreset = 'all' | 'this_week' | 'last_week' | 'custom';
+
+const TYPE_PILLS: { label: string; value: TypeFilterValue }[] = [
+  { label: 'Tous', value: 'all' },
   { label: 'Revenus', value: 'income' },
   { label: 'Dépenses', value: 'expense' },
 ];
 
-const PERIOD_PRESETS: { label: string; value: PeriodPreset }[] = [
-  { label: 'Toutes les dates', value: 'all' },
-  { label: "Aujourd'hui", value: 'today' },
-  { label: '7 derniers jours', value: 'week' },
-  { label: '30 derniers jours', value: 'month' },
+const PERIOD_PILLS: { label: string; value: Exclude<PeriodPreset, 'custom'> }[] = [
+  { label: 'Tout', value: 'all' },
+  { label: 'Cette semaine', value: 'this_week' },
+  { label: 'Semaine dernière', value: 'last_week' },
 ];
 
 const ALL_CATEGORIES = [...INCOME_CATEGORIES, ...EXPENSE_CATEGORIES];
@@ -56,8 +79,7 @@ export default function TransactionsScreen() {
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
   const [page, setPage] = useState(0);
 
-  const [activeSheet, setActiveSheet] = useState<'type' | 'category' | 'period' | null>(null);
-  const [calendarMode, setCalendarMode] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [draftStart, setDraftStart] = useState<string | null>(null);
   const [draftEnd, setDraftEnd] = useState<string | null>(null);
 
@@ -93,25 +115,30 @@ export default function TransactionsScreen() {
     return ALL_CATEGORIES.filter((c) => present.has(c.value));
   }, [transactions]);
 
-  const categoryOptions: SelectOption[] = useMemo(
-    () => [{ label: 'Toutes les catégories', value: 'all' }, ...availableCategories.map((c) => ({ label: c.label, value: c.value }))],
-    [availableCategories],
-  );
+  // The concrete [start, end] boundary for the active period — null for 'all' (no date filter),
+  // used both to filter the list and to describe the exported journal's exact date range.
+  const periodBounds = useMemo(() => {
+    const now = new Date();
+
+    if (periodPreset === 'this_week') {
+      return { start: startOfIsoWeek(now), end: endOfIsoWeek(now) };
+    }
+    if (periodPreset === 'last_week') {
+      const lastWeek = new Date(now);
+      lastWeek.setDate(now.getDate() - 7);
+      return { start: startOfIsoWeek(lastWeek), end: endOfIsoWeek(lastWeek) };
+    }
+    if (periodPreset === 'custom' && customRange) {
+      const start = new Date(customRange.start);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(customRange.end);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    return null;
+  }, [periodPreset, customRange]);
 
   const filtered = useMemo(() => {
-    const now = new Date();
-    let start: Date | null = null;
-
-    if (periodPreset === 'today') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (periodPreset === 'week') {
-      start = new Date(now);
-      start.setDate(now.getDate() - 7);
-    } else if (periodPreset === 'month') {
-      start = new Date(now);
-      start.setDate(now.getDate() - 30);
-    }
-
     return transactions.filter((transaction) => {
       if (typeFilter !== 'all' && transaction.type !== typeFilter) {
         return false;
@@ -120,22 +147,16 @@ export default function TransactionsScreen() {
         return false;
       }
 
-      const occurred = new Date(transaction.occurred_at);
-
-      if (periodPreset === 'custom' && customRange) {
-        const rangeStart = new Date(customRange.start);
-        const rangeEnd = new Date(customRange.end);
-        rangeEnd.setHours(23, 59, 59, 999);
-        if (occurred < rangeStart || occurred > rangeEnd) {
+      if (periodBounds) {
+        const occurred = new Date(transaction.occurred_at);
+        if (occurred < periodBounds.start || occurred > periodBounds.end) {
           return false;
         }
-      } else if (start && occurred < start) {
-        return false;
       }
 
       return true;
     });
-  }, [transactions, typeFilter, categoryFilter, periodPreset, customRange]);
+  }, [transactions, typeFilter, categoryFilter, periodBounds]);
 
   useEffect(() => {
     setPage(0);
@@ -144,21 +165,42 @@ export default function TransactionsScreen() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  const periodLabel =
-    periodPreset === 'custom' && customRange
-      ? `${shortDate(customRange.start)} – ${shortDate(customRange.end)}`
-      : (PERIOD_PRESETS.find((p) => p.value === periodPreset)?.label ?? 'Toutes les dates');
-  const typeLabel = TYPE_OPTIONS.find((o) => o.value === typeFilter)?.label ?? 'Tous les types';
-  const categoryLabelText = categoryOptions.find((o) => o.value === categoryFilter)?.label ?? 'Toutes les catégories';
+  // Precise date-range label used both under the pills and as the exported document's subtitle
+  // — always the real dates, regardless of which pill is active.
+  const periodLabel = useMemo(() => {
+    if (periodPreset === 'custom' && customRange) {
+      return `${shortDate(customRange.start)} – ${shortDate(customRange.end)}`;
+    }
+    if (periodBounds) {
+      return `${longDateFormatter.format(periodBounds.start)} au ${longDateFormatter.format(periodBounds.end)}`;
+    }
+    return 'Toutes les dates';
+  }, [periodPreset, customRange, periodBounds]);
 
   async function handleExportPdf() {
+    if (!user) {
+      return;
+    }
+
     setIsExporting(true);
 
     try {
-      const html = buildTransactionsStatementHtml({
-        userName: user?.name ?? 'Utilisateur Elikia',
+      const rangeEnd = periodBounds?.end ?? new Date();
+      const rangeStart = periodBounds?.start ?? (filtered.length ? new Date(Math.min(...filtered.map((t) => new Date(t.occurred_at).getTime()))) : rangeEnd);
+
+      const openingBalance = transactions
+        .filter((t) => new Date(t.occurred_at) < rangeStart)
+        .reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
+
+      const html = buildJournalCaisseHtml({
+        userName: user.name,
+        phone: user.phone,
         periodLabel,
-        transactions: filtered.map((t) => ({
+        rangeStart: rangeStart.toISOString(),
+        rangeEnd: rangeEnd.toISOString(),
+        isWeekly: periodPreset === 'this_week' || periodPreset === 'last_week',
+        openingBalance,
+        entries: filtered.map((t) => ({
           occurred_at: t.occurred_at,
           category_label: categoryLabel(t.category),
           note: t.note,
@@ -169,25 +211,18 @@ export default function TransactionsScreen() {
         })),
       });
 
-      await printAndShareHtml(html, 'Releve-tresorerie-Elikia-Fund.pdf');
+      await printAndShareHtml(html, `Journal-caisse-Elikia-Fund-${toDateKey(rangeEnd)}.pdf`);
     } catch {
-      Alert.alert('Erreur', "Impossible de générer le relevé. Veuillez réessayer.");
+      Alert.alert('Erreur', 'Impossible de générer le journal. Veuillez réessayer.');
     } finally {
       setIsExporting(false);
     }
   }
 
-  function openPeriodSheet() {
-    setCalendarMode(false);
+  function openCalendar() {
     setDraftStart(customRange?.start ?? null);
     setDraftEnd(customRange?.end ?? null);
-    setActiveSheet('period');
-  }
-
-  function handlePeriodPreset(preset: PeriodPreset) {
-    setPeriodPreset(preset);
-    setCustomRange(null);
-    setActiveSheet(null);
+    setIsCalendarOpen(true);
   }
 
   function handleDayPress(day: DateData) {
@@ -205,8 +240,7 @@ export default function TransactionsScreen() {
     if (draftStart && draftEnd) {
       setCustomRange({ start: draftStart, end: draftEnd });
       setPeriodPreset('custom');
-      setActiveSheet(null);
-      setCalendarMode(false);
+      setIsCalendarOpen(false);
     }
   }
 
@@ -245,37 +279,65 @@ export default function TransactionsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerRight: () =>
-            isExporting ? (
-              <ActivityIndicator color={theme.tint} style={styles.headerButton} />
-            ) : (
-              <Pressable onPress={handleExportPdf} disabled={filtered.length === 0} hitSlop={8} style={styles.headerButton}>
-                <Ionicons
-                  name="download-outline"
-                  size={22}
-                  color={filtered.length === 0 ? theme.textSecondary : theme.tint}
-                />
-              </Pressable>
-            ),
-        }}
-      />
+      <View style={styles.filtersSection}>
+        <View style={styles.pillRow}>
+          {PERIOD_PILLS.map((preset) => (
+            <Pill
+              key={preset.value}
+              label={preset.label}
+              active={periodPreset === preset.value}
+              onPress={() => {
+                setPeriodPreset(preset.value);
+                setCustomRange(null);
+              }}
+            />
+          ))}
+          <Pill
+            label={periodPreset === 'custom' && customRange ? `${shortDate(customRange.start)} – ${shortDate(customRange.end)}` : 'Personnalisé'}
+            active={periodPreset === 'custom'}
+            icon="calendar-outline"
+            onPress={openCalendar}
+          />
+        </View>
 
-      <View style={styles.filterBar}>
-        <FilterTrigger icon="calendar-outline" label={periodLabel} active={periodPreset !== 'all'} onPress={openPeriodSheet} />
-        <FilterTrigger
-          icon="swap-vertical-outline"
-          label={typeLabel}
-          active={typeFilter !== 'all'}
-          onPress={() => setActiveSheet('type')}
-        />
-        <FilterTrigger
-          icon="pricetag-outline"
-          label={categoryLabelText}
-          active={categoryFilter !== 'all'}
-          onPress={() => setActiveSheet('category')}
-        />
+        <View style={styles.pillRow}>
+          {TYPE_PILLS.map((option) => (
+            <Pill key={option.value} label={option.label} active={typeFilter === option.value} onPress={() => setTypeFilter(option.value)} />
+          ))}
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRowScroll}>
+          <Pill label="Toutes catégories" active={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
+          {availableCategories.map((category) => (
+            <Pill
+              key={category.value}
+              label={category.label}
+              active={categoryFilter === category.value}
+              onPress={() => setCategoryFilter(category.value)}
+            />
+          ))}
+        </ScrollView>
+
+        <Pressable
+          onPress={handleExportPdf}
+          disabled={isExporting || filtered.length === 0}
+          style={[
+            styles.exportButton,
+            { backgroundColor: theme.tint },
+            (isExporting || filtered.length === 0) && styles.buttonDisabled,
+          ]}
+        >
+          {isExporting ? (
+            <ActivityIndicator color={theme.tintForeground} />
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={18} color={theme.tintForeground} />
+              <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+                Télécharger le Journal PDF
+              </ThemedText>
+            </>
+          )}
+        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.list}>
@@ -310,145 +372,65 @@ export default function TransactionsScreen() {
             </View>
           ))
         )}
+
+        {filtered.length > PAGE_SIZE && (
+          <View style={[styles.pagination, { borderTopColor: theme.border }]}>
+            <Pressable
+              disabled={page === 0}
+              onPress={() => setPage((p) => p - 1)}
+              style={[styles.pageButton, { borderColor: theme.border }, page === 0 && styles.pageButtonDisabled]}
+            >
+              <Ionicons name="chevron-back" size={18} color={page === 0 ? theme.textSecondary : theme.tint} />
+            </Pressable>
+            <ThemedText type="small" themeColor="textSecondary">
+              Page {page + 1} sur {totalPages}
+            </ThemedText>
+            <Pressable
+              disabled={page >= totalPages - 1}
+              onPress={() => setPage((p) => p + 1)}
+              style={[styles.pageButton, { borderColor: theme.border }, page >= totalPages - 1 && styles.pageButtonDisabled]}
+            >
+              <Ionicons name="chevron-forward" size={18} color={page >= totalPages - 1 ? theme.textSecondary : theme.tint} />
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
 
-      {filtered.length > PAGE_SIZE && (
-        <View style={[styles.pagination, { borderTopColor: theme.border }]}>
-          <Pressable
-            disabled={page === 0}
-            onPress={() => setPage((p) => p - 1)}
-            style={[styles.pageButton, { borderColor: theme.border }, page === 0 && styles.pageButtonDisabled]}
-          >
-            <Ionicons name="chevron-back" size={18} color={page === 0 ? theme.textSecondary : theme.tint} />
-          </Pressable>
-          <ThemedText type="small" themeColor="textSecondary">
-            Page {page + 1} sur {totalPages}
-          </ThemedText>
-          <Pressable
-            disabled={page >= totalPages - 1}
-            onPress={() => setPage((p) => p + 1)}
-            style={[styles.pageButton, { borderColor: theme.border }, page >= totalPages - 1 && styles.pageButtonDisabled]}
-          >
-            <Ionicons name="chevron-forward" size={18} color={page >= totalPages - 1 ? theme.textSecondary : theme.tint} />
-          </Pressable>
-        </View>
-      )}
-
-      <SelectSheet
-        visible={activeSheet === 'type'}
-        title="Type de transaction"
-        options={TYPE_OPTIONS}
-        selectedValue={typeFilter}
-        onSelect={(value) => setTypeFilter(value as TypeFilterValue)}
-        onClose={() => setActiveSheet(null)}
-      />
-      <SelectSheet
-        visible={activeSheet === 'category'}
-        title="Catégorie"
-        options={categoryOptions}
-        selectedValue={categoryFilter}
-        onSelect={setCategoryFilter}
-        onClose={() => setActiveSheet(null)}
-      />
-
-      <Modal visible={activeSheet === 'period'} transparent animationType="slide" onRequestClose={() => setActiveSheet(null)}>
+      <Modal visible={isCalendarOpen} transparent animationType="slide" onRequestClose={() => setIsCalendarOpen(false)}>
         <View style={sheetStyles.overlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setActiveSheet(null)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsCalendarOpen(false)} />
           <View style={[sheetStyles.sheet, { backgroundColor: theme.background }]}>
             <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
-            {!calendarMode ? (
-              <>
-                <ThemedText type="smallBold" style={styles.sheetTitle}>
-                  Période
-                </ThemedText>
-                {PERIOD_PRESETS.map((preset) => (
-                  <Pressable
-                    key={preset.value}
-                    onPress={() => handlePeriodPreset(preset.value)}
-                    style={({ pressed }) => [styles.option, pressed && { backgroundColor: theme.backgroundElement }]}
-                  >
-                    <ThemedText style={periodPreset === preset.value ? { color: theme.tint, fontWeight: '700' } : undefined}>
-                      {preset.label}
-                    </ThemedText>
-                    {periodPreset === preset.value && <Ionicons name="checkmark" size={20} color={theme.tint} />}
-                  </Pressable>
-                ))}
-                <Pressable
-                  onPress={() => setCalendarMode(true)}
-                  style={({ pressed }) => [styles.option, pressed && { backgroundColor: theme.backgroundElement }]}
-                >
-                  <ThemedText style={periodPreset === 'custom' ? { color: theme.tint, fontWeight: '700' } : undefined}>
-                    Personnalisé
-                    {periodPreset === 'custom' && customRange ? ` (${shortDate(customRange.start)} – ${shortDate(customRange.end)})` : ''}
-                  </ThemedText>
-                  <Ionicons name="calendar-outline" size={18} color={theme.textSecondary} />
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <View style={styles.calendarHeader}>
-                  <Pressable onPress={() => setCalendarMode(false)} hitSlop={8}>
-                    <Ionicons name="arrow-back" size={20} color={theme.text} />
-                  </Pressable>
-                  <ThemedText type="smallBold">Choisir une période</ThemedText>
-                  <View style={styles.calendarHeaderSpacer} />
-                </View>
-                <Calendar
-                  markingType="period"
-                  markedDates={markedDates}
-                  onDayPress={handleDayPress}
-                  maxDate={new Date().toISOString().slice(0, 10)}
-                  theme={{
-                    calendarBackground: theme.background,
-                    dayTextColor: theme.text,
-                    monthTextColor: theme.text,
-                    textDisabledColor: theme.border,
-                    arrowColor: theme.tint,
-                    todayTextColor: theme.tint,
-                  }}
-                />
-                <Pressable
-                  disabled={!draftStart || !draftEnd}
-                  onPress={applyCustomRange}
-                  style={[styles.applyButton, { backgroundColor: theme.tint }, (!draftStart || !draftEnd) && styles.buttonDisabled]}
-                >
-                  <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
-                    Appliquer
-                  </ThemedText>
-                </Pressable>
-              </>
-            )}
+            <View style={styles.calendarHeader}>
+              <ThemedText type="smallBold">Choisir une période</ThemedText>
+            </View>
+            <Calendar
+              markingType="period"
+              markedDates={markedDates}
+              onDayPress={handleDayPress}
+              maxDate={new Date().toISOString().slice(0, 10)}
+              theme={{
+                calendarBackground: theme.background,
+                dayTextColor: theme.text,
+                monthTextColor: theme.text,
+                textDisabledColor: theme.border,
+                arrowColor: theme.tint,
+                todayTextColor: theme.tint,
+              }}
+            />
+            <Pressable
+              disabled={!draftStart || !draftEnd}
+              onPress={applyCustomRange}
+              style={[styles.applyButton, { backgroundColor: theme.tint }, (!draftStart || !draftEnd) && styles.buttonDisabled]}
+            >
+              <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+                Appliquer
+              </ThemedText>
+            </Pressable>
           </View>
         </View>
       </Modal>
     </ThemedView>
-  );
-}
-
-function FilterTrigger({
-  icon,
-  label,
-  active,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.filterTrigger, { backgroundColor: theme.backgroundElement, borderColor: active ? theme.tint : theme.border }]}
-    >
-      <Ionicons name={icon} size={13} color={active ? theme.tint : theme.textSecondary} />
-      <ThemedText type="small" numberOfLines={1} style={styles.filterTriggerLabel}>
-        {label}
-      </ThemedText>
-      <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
-    </Pressable>
   );
 }
 
@@ -471,32 +453,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerButton: {
-    marginRight: Spacing.four,
-  },
-  filterBar: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-  },
-  filterTrigger: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.one,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-  },
-  filterTriggerLabel: {
-    flex: 1,
-  },
   list: {
     padding: Spacing.four,
-    paddingTop: 0,
+    paddingTop: Spacing.three,
+  },
+  filtersSection: {
+    gap: Spacing.two,
+    padding: Spacing.four,
+    paddingBottom: Spacing.three,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  pillRowScroll: {
+    gap: Spacing.two,
+    paddingRight: Spacing.four,
+  },
+  exportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    borderRadius: 14,
+    paddingVertical: Spacing.three,
+    marginTop: Spacing.two,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
   row: {
     flexDirection: 'row',
@@ -542,31 +527,16 @@ const styles = StyleSheet.create({
   pageButtonDisabled: {
     opacity: 0.4,
   },
-  sheetTitle: {
-    marginBottom: Spacing.two,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.three,
-  },
   calendarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginBottom: Spacing.two,
-  },
-  calendarHeaderSpacer: {
-    width: 20,
   },
   applyButton: {
     borderRadius: 14,
     paddingVertical: Spacing.three,
     alignItems: 'center',
     marginTop: Spacing.three,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
   },
 });

@@ -130,7 +130,7 @@ module.exports = {
       [
         'expo-notifications',
         {
-          color: '#1B6F52',
+          color: '#A069DA',
         },
       ],
       [

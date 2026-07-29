@@ -1,7 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 
-import { backfillLegacyUserId } from '@/db/database';
+import { backfillLegacyUserId, clearActiveCashSession } from '@/db/database';
 import { registerForPushNotifications } from '@/lib/push-notifications';
 import { setApiAuthToken } from '@/services/apiService';
 import { authService, type AuthResponse, type AuthUser } from '@/services/authService';
@@ -88,6 +88,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await authService.logout();
     } catch {
       // Already logged out server-side (expired/revoked token) — clear local state anyway.
+    }
+
+    // The "active session" marker is local-only and deliberately scoped to this auth session —
+    // it must not resurrect a stale "in progress" state next time someone logs into this account.
+    if (user) {
+      await clearActiveCashSession(user.id).catch(() => {});
     }
 
     await SecureStore.deleteItemAsync(TOKEN_KEY);
