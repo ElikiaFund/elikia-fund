@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\Admin\SettingController;
 use App\Http\Controllers\Api\Admin\StatsController;
 use App\Http\Controllers\Api\Admin\TransactionController as AdminTransactionController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\Admin\WaitlistController as AdminWaitlistController;
 use App\Http\Controllers\Api\Admin\YabetoSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CashSessionController;
@@ -25,12 +26,16 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\VaultController;
+use App\Http\Controllers\Api\WaitlistController;
 use App\Http\Controllers\Api\YabetoWebhookController;
 use Illuminate\Support\Facades\Route;
 
 // Yabeto Pay webhook — public (Yabeto isn't a Sanctum-authenticated user), signature-verified
 // inside the controller itself. See yabeto.md §7 and App\Services\Payment\YabetoWebhookVerifier.
 Route::post('/webhooks/yabeto', YabetoWebhookController::class);
+
+// Marketing website waitlist — public, no Sanctum user (website has no login). Throttled against spam.
+Route::post('/waitlist', [WaitlistController::class, 'store'])->middleware('throttle:5,1');
 
 // Mobile app auth — OAuth ("continuer avec Google/Apple/Facebook") + email/password.
 Route::middleware('throttle:10,1')->group(function () {
@@ -122,6 +127,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/companies', [AdminCompanyController::class, 'index']);
         Route::get('/companies/{company}', [AdminCompanyController::class, 'show']);
         Route::delete('/companies/{company}', [AdminCompanyController::class, 'destroy'])->middleware('permission:companies.delete');
+
+        Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
+        Route::delete('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'destroy']);
 
         Route::get('/permissions', [PermissionController::class, 'index']);
 
