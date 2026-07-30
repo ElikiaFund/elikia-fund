@@ -1,6 +1,7 @@
 export const NAV_LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/a-propos", label: "À propos" },
+  { href: "/contact", label: "Contact" },
 ];
 
 export const FOOTER_LINK_GROUPS = [
@@ -15,7 +16,10 @@ export const FOOTER_LINK_GROUPS = [
   },
   {
     title: "Entreprise",
-    links: [{ href: "/a-propos", label: "À propos" }],
+    links: [
+      { href: "/a-propos", label: "À propos" },
+      { href: "/contact", label: "Contact" },
+    ],
   },
   {
     title: "Légal",
