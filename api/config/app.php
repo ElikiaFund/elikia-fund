@@ -54,6 +54,11 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Back-office console origin — same value config/cors.php reads, exposed here too so
+    // e-mail templates can link into it without a raw env() call (which config:cache wouldn't
+    // pick up on later env changes).
+    'frontend_url' => env('FRONTEND_URL', 'https://console.elikiafund.com'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
