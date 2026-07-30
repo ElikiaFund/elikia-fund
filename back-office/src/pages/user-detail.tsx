@@ -11,8 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AnalyticsTab } from '@/components/user-detail/analytics-tab'
+import { CashSessionsTab } from '@/components/user-detail/cash-sessions-tab'
 import { CreditScoreTab } from '@/components/user-detail/credit-score-tab'
 import { InformationsTab } from '@/components/user-detail/informations-tab'
+import { ProductsTab } from '@/components/user-detail/products-tab'
 import { TransactionsTab } from '@/components/user-detail/transactions-tab'
 import { adminService, type AdminUserDetail } from '@/services/adminService'
 
@@ -63,6 +65,8 @@ export function UserDetailPage() {
               <TabsTrigger value="informations">Informations</TabsTrigger>
               <TabsTrigger value="score">Score de crédit</TabsTrigger>
               <TabsTrigger value="transactions">Transactions</TabsTrigger>
+              <TabsTrigger value="produits">Produits</TabsTrigger>
+              <TabsTrigger value="sessions-caisse">Sessions de caisse</TabsTrigger>
               <TabsTrigger value="analytique">Analytique</TabsTrigger>
             </TabsList>
             <DateRangeFilter value={range} onChange={setRange} />
@@ -78,6 +82,14 @@ export function UserDetailPage() {
 
           <TabsContent value="transactions">
             <TransactionsTab transactions={filteredTransactions} />
+          </TabsContent>
+
+          <TabsContent value="produits">
+            <ProductsTab products={user.products} />
+          </TabsContent>
+
+          <TabsContent value="sessions-caisse">
+            <CashSessionsTab cashSessions={user.cash_sessions} />
           </TabsContent>
 
           <TabsContent value="analytique">

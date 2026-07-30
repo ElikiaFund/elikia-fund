@@ -1,4 +1,4 @@
-import { ArrowLeftRightIcon, BuildingIcon, CircleDollarSignIcon, LayoutDashboardIcon, SettingsIcon, ShieldIcon, UsersIcon } from "lucide-react"
+import { ArrowLeftRightIcon, BuildingIcon, CircleDollarSignIcon, LayoutDashboardIcon, MailIcon, SettingsIcon, ShieldIcon, UsersIcon } from "lucide-react"
 
 export const navMain = [
   { title: "Tableau de bord", url: "/", end: true, icon: LayoutDashboardIcon },
@@ -6,6 +6,7 @@ export const navMain = [
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRightIcon },
   { title: "Tontines", url: "/tontines", icon: CircleDollarSignIcon },
   { title: "Entreprises", url: "/entreprises", icon: BuildingIcon },
+  { title: "Liste d'attente", url: "/liste-attente", icon: MailIcon },
   { title: "Personnel", url: "/personnel", icon: ShieldIcon },
   { title: "Paramètres", url: "/parametres", icon: SettingsIcon },
 ]

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCompanyCategory } from '@/lib/company-categories'
+import { formatCompanyLocation } from '@/lib/company-locations'
 import { adminService, type AdminCompanyWithOwner } from '@/services/adminService'
 
 function initials(name: string) {
@@ -54,8 +55,9 @@ export function CompanyDetailPage() {
                 <Badge variant="outline">{formatCompanyCategory(company.category, company.other_category)}</Badge>
               </CardDescription>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              Créée le {format(new Date(company.created_at), 'd MMMM y', { locale: fr })}
+            <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
+              <span>Localisation : {formatCompanyLocation(company.department, company.city)}</span>
+              <span>Créée le {format(new Date(company.created_at), 'd MMMM y', { locale: fr })}</span>
             </CardContent>
           </Card>
 

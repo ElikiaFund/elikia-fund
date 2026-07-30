@@ -12,6 +12,7 @@ import { createSelectColumn } from '@/components/data-table/select-column'
 import { facetedFilterFn } from '@/components/data-table/types'
 import { Badge } from '@/components/ui/badge'
 import { COMPANY_CATEGORY_OPTIONS, formatCompanyCategory } from '@/lib/company-categories'
+import { DEPARTMENT_OPTIONS, formatCompanyLocation } from '@/lib/company-locations'
 import { adminService, type AdminCompanyWithOwner } from '@/services/adminService'
 
 const columns: ColumnDef<AdminCompanyWithOwner>[] = [
@@ -29,6 +30,13 @@ const columns: ColumnDef<AdminCompanyWithOwner>[] = [
     ),
     filterFn: facetedFilterFn,
     meta: { label: 'Catégorie' },
+  },
+  {
+    accessorKey: 'department',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Localisation" />,
+    cell: ({ row }) => formatCompanyLocation(row.original.department, row.original.city),
+    filterFn: facetedFilterFn,
+    meta: { label: 'Localisation' },
   },
   {
     id: 'owner',
@@ -81,7 +89,10 @@ export function CompaniesPage() {
       isLoading={isLoading}
       getRowHref={(row) => `/entreprises/${row.id}`}
       searchPlaceholder="Rechercher une entreprise…"
-      facetedFilters={[{ columnId: 'category', title: 'Catégorie', options: COMPANY_CATEGORY_OPTIONS }]}
+      facetedFilters={[
+        { columnId: 'category', title: 'Catégorie', options: COMPANY_CATEGORY_OPTIONS },
+        { columnId: 'department', title: 'Localisation', options: DEPARTMENT_OPTIONS },
+      ]}
       bulkActions={(rows, clearSelection) => (
         <BulkDeleteButton
           count={rows.length}

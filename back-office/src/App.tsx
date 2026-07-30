@@ -16,6 +16,7 @@ import { SettingsPage } from '@/pages/settings'
 import { TransactionsPage } from '@/pages/transactions'
 import { UserDetailPage } from '@/pages/user-detail'
 import { UsersPage } from '@/pages/users'
+import { WaitlistPage } from '@/pages/waitlist'
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/tontines/:id" element={<GroupDetailPage />} />
             <Route path="/entreprises" element={<CompaniesPage />} />
             <Route path="/entreprises/:id" element={<CompanyDetailPage />} />
+            <Route path="/liste-attente" element={<WaitlistPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />
             <Route path="/parametres" element={<SettingsPage />} />
             <Route path="/profil" element={<ProfilePage />} />

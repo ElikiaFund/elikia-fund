@@ -6,6 +6,8 @@ export type AdminCompany = {
   name: string
   category: string
   other_category: string | null
+  department: string | null
+  city: string | null
   created_at: string
   updated_at: string
 }
@@ -100,10 +102,49 @@ export type AdminGroupDetail = AdminGroupBase & {
 
 export type AdminCompanyWithOwner = AdminCompany & { user: AdminUser }
 
+export type AdminWaitlistEntry = {
+  id: number
+  name: string | null
+  email: string
+  created_at: string
+}
+
+export type AdminProductCategory = {
+  id: number
+  name: string
+  icon: string | null
+  color: string | null
+}
+
+export type AdminProduct = {
+  id: number
+  name: string
+  category: AdminProductCategory | null
+  sell_price: string
+  cost_price: string | null
+  tracks_stock: boolean
+  stock_quantity: number
+  low_stock_threshold: number | null
+  created_at: string
+}
+
+export type AdminCashSession = {
+  id: number
+  uuid: string
+  period_start: string | null
+  closed_at: string
+  expected_balance: string
+  counted_balance: string
+  variance: string
+  notes: string | null
+}
+
 export type AdminUserDetail = AdminUser & {
   transactions: AdminTransactionBase[]
   vault: { id: number; balance: string; pin_set_at: string | null } | null
   groups: AdminGroupBase[]
+  products: AdminProduct[]
+  cash_sessions: AdminCashSession[]
 }
 
 export type AdminStats = {
@@ -221,6 +262,22 @@ export const adminService = {
 
   deleteCompany(id: number) {
     return apiService.delete(`/admin/companies/${id}`)
+  },
+
+  listWaitlist() {
+    return apiService.get<AdminWaitlistEntry[]>('/admin/waitlist').then((r) => r.data)
+  },
+
+  deleteWaitlistEntry(id: number) {
+    return apiService.delete(`/admin/waitlist/${id}`)
+  },
+
+  deleteProduct(id: number) {
+    return apiService.delete(`/admin/products/${id}`)
+  },
+
+  deleteCashSession(id: number) {
+    return apiService.delete(`/admin/cash-sessions/${id}`)
   },
 
   listPermissions() {
