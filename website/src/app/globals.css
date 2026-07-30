@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design tokens ported from the real, shipped brand system:
+ * - --primary/--destructive/--ring/--radius: back-office/src/index.css (OKLCH, same purple hue
+ *   family as mobile's tint).
+ * - Neutrals (background/foreground/card/muted/border): mobile/src/constants/theme.ts's warm
+ *   "paper" palette, deliberately kept instead of back-office's pure white/near-black — this
+ *   warmth is what mobile/src/lib/pdf.ts (the most "designed" artifact in the codebase) uses.
+ * - --income/--danger: mobile's desaturated semantic colors, used only inside the phone-mockup
+ *   illustrations and credit-score section — kept separate from shadcn's more saturated generic
+ *   --destructive (a UI-error red), matching the project's own "muted, never alarm-red" rule.
+ */
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-income: var(--income);
+  --color-danger: var(--danger);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  --background: #faf8f4;
+  --foreground: #1a1a17;
+  --card: #f1eee7;
+  --card-foreground: #1a1a17;
+  --popover: #faf8f4;
+  --popover-foreground: #1a1a17;
+  --primary: oklch(0.628 0.17 304.4);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: #f1eee7;
+  --secondary-foreground: #1a1a17;
+  --muted: #e6e1d3;
+  --muted-foreground: #6b675e;
+  --accent: #e6e1d3;
+  --accent-foreground: #1a1a17;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #dedacd;
+  --input: #dedacd;
+  --ring: oklch(0.628 0.17 304.4);
+  --income: #4c7a63;
+  --danger: #b5544a;
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: #121210;
+  --foreground: #f3f1ea;
+  --card: #1d1c18;
+  --card-foreground: #f3f1ea;
+  --popover: #121210;
+  --popover-foreground: #f3f1ea;
+  --primary: oklch(0.714 0.138 306.7);
+  --primary-foreground: oklch(0.209 0.027 306.7);
+  --secondary: #1d1c18;
+  --secondary-foreground: #f3f1ea;
+  --muted: #292720;
+  --muted-foreground: #a9a599;
+  --accent: #292720;
+  --accent-foreground: #f3f1ea;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #2c2a22;
+  --input: #2c2a22;
+  --ring: oklch(0.714 0.138 306.7);
+  --income: #7baf95;
+  --danger: #d97b6c;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Uppercase micro-label pattern from pdf.ts's section titles/info-box labels. */
+.eyebrow {
+  @apply text-xs font-bold tracking-widest text-primary uppercase;
+}
