@@ -39,7 +39,7 @@ export default function PrivacyPage() {
           <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-muted-foreground">
             <li>
               <strong className="text-foreground">Compte</strong> : numéro de téléphone (identifiant principal), nom, mot
-              de passe (haché, jamais stocké en clair) — ou, si vous choisissez de vous connecter via Google, Apple ou
+              de passe (haché, jamais stocké en clair), ou, si vous choisissez de vous connecter via Google, Apple ou
               Facebook, l&apos;identifiant fourni par ce service, votre e-mail, votre nom et votre photo de profil.
             </li>
             <li>

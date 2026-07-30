@@ -18,7 +18,7 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — Trésorerie, épargne et tontines pour entrepreneurs informels`,
+    default: `${SITE_NAME} : Trésorerie, épargne et tontines pour entrepreneurs informels`,
     template: `%s · ${SITE_NAME}`,
   },
   description: META_DESCRIPTION,

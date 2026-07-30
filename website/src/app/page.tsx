@@ -100,11 +100,11 @@ export default function HomePage() {
         />
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-2 lg:gap-8">
           <div className="flex flex-col items-start gap-6 text-left">
-            <span className="eyebrow">Elikia — « espoir » en lingala</span>
+            <span className="eyebrow">Elikia, « espoir » en lingala</span>
             <h1 className="text-4xl font-extrabold tracking-tight text-balance sm:text-6xl">{TAGLINE}</h1>
             <p className="max-w-xl text-lg text-muted-foreground text-balance">
               Elikia Fund aide les entrepreneurs informels du Congo-Brazzaville à suivre leur trésorerie, épargner et
-              cotiser en tontine — et à construire, avec le temps, une véritable identité financière.
+              cotiser en tontine, et à construire, avec le temps, une véritable identité financière.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <WaitlistCta />
@@ -155,7 +155,7 @@ export default function HomePage() {
             </h2>
             <p className="text-base text-muted-foreground">
               À chaque revenu enregistré, chaque cotisation versée, Elikia Fund calcule un score d&apos;éligibilité
-              au crédit sur 100 — une identité financière pour des entrepreneurs qui n&apos;en avaient pas jusqu&apos;ici.
+              au crédit sur 100 : une identité financière pour des entrepreneurs qui n&apos;en avaient pas jusqu&apos;ici.
             </p>
             <ul className="flex flex-col gap-3">
               {CREDIT_SCORE_FACTORS.map((factor) => (
@@ -171,7 +171,7 @@ export default function HomePage() {
             <CreditScoreGauge score={78} />
             <VerdictBadge verdict="eligible" />
             <p className="text-center text-sm text-muted-foreground">
-              Illustration — votre score dépend de votre activité réelle dans l&apos;application.
+              Illustration : votre score dépend de votre activité réelle dans l&apos;application.
             </p>
           </div>
         </div>
