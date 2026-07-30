@@ -30,6 +30,12 @@ class UpdateSettingsRequest extends FormRequest
             'credit_scoring' => ['sometimes', 'array'],
             'credit_scoring.min_score_eligible' => ['required_with:credit_scoring', 'integer', 'min:0', 'max:100'],
             'credit_scoring.min_score_review' => ['required_with:credit_scoring', 'integer', 'min:0', 'max:100', 'lt:credit_scoring.min_score_eligible'],
+
+            'contact' => ['sometimes', 'array'],
+            'contact.phone' => ['nullable', 'string', 'max:50'],
+            'contact.whatsapp' => ['nullable', 'string', 'max:50'],
+            'contact.address' => ['nullable', 'string', 'max:255'],
+            'contact.hours' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

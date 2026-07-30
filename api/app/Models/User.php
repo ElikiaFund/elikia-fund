@@ -114,6 +114,11 @@ class User extends Authenticatable
         return $this->hasMany(CashSession::class);
     }
 
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
     /** Human-readable French label for the configured cash-session cadence, e.g. "Tous les jours à 20h00". */
     public function cashSessionScheduleLabel(): ?string
     {

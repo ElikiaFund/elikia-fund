@@ -12,12 +12,14 @@ use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\ScoringCriterionController;
 use App\Http\Controllers\Api\Admin\SettingController;
 use App\Http\Controllers\Api\Admin\StatsController;
+use App\Http\Controllers\Api\Admin\SupportTicketController as AdminSupportTicketController;
 use App\Http\Controllers\Api\Admin\TransactionController as AdminTransactionController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\Admin\WaitlistController as AdminWaitlistController;
 use App\Http\Controllers\Api\Admin\YabetoSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CashSessionController;
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\CreditScoreController as MeCreditScoreController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\NotificationController;
@@ -25,6 +27,7 @@ use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\ProductCategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\SyncController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\VaultController;
@@ -62,6 +65,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me/notifications', [NotificationController::class, 'index']);
     Route::post('/me/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/me/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+
+    Route::get('/settings/contact', [ContactController::class, 'show']);
+    Route::post('/support-tickets', [SupportTicketController::class, 'store']);
 
     Route::post('/onboarding/company', [OnboardingController::class, 'createCompany']);
 
@@ -132,6 +138,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
         Route::delete('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'destroy']);
+
+        Route::get('/support-tickets', [AdminSupportTicketController::class, 'index']);
+        Route::delete('/support-tickets/{supportTicket}', [AdminSupportTicketController::class, 'destroy'])->middleware('permission:support_tickets.delete');
 
         // Read access to a user's products/cash sessions is bundled into GET /admin/users/{user}
         // (the "Produits"/"Sessions de caisse" tabs) — these two routes only add delete.
