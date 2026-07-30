@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCompanyCategory } from '@/lib/company-categories'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { formatCompanyLocation } from '@/lib/company-locations'
 import { adminService, type AdminCompanyWithOwner } from '@/services/adminService'
 
@@ -26,6 +27,7 @@ export function CompanyDetailPage() {
   const { id } = useParams()
   const [company, setCompany] = useState<AdminCompanyWithOwner | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  usePageTitle(company ? `${company.name} · Entreprises` : 'Entreprises')
 
   useEffect(() => {
     setIsLoading(true)
@@ -57,6 +59,8 @@ export function CompanyDetailPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-1 text-sm text-muted-foreground">
               <span>Localisation : {formatCompanyLocation(company.department, company.city)}</span>
+              {company.neighborhood && <span>Quartier : {company.neighborhood}</span>}
+              {company.address && <span>Adresse : {company.address}</span>}
               <span>Créée le {format(new Date(company.created_at), 'd MMMM y', { locale: fr })}</span>
             </CardContent>
           </Card>

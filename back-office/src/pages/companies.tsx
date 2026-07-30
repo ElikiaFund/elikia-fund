@@ -13,6 +13,7 @@ import { facetedFilterFn } from '@/components/data-table/types'
 import { Badge } from '@/components/ui/badge'
 import { COMPANY_CATEGORY_OPTIONS, formatCompanyCategory } from '@/lib/company-categories'
 import { DEPARTMENT_OPTIONS, formatCompanyLocation } from '@/lib/company-locations'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminCompanyWithOwner } from '@/services/adminService'
 
 const columns: ColumnDef<AdminCompanyWithOwner>[] = [
@@ -53,6 +54,8 @@ const columns: ColumnDef<AdminCompanyWithOwner>[] = [
 ]
 
 export function CompaniesPage() {
+  usePageTitle('Entreprises')
+
   const [companies, setCompanies] = useState<AdminCompanyWithOwner[]>([])
   const [isLoading, setIsLoading] = useState(true)
 

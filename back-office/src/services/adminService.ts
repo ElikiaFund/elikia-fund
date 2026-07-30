@@ -8,6 +8,8 @@ export type AdminCompany = {
   other_category: string | null
   department: string | null
   city: string | null
+  neighborhood: string | null
+  address: string | null
   created_at: string
   updated_at: string
 }

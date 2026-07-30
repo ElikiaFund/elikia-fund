@@ -11,6 +11,7 @@ import { DataTableRowActions } from '@/components/data-table/row-actions'
 import { createSelectColumn } from '@/components/data-table/select-column'
 import { facetedFilterFn } from '@/components/data-table/types'
 import { Badge } from '@/components/ui/badge'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminTransaction } from '@/services/adminService'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
@@ -67,6 +68,8 @@ const columns: ColumnDef<AdminTransaction>[] = [
 ]
 
 export function TransactionsPage() {
+  usePageTitle('Transactions')
+
   const [transactions, setTransactions] = useState<AdminTransaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
 

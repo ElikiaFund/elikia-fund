@@ -14,6 +14,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminGroupDetail } from '@/services/adminService'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
@@ -36,6 +37,7 @@ export function GroupDetailPage() {
   const { id } = useParams()
   const [group, setGroup] = useState<AdminGroupDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  usePageTitle(group ? `${group.name} · Tontines` : 'Tontines')
 
   useEffect(() => {
     setIsLoading(true)

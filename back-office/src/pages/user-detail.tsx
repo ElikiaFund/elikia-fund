@@ -16,12 +16,14 @@ import { CreditScoreTab } from '@/components/user-detail/credit-score-tab'
 import { InformationsTab } from '@/components/user-detail/informations-tab'
 import { ProductsTab } from '@/components/user-detail/products-tab'
 import { TransactionsTab } from '@/components/user-detail/transactions-tab'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminUserDetail } from '@/services/adminService'
 
 export function UserDetailPage() {
   const { id } = useParams()
   const [user, setUser] = useState<AdminUserDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  usePageTitle(user ? `${user.name} · Utilisateurs` : 'Utilisateurs')
   const [range, setRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 30), to: new Date() })
 
   useEffect(() => {

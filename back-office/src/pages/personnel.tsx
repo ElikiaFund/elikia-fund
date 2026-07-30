@@ -1,8 +1,11 @@
 import { PersonnelTab } from '@/components/personnel/personnel-tab'
 import { RolesTab } from '@/components/personnel/roles-tab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePageTitle } from '@/hooks/use-page-title'
 
 export function PersonnelPage() {
+  usePageTitle('Personnel')
+
   return (
     <Tabs defaultValue="personnels">
       <TabsList>

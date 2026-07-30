@@ -9,6 +9,7 @@ import { DataTableColumnHeader } from '@/components/data-table/column-header'
 import { DataTable } from '@/components/data-table/data-table'
 import { DataTableRowActions } from '@/components/data-table/row-actions'
 import { createSelectColumn } from '@/components/data-table/select-column'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminWaitlistEntry } from '@/services/adminService'
 
 const columns: ColumnDef<AdminWaitlistEntry>[] = [
@@ -33,6 +34,8 @@ const columns: ColumnDef<AdminWaitlistEntry>[] = [
 ]
 
 export function WaitlistPage() {
+  usePageTitle("Liste d'attente")
+
   const [entries, setEntries] = useState<AdminWaitlistEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
 

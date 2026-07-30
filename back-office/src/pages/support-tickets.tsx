@@ -9,6 +9,7 @@ import { DataTableColumnHeader } from '@/components/data-table/column-header'
 import { DataTable } from '@/components/data-table/data-table'
 import { DataTableRowActions } from '@/components/data-table/row-actions'
 import { createSelectColumn } from '@/components/data-table/select-column'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminSupportTicket } from '@/services/adminService'
 
 const columns: ColumnDef<AdminSupportTicket>[] = [
@@ -44,6 +45,8 @@ const columns: ColumnDef<AdminSupportTicket>[] = [
 ]
 
 export function SupportTicketsPage() {
+  usePageTitle('Support')
+
   const [tickets, setTickets] = useState<AdminSupportTicket[]>([])
   const [isLoading, setIsLoading] = useState(true)
 

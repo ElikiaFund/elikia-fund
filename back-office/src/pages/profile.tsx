@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/context/auth-context'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { authService } from '@/services/authService'
 
 function initials(name: string) {
@@ -20,6 +21,8 @@ function initials(name: string) {
 }
 
 export function ProfilePage() {
+  usePageTitle('Mon profil')
+
   const { user, updateUser } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)

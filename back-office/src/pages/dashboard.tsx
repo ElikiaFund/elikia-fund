@@ -11,9 +11,12 @@ import { TontinesChart } from '@/components/dashboard/tontines-chart'
 import { TransactionsChart } from '@/components/dashboard/transactions-chart'
 import type { Contribution, NewUser, Transaction } from '@/components/dashboard/types'
 import { Skeleton } from '@/components/ui/skeleton'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService } from '@/services/adminService'
 
 export function DashboardPage() {
+  usePageTitle('Tableau de bord')
+
   const [range, setRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 30), to: new Date() })
   const [isLoading, setIsLoading] = useState(true)
   const [transactions, setTransactions] = useState<Transaction[]>([])

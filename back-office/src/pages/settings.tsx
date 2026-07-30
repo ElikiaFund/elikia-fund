@@ -2,8 +2,11 @@ import { CreditScoringTab } from '@/components/settings/credit-scoring-tab'
 import { GeneralTab } from '@/components/settings/general-tab'
 import { PaymentsTab } from '@/components/settings/payments-tab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { usePageTitle } from '@/hooks/use-page-title'
 
 export function SettingsPage() {
+  usePageTitle('Paramètres')
+
   return (
     <Tabs defaultValue="general">
       <TabsList>

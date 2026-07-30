@@ -11,6 +11,7 @@ import { DataTableRowActions } from '@/components/data-table/row-actions'
 import { createSelectColumn } from '@/components/data-table/select-column'
 import { facetedFilterFn } from '@/components/data-table/types'
 import { Badge } from '@/components/ui/badge'
+import { usePageTitle } from '@/hooks/use-page-title'
 import { adminService, type AdminUser } from '@/services/adminService'
 
 const columns: ColumnDef<AdminUser>[] = [
@@ -48,6 +49,8 @@ const columns: ColumnDef<AdminUser>[] = [
 ]
 
 export function UsersPage() {
+  usePageTitle('Utilisateurs')
+
   const [users, setUsers] = useState<AdminUser[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
