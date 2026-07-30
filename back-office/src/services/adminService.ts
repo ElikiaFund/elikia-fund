@@ -190,6 +190,16 @@ export type CreditScore = {
 export type AdminSettings = {
   platform: { name: string; support_email: string }
   credit_scoring: { min_score_eligible: number; min_score_review: number }
+  contact: { phone: string | null; whatsapp: string | null; address: string | null; hours: string | null }
+}
+
+export type AdminSupportTicket = {
+  id: number
+  email: string
+  subject: string
+  message: string
+  created_at: string
+  user: AdminUser
 }
 
 export type YabetoSettings = {
@@ -278,6 +288,14 @@ export const adminService = {
 
   deleteCashSession(id: number) {
     return apiService.delete(`/admin/cash-sessions/${id}`)
+  },
+
+  listSupportTickets() {
+    return apiService.get<AdminSupportTicket[]>('/admin/support-tickets').then((r) => r.data)
+  },
+
+  deleteSupportTicket(id: number) {
+    return apiService.delete(`/admin/support-tickets/${id}`)
   },
 
   listPermissions() {

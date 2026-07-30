@@ -13,6 +13,7 @@ import { LoginPage } from '@/pages/login'
 import { PersonnelPage } from '@/pages/personnel'
 import { ProfilePage } from '@/pages/profile'
 import { SettingsPage } from '@/pages/settings'
+import { SupportTicketsPage } from '@/pages/support-tickets'
 import { TransactionsPage } from '@/pages/transactions'
 import { UserDetailPage } from '@/pages/user-detail'
 import { UsersPage } from '@/pages/users'
@@ -35,6 +36,7 @@ function App() {
             <Route path="/entreprises" element={<CompaniesPage />} />
             <Route path="/entreprises/:id" element={<CompanyDetailPage />} />
             <Route path="/liste-attente" element={<WaitlistPage />} />
+            <Route path="/support" element={<SupportTicketsPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />
             <Route path="/parametres" element={<SettingsPage />} />
             <Route path="/profil" element={<ProfilePage />} />
