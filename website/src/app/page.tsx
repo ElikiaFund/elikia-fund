@@ -80,8 +80,32 @@ const FAQS = [
       "Une fois l'application installée, vos transactions, votre coffre et vos tontines sont bien réels et vous appartiennent. Les paiements par mobile money peuvent, selon la disponibilité, être traités par un prestataire tiers ou simulés pendant la phase actuelle.",
   },
   {
+    question: "Elikia Fund fonctionne-t-il sans connexion internet ?",
+    answer:
+      "Oui pour le suivi de trésorerie : vos transactions sont enregistrées même hors connexion et se synchronisent automatiquement dès que votre téléphone retrouve le réseau. Le coffre et les tontines nécessitent une connexion.",
+  },
+  {
+    question: "Comment est calculé le score d'éligibilité au crédit ?",
+    answer:
+      "Il combine plusieurs facteurs liés à votre activité réelle dans l'application : ancienneté du compte, régularité de vos transactions, comportement d'épargne, équilibre entre revenus et dépenses, participation aux tontines et profil de votre entreprise. Aucun document bancaire n'est requis.",
+  },
+  {
+    question: "Qu'est-ce que le coffre et en quoi diffère-t-il de la trésorerie ?",
+    answer:
+      "Le coffre est un espace d'épargne protégé par un code PIN à 4 chiffres, séparé de vos dépenses courantes. Il vous aide à mettre de l'argent de côté sans le mélanger avec l'argent que vous utilisez au quotidien.",
+  },
+  {
+    question: "Elikia Fund est-il gratuit ?",
+    answer: `Oui, l'application est gratuite. La seule commission est celle de ${TONTINE_FEE_PERCENT} % sur les tontines, décrite ci-dessous — aucun autre frais ni abonnement.`,
+  },
+  {
     question: "Quels frais s'appliquent aux tontines ?",
     answer: `Une commission fixe de ${TONTINE_FEE_PERCENT} % est prélevée sur chaque cotisation versée dans une tontine. Ce montant est toujours affiché clairement, cotisation par cotisation.`,
+  },
+  {
+    question: "Elikia Fund est-il disponible en dehors du Congo-Brazzaville ?",
+    answer:
+      "Pas pour le moment. L'application est pensée spécifiquement pour les entrepreneurs informels du Congo-Brazzaville, y compris pour les paiements par mobile money.",
   },
   {
     question: "Où puis-je lire la politique de confidentialité ?",

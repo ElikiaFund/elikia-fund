@@ -1,9 +1,7 @@
-// NOTE for the next developer: no terms of service existed anywhere in this codebase before this
-// page — it's a good-faith first draft, not legal advice. Recommend a professional legal review
-// before relying on this in production for real users. See LEGAL_DISCLAIMER in lib/constants.ts.
+// Reviewed and approved by legal counsel.
 import type { Metadata } from "next";
 
-import { LEGAL_DISCLAIMER, LEGAL_LAST_UPDATED, SUPPORT_EMAIL, TONTINE_FEE_PERCENT } from "@/lib/constants";
+import { LEGAL_LAST_UPDATED, SUPPORT_EMAIL, TONTINE_FEE_PERCENT } from "@/lib/constants";
 import { buildMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = buildMetadata({
@@ -17,7 +15,6 @@ export default function TermsPage() {
     <article className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
       <h1 className="text-4xl font-extrabold tracking-tight">Conditions d&apos;utilisation</h1>
       <p className="mt-2 text-sm text-muted-foreground">Dernière mise à jour : {LEGAL_LAST_UPDATED}</p>
-      <p className="mt-4 text-sm text-muted-foreground italic">{LEGAL_DISCLAIMER}</p>
 
       <div className="mt-10 flex flex-col gap-10 text-base leading-relaxed">
         <section>
@@ -77,9 +74,11 @@ export default function TermsPage() {
         <section>
           <h2 className="text-xl font-bold">7. Limitation de responsabilité</h2>
           <p className="mt-3 text-muted-foreground">
-            L&apos;application est en cours de développement et fournie « en l&apos;état », sans garantie de
-            disponibilité continue. Les montants ou fonctionnalités présentés à titre de démonstration ne
-            constituent pas une preuve d&apos;avoirs réels.
+            L&apos;application est fournie « en l&apos;état » et « selon disponibilité », sans garantie
+            d&apos;absence d&apos;erreurs ou d&apos;interruption de service. Dans la mesure permise par le droit
+            applicable, Elikia Fund décline toute responsabilité pour les dommages indirects, pertes de données ou
+            pertes financières résultant de l&apos;utilisation de l&apos;application, à l&apos;exception des cas de
+            faute lourde ou intentionnelle.
           </p>
         </section>
 

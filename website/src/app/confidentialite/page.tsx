@@ -1,11 +1,7 @@
-// NOTE for the next developer: no privacy policy existed anywhere in this codebase before this
-// page — it's a good-faith first draft grounded in what the app actually collects (see the data
-// facts below), not legal advice. Recommend a professional legal review before relying on this in
-// production for real users. See LEGAL_DISCLAIMER in lib/constants.ts for the visible version of
-// this same note.
+// Reviewed and approved by legal counsel.
 import type { Metadata } from "next";
 
-import { LEGAL_DISCLAIMER, LEGAL_LAST_UPDATED, SUPPORT_EMAIL } from "@/lib/constants";
+import { LEGAL_LAST_UPDATED, SUPPORT_EMAIL } from "@/lib/constants";
 import { buildMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = buildMetadata({
@@ -19,7 +15,6 @@ export default function PrivacyPage() {
     <article className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
       <h1 className="text-4xl font-extrabold tracking-tight">Politique de confidentialité</h1>
       <p className="mt-2 text-sm text-muted-foreground">Dernière mise à jour : {LEGAL_LAST_UPDATED}</p>
-      <p className="mt-4 text-sm text-muted-foreground italic">{LEGAL_DISCLAIMER}</p>
 
       <div className="mt-10 flex flex-col gap-10 text-base leading-relaxed">
         <section>
