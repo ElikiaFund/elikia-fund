@@ -1,5 +1,6 @@
 import { Landmark, ShieldCheck, Users, Wallet, WifiOff } from "lucide-react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -95,20 +96,37 @@ export default function HomePage() {
       <section className="relative overflow-hidden">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-40 left-1/2 h-112 w-2xl -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
+          className="pointer-events-none absolute -top-40 -left-40 h-112 w-2xl rounded-full bg-primary/20 blur-3xl"
         />
-        <div className="relative mx-auto flex max-w-4xl flex-col items-center gap-6 px-4 py-24 text-center sm:px-6 sm:py-32">
-          <span className="eyebrow">Elikia — « espoir » en lingala</span>
-          <h1 className="text-4xl font-extrabold tracking-tight text-balance sm:text-6xl">{TAGLINE}</h1>
-          <p className="max-w-2xl text-lg text-muted-foreground text-balance">
-            Elikia Fund aide les entrepreneurs informels du Congo-Brazzaville à suivre leur trésorerie, épargner et
-            cotiser en tontine — et à construire, avec le temps, une véritable identité financière.
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <WaitlistCta />
-            <Button asChild variant="outline" size="lg">
-              <Link href="#fonctionnalites">Découvrir comment ça marche</Link>
-            </Button>
+        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-2 lg:gap-8">
+          <div className="flex flex-col items-start gap-6 text-left">
+            <span className="eyebrow">Elikia — « espoir » en lingala</span>
+            <h1 className="text-4xl font-extrabold tracking-tight text-balance sm:text-6xl">{TAGLINE}</h1>
+            <p className="max-w-xl text-lg text-muted-foreground text-balance">
+              Elikia Fund aide les entrepreneurs informels du Congo-Brazzaville à suivre leur trésorerie, épargner et
+              cotiser en tontine — et à construire, avec le temps, une véritable identité financière.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <WaitlistCta />
+              <Button asChild variant="outline" size="lg">
+                <Link href="#fonctionnalites">Découvrir comment ça marche</Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute -inset-4 -z-10 rounded-[2rem] bg-primary/15 blur-2xl" aria-hidden />
+            <div className="overflow-hidden rounded-[1.75rem] border border-border shadow-xl">
+              {/* Photo by Ali Mkumbwa (@mkumbwajr) on Unsplash — Unsplash License, free commercial use. */}
+              <Image
+                src="/images/hero-entrepreneur.jpg"
+                alt="Une commerçante reçoit un paiement dans sa boutique, téléphone à la main"
+                width={1600}
+                height={1067}
+                priority
+                className="h-full w-full object-cover"
+              />
+            </div>
           </div>
         </div>
       </section>
