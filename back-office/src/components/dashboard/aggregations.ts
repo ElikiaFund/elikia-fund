@@ -2,6 +2,8 @@ import { endOfDay, format, isWithinInterval, startOfDay, subMilliseconds } from 
 import type { DateRange } from 'react-day-picker'
 
 import type { Contribution, Transaction } from '@/components/dashboard/types'
+import { COMPANY_CATEGORY_LABELS } from '@/lib/company-categories'
+import { DEPARTMENT_LABELS } from '@/lib/company-locations'
 
 function dateOf(item: { date: Date } | { joinedAt: Date }) {
   return 'date' in item ? item.date : item.joinedAt
@@ -85,6 +87,40 @@ export function aggregateByCategory(transactions: Transaction[], limit = 5) {
   }
 
   return Array.from(byCategory.entries())
+    .map(([tontine, total]) => ({ tontine, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit)
+}
+
+/**
+ * Company sector distribution — grouped by the fixed `Company::CATEGORIES` label only (not the
+ * free-text `other_category`), so every "Autre" company lands in one bucket instead of
+ * fragmenting into one bucket per custom sector name.
+ */
+export function aggregateByCompanyCategory(companies: { category: string }[]) {
+  const byCategory = new Map<string, number>()
+
+  for (const c of companies) {
+    const label = COMPANY_CATEGORY_LABELS[c.category] ?? c.category
+    byCategory.set(label, (byCategory.get(label) ?? 0) + 1)
+  }
+
+  return Array.from(byCategory.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+}
+
+/** Ranked company count per department — reuses the tontines chart's `{tontine, total}` shape (relabeled). */
+export function aggregateByDepartment(companies: { department: string | null }[], limit = 6) {
+  const byDepartment = new Map<string, number>()
+
+  for (const c of companies) {
+    if (!c.department) continue
+    const label = DEPARTMENT_LABELS[c.department] ?? c.department
+    byDepartment.set(label, (byDepartment.get(label) ?? 0) + 1)
+  }
+
+  return Array.from(byDepartment.entries())
     .map(([tontine, total]) => ({ tontine, total }))
     .sort((a, b) => b.total - a.total)
     .slice(0, limit)

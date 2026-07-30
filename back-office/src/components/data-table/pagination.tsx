@@ -10,11 +10,11 @@ type DataTablePaginationProps<TData> = {
 
 export function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex items-center justify-between px-2">
-      <div className="flex-1 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-4 px-2">
+      <div className="min-w-0 flex-1 text-sm text-muted-foreground">
         {table.getFilteredSelectedRowModel().rows.length} sur {table.getFilteredRowModel().rows.length} ligne(s) sélectionnée(s)
       </div>
-      <div className="flex items-center gap-6 lg:gap-8">
+      <div className="flex flex-wrap items-center gap-4 sm:gap-6 lg:gap-8">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium">Lignes par page</p>
           <Select value={`${table.getState().pagination.pageSize}`} onValueChange={(value) => table.setPageSize(Number(value))}>

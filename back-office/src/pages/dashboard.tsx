@@ -2,8 +2,17 @@ import { subDays } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 
-import { aggregateByTontine, aggregateDaily, filterByRange, previousRange } from '@/components/dashboard/aggregations'
+import {
+  aggregateByCategory,
+  aggregateByCompanyCategory,
+  aggregateByDepartment,
+  aggregateByTontine,
+  aggregateDaily,
+  filterByRange,
+  previousRange,
+} from '@/components/dashboard/aggregations'
 import { DateRangeFilter } from '@/components/dashboard/date-range-filter'
+import { DistributionDonutChart } from '@/components/dashboard/distribution-donut-chart'
 import { NewUsersTable } from '@/components/dashboard/new-users-table'
 import { RecentTransactionsTable } from '@/components/dashboard/recent-transactions-table'
 import { StatCards } from '@/components/dashboard/stat-cards'
@@ -12,7 +21,9 @@ import { TransactionsChart } from '@/components/dashboard/transactions-chart'
 import type { Contribution, NewUser, Transaction } from '@/components/dashboard/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePageTitle } from '@/hooks/use-page-title'
-import { adminService } from '@/services/adminService'
+import { adminService, type AdminCompany } from '@/services/adminService'
+
+const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 
 export function DashboardPage() {
   usePageTitle('Tableau de bord')
@@ -22,10 +33,11 @@ export function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [contributions, setContributions] = useState<Contribution[]>([])
   const [newUsers, setNewUsers] = useState<NewUser[]>([])
+  const [companies, setCompanies] = useState<AdminCompany[]>([])
 
   useEffect(() => {
-    Promise.all([adminService.listUsers(), adminService.listTransactions(), adminService.listGroups()])
-      .then(([users, apiTransactions, groups]) => {
+    Promise.all([adminService.listUsers(), adminService.listTransactions(), adminService.listGroups(), adminService.listCompanies()])
+      .then(([users, apiTransactions, groups, apiCompanies]) => {
         const userNameById = new Map(users.map((u) => [u.id, u.name]))
 
         setNewUsers(users.map((u) => ({ id: u.id, name: u.name, email: u.email, joinedAt: new Date(u.created_at) })))
@@ -53,6 +65,8 @@ export function DashboardPage() {
             })),
           ),
         )
+
+        setCompanies(apiCompanies)
       })
       .finally(() => setIsLoading(false))
   }, [])
@@ -77,6 +91,29 @@ export function DashboardPage() {
 
   const dailyData = useMemo(() => aggregateDaily(current.transactions), [current.transactions])
   const tontineData = useMemo(() => aggregateByTontine(current.contributions), [current.contributions])
+
+  const incomeExpenseData = useMemo(() => {
+    const revenus = current.transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+    const depenses = current.transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+    return [
+      { label: 'Revenus', value: revenus },
+      { label: 'Dépenses', value: depenses },
+    ]
+  }, [current.transactions])
+
+  const topExpenseCategories = useMemo(
+    () => aggregateByCategory(current.transactions.filter((t) => t.type === 'expense')),
+    [current.transactions],
+  )
+  const topIncomeCategories = useMemo(
+    () => aggregateByCategory(current.transactions.filter((t) => t.type === 'income')),
+    [current.transactions],
+  )
+
+  // Merchant profile snapshot — who our companies are today, not scoped to the selected date
+  // range (a company created 3 months ago is still part of "how our merchants break down now").
+  const sectorData = useMemo(() => aggregateByCompanyCategory(companies), [companies])
+  const departmentData = useMemo(() => aggregateByDepartment(companies), [companies])
 
   if (isLoading) {
     return (
@@ -104,6 +141,23 @@ export function DashboardPage() {
           <TransactionsChart data={dailyData} />
         </div>
         <TontinesChart data={tontineData} />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Activité sur la période</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <DistributionDonutChart data={incomeExpenseData} title="Revenus vs dépenses" valueFormatter={currency.format} />
+          <TontinesChart data={topExpenseCategories} title="Top catégories de dépenses" description="Top 5 sur la période sélectionnée" />
+          <TontinesChart data={topIncomeCategories} title="Top catégories de revenus" description="Top 5 sur la période sélectionnée" />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Profil des entreprises</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <DistributionDonutChart data={sectorData} title="Répartition par secteur d'activité" description="Toutes les entreprises enregistrées" />
+          <TontinesChart data={departmentData} title="Répartition géographique" description="Entreprises par département" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
