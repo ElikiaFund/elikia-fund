@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/form-field';
+import { Pill } from '@/components/pill';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/cashflow-categories';
@@ -14,6 +15,8 @@ import { useAuth } from '@/context/auth-context';
 import { useSync } from '@/context/sync-context';
 import { cacheSyncedTransaction, insertTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
+import { isLowStock } from '@/lib/product-stats';
+import { productCategoryService, type ProductCategory } from '@/services/productCategoryService';
 import { productService, type Product } from '@/services/productService';
 import { transactionService } from '@/services/transactionService';
 
@@ -30,6 +33,8 @@ export default function AddTransactionScreen() {
   const [category, setCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
+  const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
+  const [productCategoryFilter, setProductCategoryFilter] = useState<number | 'all'>('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,6 +43,8 @@ export default function AddTransactionScreen() {
   const amountValue = Number(amount.replace(',', '.'));
   const exceedsStock = type === 'income' && !!selectedProduct?.tracks_stock && quantity > selectedProduct.stock_quantity;
   const canSubmit = amountValue > 0 && category !== null && !exceedsStock;
+  const filteredProducts =
+    productCategoryFilter === 'all' ? products : products.filter((p) => p.category_id === productCategoryFilter);
 
   useEffect(() => {
     productService
@@ -45,6 +52,12 @@ export default function AddTransactionScreen() {
       .then(setProducts)
       .catch(() => {
         // The catalog is optional — a fetch failure just hides the picker.
+      });
+    productCategoryService
+      .list()
+      .then(setProductCategories)
+      .catch(() => {
+        // Category filter is a nice-to-have — a fetch failure just hides the filter row.
       });
   }, []);
 
@@ -191,9 +204,25 @@ export default function AddTransactionScreen() {
               <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
                 Produit ou service (facultatif)
               </ThemedText>
+
+              {productCategories.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryPills}>
+                  <Pill label="Tous" active={productCategoryFilter === 'all'} onPress={() => setProductCategoryFilter('all')} />
+                  {productCategories.map((productCategory) => (
+                    <Pill
+                      key={productCategory.id}
+                      label={productCategory.name}
+                      active={productCategoryFilter === productCategory.id}
+                      onPress={() => setProductCategoryFilter(productCategory.id)}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.productChips}>
-                {products.map((product) => {
+                {filteredProducts.map((product) => {
                   const selected = selectedProduct?.id === product.id;
+                  const lowStock = isLowStock(product);
 
                   return (
                     <Pressable
@@ -205,9 +234,17 @@ export default function AddTransactionScreen() {
                         selected && { backgroundColor: theme.backgroundSelected },
                       ]}
                     >
+                      {product.category?.icon && (
+                        <Ionicons
+                          name={product.category.icon as keyof typeof Ionicons.glyphMap}
+                          size={14}
+                          color={selected ? theme.tint : (product.category.color ?? theme.textSecondary)}
+                        />
+                      )}
                       <ThemedText type="small" themeColor={selected ? 'text' : 'textSecondary'}>
                         {product.name}
                       </ThemedText>
+                      {lowStock && <View style={[styles.lowStockDot, { backgroundColor: theme.danger }]} />}
                     </Pressable>
                   );
                 })}
@@ -335,15 +372,28 @@ const styles = StyleSheet.create({
   productSection: {
     marginTop: Spacing.five,
   },
+  categoryPills: {
+    gap: Spacing.two,
+    paddingBottom: Spacing.two,
+    paddingRight: Spacing.four,
+  },
   productChips: {
     gap: Spacing.two,
     paddingRight: Spacing.four,
   },
   productChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
     borderWidth: 1.5,
     borderRadius: 999,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
+  },
+  lowStockDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   quantityRow: {
     flexDirection: 'row',

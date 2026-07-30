@@ -7,6 +7,8 @@ export type Company = {
   other_category: string | null;
   department: string | null;
   city: string | null;
+  neighborhood: string | null;
+  address: string | null;
 };
 
 export type AuthUser = {

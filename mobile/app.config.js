@@ -63,9 +63,11 @@ module.exports = {
       [
         'expo-splash-screen',
         {
-          backgroundColor: '#208AEF',
-          image: './assets/images/splash-icon.png',
-          imageWidth: 76,
+          // Fixed black + wordmark regardless of system light/dark mode — no `dark` override key,
+          // which is what would otherwise make expo-splash-screen theme-dependent.
+          backgroundColor: '#000000',
+          image: './assets/images/icon.png',
+          imageWidth: 280,
         },
       ],
       [

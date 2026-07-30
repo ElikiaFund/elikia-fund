@@ -30,10 +30,28 @@ export const COMPANY_CATEGORIES: { value: CompanyCategory; label: string; icon: 
   { value: 'autre', label: 'Autre', icon: 'ellipsis-horizontal-outline' },
 ];
 
+export type CreateCompanyPayload = {
+  name: string;
+  category: CompanyCategory;
+  otherCategory?: string;
+  department: string;
+  city: string;
+  neighborhood: string;
+  address?: string;
+};
+
 export const companyService = {
-  create(name: string, category: CompanyCategory, department: string, city: string, otherCategory?: string) {
+  create(payload: CreateCompanyPayload) {
     return apiService
-      .post<Company>('/onboarding/company', { name, category, other_category: otherCategory, department, city })
+      .post<Company>('/onboarding/company', {
+        name: payload.name,
+        category: payload.category,
+        other_category: payload.otherCategory,
+        department: payload.department,
+        city: payload.city,
+        neighborhood: payload.neighborhood,
+        address: payload.address || undefined,
+      })
       .then((r) => r.data);
   },
 };

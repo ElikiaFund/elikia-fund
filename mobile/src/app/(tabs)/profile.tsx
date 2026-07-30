@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { SupportSheet } from '@/components/support-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -12,6 +14,8 @@ import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { profileService } from '@/services/profileService';
 import { CATALOG_ENABLED_CATEGORIES } from '@/services/productService';
+
+const TERMS_URL = 'https://www.elikiafund.com/conditions';
 
 function initials(name: string) {
   return name
@@ -22,15 +26,12 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-function comingSoon() {
-  Alert.alert('Bientôt disponible', 'Cette fonctionnalité arrive prochainement.');
-}
-
 export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isSupportSheetOpen, setIsSupportSheetOpen] = useState(false);
   const hasCatalog = user?.company ? (CATALOG_ENABLED_CATEGORIES as readonly string[]).includes(user.company.category) : false;
 
   function handleLogout() {
@@ -118,8 +119,13 @@ export default function ProfileScreen() {
         </ProfileSection>
 
         <ProfileSection title="Assistance">
-          <ProfileRow icon="help-circle-outline" label="Aide et support" onPress={comingSoon} />
-          <ProfileRow icon="document-text-outline" label="Conditions d'utilisation" onPress={comingSoon} last />
+          <ProfileRow icon="help-circle-outline" label="Aide et support" onPress={() => setIsSupportSheetOpen(true)} />
+          <ProfileRow
+            icon="document-text-outline"
+            label="Conditions d'utilisation"
+            onPress={() => WebBrowser.openBrowserAsync(TERMS_URL)}
+            last
+          />
         </ProfileSection>
 
         <Pressable
@@ -136,6 +142,8 @@ export default function ProfileScreen() {
           </ThemedText>
         </Pressable>
       </ScrollView>
+
+      <SupportSheet visible={isSupportSheetOpen} onClose={() => setIsSupportSheetOpen(false)} />
     </ThemedView>
   );
 }

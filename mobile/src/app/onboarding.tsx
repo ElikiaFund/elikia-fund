@@ -31,6 +31,8 @@ export default function OnboardingScreen() {
   const [isDepartmentSheetOpen, setIsDepartmentSheetOpen] = useState(false);
   const [useCapitalAsCity, setUseCapitalAsCity] = useState(true);
   const [customCity, setCustomCity] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [address, setAddress] = useState('');
   const [products, setProducts] = useState<DraftProduct[]>([]);
   const [draftName, setDraftName] = useState('');
   const [draftPrice, setDraftPrice] = useState('');
@@ -45,7 +47,8 @@ export default function OnboardingScreen() {
     category !== null &&
     (category !== 'autre' || otherCategory.trim().length > 0) &&
     department !== null &&
-    !!city;
+    !!city &&
+    neighborhood.trim().length > 0;
   const showCatalogStep = category !== null && (CATALOG_ENABLED_CATEGORIES as readonly string[]).includes(category);
 
   function handleSelectDepartment(value: string) {
@@ -77,7 +80,15 @@ export default function OnboardingScreen() {
     setIsSubmitting(true);
 
     try {
-      await companyService.create(name.trim(), category, department, city, category === 'autre' ? otherCategory.trim() : undefined);
+      await companyService.create({
+        name: name.trim(),
+        category,
+        otherCategory: category === 'autre' ? otherCategory.trim() : undefined,
+        department,
+        city,
+        neighborhood: neighborhood.trim(),
+        address: address.trim() || undefined,
+      });
 
       if (products.length > 0) {
         await Promise.all(
@@ -206,6 +217,29 @@ export default function OnboardingScreen() {
                     onChangeText={setCustomCity}
                   />
                 </View>
+              )}
+
+              {departmentEntry && (
+                <>
+                  <View style={styles.otherField}>
+                    <FormField
+                      label="Quartier"
+                      placeholder="Ex. Moungali"
+                      autoCapitalize="words"
+                      value={neighborhood}
+                      onChangeText={setNeighborhood}
+                    />
+                  </View>
+                  <View style={styles.otherField}>
+                    <FormField
+                      label="Adresse (facultatif)"
+                      placeholder="Ex. 12 Avenue de la Paix"
+                      autoCapitalize="sentences"
+                      value={address}
+                      onChangeText={setAddress}
+                    />
+                  </View>
+                </>
               )}
             </View>
 
