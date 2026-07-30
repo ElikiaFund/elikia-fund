@@ -15,7 +15,15 @@ class UserController extends Controller
 
     public function show(User $user): JsonResponse
     {
-        return response()->json($user->load('company', 'role', 'transactions', 'vault', 'groups'));
+        return response()->json($user->load([
+            'company',
+            'role',
+            'transactions',
+            'vault',
+            'groups',
+            'products.category',
+            'cashSessions' => fn ($query) => $query->latest('closed_at'),
+        ]));
     }
 
     public function destroy(User $user): JsonResponse

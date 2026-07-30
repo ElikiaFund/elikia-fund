@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
+use App\Http\Controllers\Api\Admin\CashSessionController as AdminCashSessionController;
 use App\Http\Controllers\Api\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Api\Admin\CreditScoreController;
 use App\Http\Controllers\Api\Admin\GroupController as AdminGroupController;
 use App\Http\Controllers\Api\Admin\PermissionController;
 use App\Http\Controllers\Api\Admin\PersonnelController;
+use App\Http\Controllers\Api\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Api\Admin\RoleController;
 use App\Http\Controllers\Api\Admin\ScoringCriterionController;
 use App\Http\Controllers\Api\Admin\SettingController;
@@ -130,6 +132,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
         Route::delete('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'destroy']);
+
+        // Read access to a user's products/cash sessions is bundled into GET /admin/users/{user}
+        // (the "Produits"/"Sessions de caisse" tabs) — these two routes only add delete.
+        Route::delete('/products/{product}', [AdminProductController::class, 'destroy'])->middleware('permission:products.delete');
+        Route::delete('/cash-sessions/{cashSession}', [AdminCashSessionController::class, 'destroy'])->middleware('permission:cash_sessions.delete');
 
         Route::get('/permissions', [PermissionController::class, 'index']);
 
