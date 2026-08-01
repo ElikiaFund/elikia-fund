@@ -1,4 +1,5 @@
 import { apiService } from '@/services/apiService';
+import type { VaultMovement } from '@/services/vaultService';
 
 export type GroupFrequency = 'weekly' | 'monthly';
 export type MembershipStatus = 'pending' | 'approved';
@@ -22,6 +23,7 @@ export type Contribution = {
   cycle_period: string;
   paid_at: string;
   status: string;
+  recorded_by: number | null;
   user?: GroupMember;
 };
 
@@ -34,8 +36,48 @@ export type CycleRecipient = {
   user_id: number | null;
   method: RecipientMode;
   decided_at: string | null;
+  paid_out_at: string | null;
+  vault_movement_id: number | null;
   user?: GroupMember | null;
 };
+
+export type PayoutResult = {
+  recipient: CycleRecipient;
+  movement: VaultMovement;
+  amount: number;
+  round_completed: boolean;
+};
+
+export type RoundStatus = 'active' | 'completed';
+
+/** Round is locked — the API returns this minimal shape without resolving a cycle recipient. */
+export type PayoutPreviewLocked = {
+  group_name: string;
+  round_status: 'completed';
+  round_number: number;
+  blocked_reason: string;
+  can_payout: false;
+};
+
+export type PayoutPreviewActive = {
+  group_name: string;
+  frequency: GroupFrequency;
+  cycle_period: string;
+  round_status: 'active';
+  round_number: number;
+  starts_at: string;
+  ends_at: string;
+  recipient: { id: number; name: string; avatar_url: string | null; vault_activated: boolean } | null;
+  members_count: number;
+  paid_count: number;
+  amount: number;
+  all_paid: boolean;
+  already_paid_out: boolean;
+  paid_out_at: string | null;
+  can_payout: boolean;
+};
+
+export type PayoutPreview = PayoutPreviewLocked | PayoutPreviewActive;
 
 export type Group = {
   id: number;
@@ -48,16 +90,23 @@ export type Group = {
   contribution_time: string | null;
   recipient_mode: RecipientMode;
   recipient_order: number[] | null;
+  recipient_order_updated_at?: string | null;
+  recipient_order_updated_by?: number | null;
   invite_code: string;
   owner_id: number;
+  auto_payout_enabled: boolean;
+  round_number: number;
+  round_status: RoundStatus;
   created_at: string;
   updated_at: string;
   members_count?: number;
   current_cycle_period?: string;
   has_paid_current_cycle?: boolean;
+  current_cycle_all_paid?: boolean;
   cycle_ends_at?: string;
   schedule_label?: string | null;
-  current_cycle_recipient?: CycleRecipient;
+  current_cycle_recipient?: CycleRecipient | null;
+  round_summary?: { members_paid: number; total_distributed: number };
   pending_requests_count?: number;
   membership_status?: MembershipStatus;
   owner?: GroupMember;
@@ -168,6 +217,26 @@ export const groupService = {
     return apiService.put<CycleRecipient>(`/groups/${groupId}/cycle-recipient`, { user_id: userId }).then((r) => r.data);
   },
 
+  /** Owner-only partial update — currently only the auto-payout toggle is exposed in the mobile UI. */
+  updateSettings(groupId: number, settings: Partial<{ auto_payout_enabled: boolean }>) {
+    return apiService.put<Group>(`/groups/${groupId}/settings`, settings).then((r) => r.data);
+  },
+
+  /** Owner-only, only while the round is locked — starts the next round. */
+  renewRound(groupId: number) {
+    return apiService.post<Group>(`/groups/${groupId}/renew-round`, {}).then((r) => r.data);
+  },
+
+  /** Owner-only. Read-only preview for the payout screen — cycle info, live amount, recipient, and whether payout can happen right now. */
+  previewPayout(groupId: number) {
+    return apiService.get<PayoutPreview>(`/groups/${groupId}/payout`).then((r) => r.data);
+  },
+
+  /** Owner-only. Disburses a cycle's total net contributions into the recipient's vault — defaults to the current cycle. */
+  payoutCycle(groupId: number, cyclePeriod?: string) {
+    return apiService.post<PayoutResult>(`/groups/${groupId}/payout`, { cycle_period: cyclePeriod }).then((r) => r.data);
+  },
+
   contribute(id: number, paymentMethod?: PaymentMethod, phone?: string) {
     return apiService
       .post<Contribution>(`/groups/${id}/contribute`, { payment_method: paymentMethod, phone })
@@ -179,6 +248,32 @@ export const groupService = {
     return apiService
       .post<Contribution>(`/groups/${groupId}/contributions/${contributionId}/refresh-status`)
       .then((r) => r.data);
+  },
+
+  /** Owner-only. Records a cash/manual contribution on a member's behalf — defaults to the current cycle. */
+  recordContribution(groupId: number, userId: number, cyclePeriod?: string) {
+    return apiService
+      .post<Contribution>(`/groups/${groupId}/members/${userId}/contributions`, { cycle_period: cyclePeriod })
+      .then((r) => r.data);
+  },
+
+  /** Owner-only. Voids a mistaken manual contribution — only possible before its cycle has been paid out. */
+  voidContribution(groupId: number, contributionId: number) {
+    return apiService.post<Contribution>(`/groups/${groupId}/contributions/${contributionId}/void`).then((r) => r.data);
+  },
+
+  /** Owner-only, non-mutating check before confirming a member removal. */
+  previewMemberRemoval(groupId: number, userId: number) {
+    return apiService
+      .get<{ can_remove: boolean; blocking_reason: string | null; warning: string | null }>(
+        `/groups/${groupId}/members/${userId}/removal-preview`,
+      )
+      .then((r) => r.data);
+  },
+
+  /** Owner-only soft removal — the member drops out of rotation/eligibility, history is preserved. */
+  removeMember(groupId: number, userId: number) {
+    return apiService.delete(`/groups/${groupId}/members/${userId}`).then((r) => r.data);
   },
 
   report(id: number, cyclePeriod?: string) {

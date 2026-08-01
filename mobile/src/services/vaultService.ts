@@ -9,10 +9,12 @@ export type Vault = {
 
 export type VaultMovement = {
   id: number;
-  type: 'deposit' | 'withdraw';
+  type: 'deposit' | 'withdraw' | 'tontine_payout';
   amount: string;
   note: string | null;
   status: string;
+  group_id: number | null;
+  cycle_period: string | null;
   created_at: string;
 };
 
@@ -21,6 +23,7 @@ export type PaymentMethod = 'mtn_momo' | 'airtel_money';
 export type VaultTransactionResult = {
   vault: Vault;
   movement: VaultMovement;
+  message?: string;
 };
 
 export const vaultService = {
@@ -65,5 +68,10 @@ export const vaultService = {
     return apiService
       .post<VaultTransactionResult>('/vault/withdraw', { amount, pin, payment_method: paymentMethod, phone })
       .then((r) => r.data);
+  },
+
+  /** Manual fallback for a deposit/withdrawal stuck `processing` — re-checks the payment status with Yabeto directly instead of waiting on the webhook. */
+  refreshMovementStatus(movementId: number) {
+    return apiService.post<VaultMovement>(`/vault/movements/${movementId}/refresh-status`).then((r) => r.data);
   },
 };

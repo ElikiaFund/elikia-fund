@@ -22,6 +22,15 @@ const TYPE_ICONS: Record<AppNotification['type'], keyof typeof Ionicons.glyphMap
   vault_withdraw_failed: 'close-circle-outline',
   contribution_succeeded: 'checkmark-circle-outline',
   contribution_failed: 'close-circle-outline',
+  tontine_payout_received: 'gift-outline',
+  tontine_payout_broadcast: 'cash-outline',
+  tontine_payout_confirmed: 'checkmark-done-circle-outline',
+  tontine_payout_blocked_no_vault: 'alert-circle-outline',
+  tontine_round_completed: 'trophy-outline',
+  tontine_recipient_order_changed: 'swap-horizontal-outline',
+  tontine_recipient_decided: 'gift-outline',
+  tontine_member_removed: 'person-remove-outline',
+  tontine_member_removed_broadcast: 'person-remove-outline',
 };
 
 export default function NotificationsScreen() {

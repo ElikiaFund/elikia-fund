@@ -14,7 +14,16 @@ export type AppNotification = {
     | 'vault_withdraw_succeeded'
     | 'vault_withdraw_failed'
     | 'contribution_succeeded'
-    | 'contribution_failed';
+    | 'contribution_failed'
+    | 'tontine_payout_received'
+    | 'tontine_payout_broadcast'
+    | 'tontine_payout_confirmed'
+    | 'tontine_payout_blocked_no_vault'
+    | 'tontine_round_completed'
+    | 'tontine_recipient_order_changed'
+    | 'tontine_recipient_decided'
+    | 'tontine_member_removed'
+    | 'tontine_member_removed_broadcast';
   cycle_period: string | null;
   title: string;
   body: string;

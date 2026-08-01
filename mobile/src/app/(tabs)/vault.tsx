@@ -16,6 +16,12 @@ const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: '
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
 const RECENT_COUNT = 5;
 
+const MOVEMENT_META: Record<VaultMovement['type'], { label: string; icon: keyof typeof Ionicons.glyphMap; isCredit: boolean }> = {
+  deposit: { label: 'Dépôt', icon: 'arrow-up-circle-outline', isCredit: true },
+  withdraw: { label: 'Retrait', icon: 'arrow-down-circle-outline', isCredit: false },
+  tontine_payout: { label: 'Versement tontine', icon: 'gift-outline', isCredit: true },
+};
+
 export default function VaultScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -220,30 +226,30 @@ export default function VaultScreen() {
           </ThemedText>
         ) : (
           <View style={[styles.movementsCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-            {recentMovements.map((movement, index) => (
-              <View
-                key={movement.id}
-                style={[
-                  styles.movementRow,
-                  index < recentMovements.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
-                ]}
-              >
-                <Ionicons
-                  name={movement.type === 'deposit' ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
-                  size={20}
-                  color={movement.type === 'deposit' ? theme.income : theme.danger}
-                />
-                <View style={styles.movementContent}>
-                  <ThemedText type="small">{movement.type === 'deposit' ? 'Dépôt' : 'Retrait'}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {dateFormatter.format(new Date(movement.created_at))}
+            {recentMovements.map((movement, index) => {
+              const meta = MOVEMENT_META[movement.type];
+
+              return (
+                <View
+                  key={movement.id}
+                  style={[
+                    styles.movementRow,
+                    index < recentMovements.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+                  ]}
+                >
+                  <Ionicons name={meta.icon} size={20} color={meta.isCredit ? theme.income : theme.danger} />
+                  <View style={styles.movementContent}>
+                    <ThemedText type="small">{meta.label}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {dateFormatter.format(new Date(movement.created_at))}
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="smallBold" style={{ color: meta.isCredit ? theme.income : theme.danger }}>
+                    {meta.isCredit ? '+' : '−'} {currency.format(Number(movement.amount))}
                   </ThemedText>
                 </View>
-                <ThemedText type="smallBold" style={{ color: movement.type === 'deposit' ? theme.income : theme.danger }}>
-                  {movement.type === 'deposit' ? '+' : '−'} {currency.format(Number(movement.amount))}
-                </ThemedText>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 

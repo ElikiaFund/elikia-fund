@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -13,7 +13,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCycleLabel } from '@/lib/cycle-format';
-import { groupService, TONTINE_MANAGEMENT_FEE_RATE, type Group, type GroupCycle, type PaymentMethod } from '@/services/groupService';
+import { groupService, TONTINE_MANAGEMENT_FEE_RATE, type Group, type GroupCycle, type GroupMember, type PaymentMethod } from '@/services/groupService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const FREQUENCY_LABELS: Record<Group['frequency'], string> = { weekly: 'hebdomadaire', monthly: 'mensuelle' };
@@ -49,6 +49,8 @@ export default function GroupDetailScreen() {
   const [isRecipientPickerOpen, setIsRecipientPickerOpen] = useState(false);
   const [isDesignatingRecipient, setIsDesignatingRecipient] = useState(false);
   const [cycles, setCycles] = useState<GroupCycle[]>([]);
+  const [isRenewing, setIsRenewing] = useState(false);
+  const [processingMemberId, setProcessingMemberId] = useState<number | null>(null);
 
   const load = useCallback(() => {
     setIsLoading(true);
@@ -173,6 +175,92 @@ export default function GroupDetailScreen() {
     }
   }
 
+  async function handleRecordContribution(memberId: number) {
+    setError(null);
+    setProcessingMemberId(memberId);
+
+    try {
+      await groupService.recordContribution(Number(id), memberId);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setProcessingMemberId(null);
+    }
+  }
+
+  async function handleVoidContribution(memberId: number, contributionId: number) {
+    setError(null);
+    setProcessingMemberId(memberId);
+
+    try {
+      await groupService.voidContribution(Number(id), contributionId);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setProcessingMemberId(null);
+    }
+  }
+
+  async function handleRemoveMember(member: GroupMember) {
+    setError(null);
+    setProcessingMemberId(member.id);
+
+    try {
+      const preview = await groupService.previewMemberRemoval(Number(id), member.id);
+
+      if (!preview.can_remove) {
+        setProcessingMemberId(null);
+        Alert.alert('Impossible de retirer ce membre', preview.blocking_reason ?? "Ce membre ne peut pas être retiré pour le moment.");
+        return;
+      }
+
+      setProcessingMemberId(null);
+
+      Alert.alert(
+        'Retirer ce membre',
+        `${preview.warning ? `${preview.warning}\n\n` : ''}Confirmez-vous le retrait de ${member.name} de la tontine ?`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Retirer',
+            style: 'destructive',
+            onPress: async () => {
+              setProcessingMemberId(member.id);
+
+              try {
+                await groupService.removeMember(Number(id), member.id);
+                load();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+              } finally {
+                setProcessingMemberId(null);
+              }
+            },
+          },
+        ],
+      );
+    } catch (e) {
+      setProcessingMemberId(null);
+      setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+    }
+  }
+
+  async function handleRenewRound() {
+    setError(null);
+    setIsRenewing(true);
+
+    try {
+      await groupService.renewRound(Number(id));
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setIsRenewing(false);
+    }
+  }
+
   if (isLoading && !group) {
     return (
       <ThemedView style={[styles.container, styles.centered]}>
@@ -240,11 +328,20 @@ export default function GroupDetailScreen() {
         <ThemedText type="smallBold" numberOfLines={1} style={styles.headerTitle}>
           {group.name}
         </ThemedText>
-        <View style={styles.headerSpacer} />
+        {group.owner_id === user?.id ? (
+          <Pressable onPress={() => router.push({ pathname: '/group-settings', params: { id: String(group.id) } })} hitSlop={8}>
+            <Ionicons name="settings-outline" size={20} color={theme.text} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.summaryCard}>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.roundLabel}>
+            Tour n°{group.round_number}
+          </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             Cotisation {FREQUENCY_LABELS[group.frequency]}
           </ThemedText>
@@ -258,33 +355,94 @@ export default function GroupDetailScreen() {
           </ThemedText>
         </View>
 
-        <View style={[styles.cycleCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-          <View style={styles.cycleRow}>
-            <Ionicons name="calendar-outline" size={16} color={theme.textSecondary} />
-            <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
-              {group.schedule_label ?? `Cycle en cours : ${group.current_cycle_period}`}
-              {group.cycle_ends_at ? ` · échéance le ${dateTimeFormatter.format(new Date(group.cycle_ends_at))}` : ''}
-            </ThemedText>
-          </View>
-          <View style={styles.cycleRow}>
-            <Ionicons name="gift-outline" size={16} color={theme.textSecondary} />
-            {group.current_cycle_recipient?.user ? (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
-                Bénéficiaire de ce cycle : <ThemedText type="smallBold">{group.current_cycle_recipient.user.name}</ThemedText>
+        {group.round_status === 'completed' ? (
+          <View style={[styles.cycleCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <View style={styles.cycleRow}>
+              <Ionicons name="trophy-outline" size={16} color={theme.tint} />
+              <ThemedText type="smallBold" style={styles.cycleRowText}>
+                Tour terminé
               </ThemedText>
-            ) : group.recipient_mode === 'admin' && group.owner_id === user?.id ? (
-              <Pressable onPress={() => setIsRecipientPickerOpen(true)} style={styles.designateLink}>
-                <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
-                  Désigner le bénéficiaire de ce cycle
-                </ThemedText>
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              {group.round_summary?.members_paid ?? 0} membre(s) ont reçu leur versement, pour un total de{' '}
+              {currency.format(group.round_summary?.total_distributed ?? 0)}.
+            </ThemedText>
+
+            {group.owner_id === user?.id ? (
+              <Pressable
+                onPress={handleRenewRound}
+                disabled={isRenewing}
+                style={[styles.payoutButton, { backgroundColor: theme.tint }, isRenewing && styles.buttonDisabled]}
+              >
+                {isRenewing ? (
+                  <ActivityIndicator color={theme.tintForeground} size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="refresh-outline" size={16} color={theme.tintForeground} />
+                    <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+                      Relancer un nouveau tour
+                    </ThemedText>
+                  </>
+                )}
               </Pressable>
             ) : (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
-                Bénéficiaire pas encore désigné
+              <ThemedText type="small" themeColor="textSecondary">
+                En attente du créateur pour relancer un nouveau tour.
               </ThemedText>
             )}
           </View>
-        </View>
+        ) : (
+          <View style={[styles.cycleCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <View style={styles.cycleRow}>
+              <Ionicons name="calendar-outline" size={16} color={theme.textSecondary} />
+              <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
+                {group.schedule_label ?? `Cycle en cours : ${group.current_cycle_period}`}
+                {group.cycle_ends_at ? ` · échéance le ${dateTimeFormatter.format(new Date(group.cycle_ends_at))}` : ''}
+              </ThemedText>
+            </View>
+            <View style={styles.cycleRow}>
+              <Ionicons name="gift-outline" size={16} color={theme.textSecondary} />
+              {group.current_cycle_recipient?.user ? (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
+                  Bénéficiaire de ce cycle : <ThemedText type="smallBold">{group.current_cycle_recipient.user.name}</ThemedText>
+                </ThemedText>
+              ) : group.recipient_mode === 'admin' && group.owner_id === user?.id ? (
+                <Pressable onPress={() => setIsRecipientPickerOpen(true)} style={styles.designateLink}>
+                  <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                    Désigner le bénéficiaire de ce cycle
+                  </ThemedText>
+                </Pressable>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
+                  Bénéficiaire pas encore désigné
+                </ThemedText>
+              )}
+            </View>
+
+            {group.owner_id === user?.id &&
+              group.current_cycle_recipient?.user &&
+              (group.current_cycle_recipient.paid_out_at ? (
+                <View style={styles.cycleRow}>
+                  <Ionicons name="checkmark-circle" size={16} color={theme.income} />
+                  <ThemedText type="small" style={{ color: theme.income }}>
+                    Cagnotte versée à {group.current_cycle_recipient.user.name}
+                  </ThemedText>
+                </View>
+              ) : (
+                // Always visible, even before everyone has contributed — the payout screen itself
+                // shows live progress and disables the actual "Verser" action until it's eligible.
+                <Pressable
+                  onPress={() => router.push({ pathname: '/group-payout', params: { id: String(group.id) } })}
+                  style={[styles.payoutButton, { backgroundColor: theme.tint }]}
+                >
+                  <Ionicons name="cash-outline" size={16} color={theme.tintForeground} />
+                  <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+                    Verser la cagnotte à {group.current_cycle_recipient.user.name}
+                  </ThemedText>
+                </Pressable>
+              ))}
+          </View>
+        )}
 
         {group.owner_id === user?.id && (group.pending_members?.length ?? 0) > 0 && (
           <View style={styles.requestsSection}>
@@ -435,9 +593,12 @@ export default function GroupDetailScreen() {
         </ThemedText>
         <View style={[styles.membersCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
           {group.members?.map((member, index) => {
-            const paid = (group.contributions ?? []).some(
+            const contribution = (group.contributions ?? []).find(
               (c) => c.user_id === member.id && c.cycle_period === group.current_cycle_period && c.status === 'succeeded',
             );
+            const cycleAlreadyPaidOut = Boolean(group.current_cycle_recipient?.paid_out_at);
+            const isOwnerViewer = group.owner_id === user?.id;
+            const isProcessingThisMember = processingMemberId === member.id;
 
             return (
               <View
@@ -460,7 +621,30 @@ export default function GroupDetailScreen() {
                   {member.name}
                   {member.id === group.owner_id ? ' · Créateur' : ''}
                 </ThemedText>
-                <Ionicons name={paid ? 'checkmark-circle' : 'time-outline'} size={18} color={paid ? theme.income : theme.textSecondary} />
+
+                {isProcessingThisMember ? (
+                  <ActivityIndicator size="small" color={theme.tint} />
+                ) : isOwnerViewer && !contribution && group.round_status === 'active' ? (
+                  <Pressable onPress={() => handleRecordContribution(member.id)} hitSlop={8}>
+                    <Ionicons name="cash-outline" size={18} color={theme.tint} />
+                  </Pressable>
+                ) : isOwnerViewer && contribution?.recorded_by && !cycleAlreadyPaidOut ? (
+                  <Pressable onPress={() => handleVoidContribution(member.id, contribution.id)} hitSlop={8}>
+                    <Ionicons name="close-circle-outline" size={18} color={theme.danger} />
+                  </Pressable>
+                ) : (
+                  <Ionicons
+                    name={contribution ? 'checkmark-circle' : 'time-outline'}
+                    size={18}
+                    color={contribution ? theme.income : theme.textSecondary}
+                  />
+                )}
+
+                {isOwnerViewer && member.id !== group.owner_id && !isProcessingThisMember && (
+                  <Pressable onPress={() => handleRemoveMember(member)} hitSlop={8} style={styles.removeMemberButton}>
+                    <Ionicons name="person-remove-outline" size={16} color={theme.danger} />
+                  </Pressable>
+                )}
               </View>
             );
           })}
@@ -587,6 +771,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.four,
   },
+  roundLabel: {
+    marginBottom: Spacing.one,
+  },
   amount: {
     fontSize: 36,
     lineHeight: 42,
@@ -613,6 +800,15 @@ const styles = StyleSheet.create({
   },
   designateLink: {
     flex: 1,
+  },
+  payoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    borderRadius: 12,
+    paddingVertical: Spacing.two,
+    marginTop: Spacing.one,
   },
   requestsSection: {
     marginBottom: Spacing.five,
@@ -756,6 +952,9 @@ const styles = StyleSheet.create({
   },
   memberName: {
     flex: 1,
+  },
+  removeMemberButton: {
+    marginLeft: Spacing.two,
   },
   inviteCard: {
     alignItems: 'center',

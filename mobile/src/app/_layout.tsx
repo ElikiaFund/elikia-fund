@@ -102,6 +102,8 @@ function RootNavigator() {
         <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
         <Stack.Screen name="security-pin" options={{ title: 'Sécurité et code PIN' }} />
         <Stack.Screen name="group-report" options={{ title: 'Rapport de tontine' }} />
+        <Stack.Screen name="group-payout" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="group-settings" options={{ title: 'Paramètres de la tontine' }} />
         <Stack.Screen name="close-cash-session" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="cash-session-settings" options={{ title: 'Session de caisse' }} />
         <Stack.Screen name="cash-session-history" options={{ title: 'Historique des clôtures' }} />

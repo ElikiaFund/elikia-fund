@@ -18,6 +18,9 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# EAS Submit credentials (App Store Connect API key, Google Play service account key)
+/credentials/
+
 # Metro
 .metro-health-check*
 

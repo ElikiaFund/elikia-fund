@@ -11,6 +11,8 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { groupService, TONTINE_MANAGEMENT_FEE_RATE, type GroupFrequency, type RecipientMode } from '@/services/groupService';
 
+const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
+
 const WEEKDAYS: SelectOption[] = [
   { label: 'Lundi', value: '1' },
   { label: 'Mardi', value: '2' },
@@ -116,6 +118,13 @@ export default function CreateGroupScreen() {
                 />
                 <ThemedText themeColor="textSecondary">FCFA</ThemedText>
               </View>
+              {amountValue > 0 && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.feeHint}>
+                  Dont {currency.format(amountValue * TONTINE_MANAGEMENT_FEE_RATE)} de frais de gestion (
+                  {TONTINE_MANAGEMENT_FEE_RATE * 100}%) — net versé à la tontine :{' '}
+                  {currency.format(amountValue * (1 - TONTINE_MANAGEMENT_FEE_RATE))}
+                </ThemedText>
+              )}
             </View>
 
             <View>
@@ -303,6 +312,10 @@ const styles = StyleSheet.create({
   fieldLabel: {
     marginLeft: Spacing.one,
     marginBottom: Spacing.one,
+  },
+  feeHint: {
+    marginTop: Spacing.two,
+    marginLeft: Spacing.one,
   },
   amountRow: {
     flexDirection: 'row',

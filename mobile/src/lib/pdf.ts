@@ -366,9 +366,15 @@ export function buildJournalCaisseHtml(options: {
 
 export type StatementMovement = {
   created_at: string;
-  type: 'deposit' | 'withdraw';
+  type: 'deposit' | 'withdraw' | 'tontine_payout';
   amount: number;
   note: string | null;
+};
+
+const MOVEMENT_LABELS: Record<StatementMovement['type'], string> = {
+  deposit: 'Dépôt',
+  withdraw: 'Retrait',
+  tontine_payout: 'Versement tontine',
 };
 
 export function buildVaultStatementHtml(options: {
@@ -381,17 +387,21 @@ export function buildVaultStatementHtml(options: {
 
   const depositsTotal = movements.filter((m) => m.type === 'deposit').reduce((sum, m) => sum + m.amount, 0);
   const withdrawalsTotal = movements.filter((m) => m.type === 'withdraw').reduce((sum, m) => sum + m.amount, 0);
+  // Kept as its own line rather than folded into "Dépôts" — distinguishing tontine payouts from
+  // regular top-ups is the whole point of tagging these movements separately in the first place.
+  const tontinePayoutsTotal = movements.filter((m) => m.type === 'tontine_payout').reduce((sum, m) => sum + m.amount, 0);
 
   const rows = movements.length
     ? movements
-        .map(
-          (m) => `
+        .map((m) => {
+          const isCredit = m.type !== 'withdraw';
+          return `
         <tr>
           <td>${dateFormatter.format(new Date(m.created_at))}</td>
-          <td>${m.type === 'deposit' ? 'Dépôt' : 'Retrait'}${m.note ? `<div class="note">${escapeHtml(m.note)}</div>` : ''}</td>
-          <td class="amount ${m.type === 'deposit' ? 'income' : 'expense'}">${m.type === 'deposit' ? '+' : '−'} ${currency.format(m.amount)}</td>
-        </tr>`,
-        )
+          <td>${MOVEMENT_LABELS[m.type]}${m.note ? `<div class="note">${escapeHtml(m.note)}</div>` : ''}</td>
+          <td class="amount ${isCredit ? 'income' : 'expense'}">${isCredit ? '+' : '−'} ${currency.format(m.amount)}</td>
+        </tr>`;
+        })
         .join('')
     : `<tr><td colspan="3" class="empty">Aucun mouvement pour cette période.</td></tr>`;
 
@@ -412,6 +422,10 @@ export function buildVaultStatementHtml(options: {
           <div class="info-box">
             <div class="info-label">Retraits</div>
             <div class="info-value expense">${currency.format(withdrawalsTotal)}</div>
+          </div>
+          <div class="info-box">
+            <div class="info-label">Versements tontine</div>
+            <div class="info-value income">${currency.format(tontinePayoutsTotal)}</div>
           </div>
         </div>
         <table>
