@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\VaultTransactionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Vault\SetVaultPinRequest;
 use App\Http\Requests\Vault\UpdateVaultPinRequest;
 use App\Http\Requests\Vault\VaultTransactionRequest;
 use App\Http\Requests\Vault\VerifyVaultPinRequest;
 use App\Models\Vault;
+use App\Models\VaultMovement;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use App\Services\PaymentNotificationService;
+use App\Services\VaultTransactionService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +36,7 @@ class VaultController extends Controller
     public function __construct(
         private readonly YabetoService $yabeto,
         private readonly PaymentNotificationService $paymentNotifications,
+        private readonly VaultTransactionService $vaultTransactions,
     ) {}
 
     /**
@@ -153,7 +157,19 @@ class VaultController extends Controller
             return response()->json(['message' => 'Numéro de téléphone Mobile Money requis.'], 422);
         }
 
-        return $this->depositViaYabeto($vault, $amount, $paymentMethod, $methodLabel, $phone);
+        try {
+            $result = $this->vaultTransactions->deposit($vault, $amount, $paymentMethod, $methodLabel, $phone);
+        } catch (VaultTransactionException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
+
+        if ($result['movement']->status === 'succeeded') {
+            $this->paymentNotifications->depositSucceeded($vault->user, $amount);
+        } elseif ($result['movement']->status === 'failed') {
+            $this->paymentNotifications->depositFailed($vault->user, $amount, $result['message'] ?? null);
+        }
+
+        return response()->json($result, $this->statusFor($result['movement']));
     }
 
     /**
@@ -169,15 +185,14 @@ class VaultController extends Controller
         }
 
         $amount = $request->validated('amount');
-
-        if ($amount > $vault->balance) {
-            return response()->json(['message' => 'Solde insuffisant.'], 422);
-        }
-
         $paymentMethod = $request->validated('payment_method');
         $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
 
         if (! $this->yabeto->isEnabled()) {
+            if ($amount > $vault->balance) {
+                return response()->json(['message' => 'Solde insuffisant.'], 422);
+            }
+
             return $this->withdrawSimulated($vault, $amount, $methodLabel);
         }
 
@@ -187,7 +202,19 @@ class VaultController extends Controller
             return response()->json(['message' => 'Numéro de téléphone Mobile Money requis.'], 422);
         }
 
-        return $this->withdrawViaYabeto($vault, $amount, $paymentMethod, $methodLabel, $phone);
+        try {
+            $result = $this->vaultTransactions->withdraw($vault, $amount, $paymentMethod, $methodLabel, $phone);
+        } catch (VaultTransactionException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
+
+        if ($result['movement']->status === 'succeeded') {
+            $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
+        } elseif ($result['movement']->status === 'failed') {
+            $this->paymentNotifications->withdrawFailed($vault->user, $amount, $result['message'] ?? null);
+        }
+
+        return response()->json($result, $this->statusFor($result['movement']));
     }
 
     private function depositSimulated(Vault $vault, float $amount, string $methodLabel): JsonResponse
@@ -227,101 +254,56 @@ class VaultController extends Controller
     }
 
     /**
-     * Deposits credit the balance only once Yabeto confirms success — the confirm response is
-     * often already terminal (yabeto.md §5.2), but a `processing` result leaves the movement
-     * pending until the `intent.completed` webhook resolves it.
+     * POST /vault/movements/{movement}/refresh-status — manual fallback for a deposit/withdrawal
+     * stuck `processing` (e.g. the confirmation webhook never arrived — mirrors
+     * GroupController::refreshContributionStatus, contributions' own equivalent).
      */
-    private function depositViaYabeto(Vault $vault, float $amount, string $paymentMethod, string $methodLabel, string $phone): JsonResponse
+    public function refreshMovementStatus(Request $request, VaultMovement $movement): JsonResponse
     {
+        $vault = $request->user()->vault;
+
+        abort_unless($vault && $movement->vault_id === $vault->id, 403);
+
+        if ($movement->provider !== 'yabeto' || $movement->status !== 'processing' || ! $movement->yabeto_reference) {
+            return response()->json($movement);
+        }
+
         try {
-            $intent = $this->yabeto->createPaymentIntent(
-                (int) round($amount),
-                'Dépôt coffre Elikia Fund',
-                ['vault_id' => $vault->id],
-            );
-
-            $result = $this->yabeto->confirmPaymentIntent(
-                $intent->id,
-                $intent->clientSecret ?? '',
-                $phone,
-                YabetoService::OPERATOR_MAP[$paymentMethod],
-                $vault->user->name,
-                '',
-            );
+            $result = $movement->type === 'deposit'
+                ? $this->yabeto->getPaymentIntent($movement->yabeto_reference)
+                : $this->yabeto->getDisbursement($movement->yabeto_reference);
         } catch (YabetoRequestException|ConnectionException $e) {
-            Log::warning('Yabeto deposit request failed', ['message' => $e->getMessage()]);
+            Log::warning('Yabeto movement status refresh failed', ['message' => $e->getMessage(), 'movement_id' => $movement->id]);
 
-            return response()->json(['message' => "Le paiement n'a pas pu être initié. Veuillez réessayer."], 502);
+            return response()->json($movement);
         }
 
-        if ($result->failed()) {
-            $this->paymentNotifications->depositFailed($vault->user, $amount, $result->failureMessage);
+        $resolved = $this->vaultTransactions->resolveMovementStatus($movement->id, $result->status);
 
-            return response()->json(['message' => $result->failureMessage ?? 'Le paiement a échoué.'], 422);
+        if ($resolved) {
+            if ($result->succeeded()) {
+                $movement->type === 'deposit'
+                    ? $this->paymentNotifications->depositSucceeded($vault->user, (float) $movement->amount)
+                    : $this->paymentNotifications->withdrawSucceeded($vault->user, (float) $movement->amount);
+            } elseif ($result->failed()) {
+                $movement->type === 'deposit'
+                    ? $this->paymentNotifications->depositFailed($vault->user, (float) $movement->amount, $result->failureMessage)
+                    : $this->paymentNotifications->withdrawFailed($vault->user, (float) $movement->amount, $result->failureMessage);
+            }
         }
 
-        $movement = $vault->movements()->create([
-            'type' => 'deposit',
-            'amount' => $amount,
-            'note' => "Dépôt via {$methodLabel}.",
-            'provider' => 'yabeto',
-            'status' => $result->status,
-            'yabeto_reference' => $result->id,
-        ]);
-
-        if ($result->succeeded()) {
-            $vault->increment('balance', $amount);
-            $this->paymentNotifications->depositSucceeded($vault->user, $amount);
-        }
-
-        return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
+        return response()->json($resolved ?? $movement->fresh());
     }
 
-    /**
-     * Withdrawals via Disbursement are always created `processing` (yabeto.md §6) — the balance
-     * is debited immediately to reserve the funds, and refunded if the webhook later reports a
-     * failure. Never optimistic-credits; only ever optimistic-*debits* a payout already in flight.
-     */
-    private function withdrawViaYabeto(Vault $vault, float $amount, string $paymentMethod, string $methodLabel, string $phone): JsonResponse
+    /** 201 once a movement is terminally succeeded, 202 while still processing, 422 on a terminal failure. */
+    private function statusFor(VaultMovement $movement): int
     {
-        try {
-            $result = $this->yabeto->createDisbursement(
-                (int) round($amount),
-                $phone,
-                YabetoService::OPERATOR_MAP[$paymentMethod],
-                $vault->user->name,
-                '',
-            );
-        } catch (YabetoRequestException|ConnectionException $e) {
-            Log::warning('Yabeto withdrawal request failed', ['message' => $e->getMessage()]);
-
-            return response()->json(['message' => "Le retrait n'a pas pu être initié. Veuillez réessayer."], 502);
-        }
-
-        if ($result->failed()) {
-            $this->paymentNotifications->withdrawFailed($vault->user, $amount, $result->failureMessage);
-
-            return response()->json(['message' => $result->failureMessage ?? 'Le retrait a échoué.'], 422);
-        }
-
-        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel, $result) {
-            $vault->decrement('balance', $amount);
-
-            return $vault->movements()->create([
-                'type' => 'withdraw',
-                'amount' => $amount,
-                'note' => "Retrait via {$methodLabel}.",
-                'provider' => 'yabeto',
-                'status' => $result->status,
-                'yabeto_reference' => $result->id,
-            ]);
-        });
-
-        if ($result->succeeded()) {
-            $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
-        }
-
-        return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
+        return match ($movement->status) {
+            'succeeded', 'completed' => 201,
+            'processing' => 202,
+            'failed' => 422,
+            default => 200,
+        };
     }
 
     /**

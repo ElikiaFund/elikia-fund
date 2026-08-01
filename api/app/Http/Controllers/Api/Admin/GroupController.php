@@ -24,7 +24,13 @@ class GroupController extends Controller
     public function show(Group $group): JsonResponse
     {
         return response()->json(
-            $group->load('owner', 'members', 'contributions.user')->loadCount('members')->loadSum('contributions', 'amount')
+            $group->load(
+                'owner',
+                'members',
+                'removedMembers',
+                'contributions.user',
+                ['cycleRecipients' => fn ($query) => $query->whereNotNull('paid_out_at')->with('user', 'vaultMovement')],
+            )->loadCount('members')->loadSum('contributions', 'amount')
         );
     }
 

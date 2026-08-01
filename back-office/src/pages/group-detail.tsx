@@ -20,6 +20,20 @@ import { adminService, type AdminGroupDetail } from '@/services/adminService'
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 const FREQUENCY_LABELS: Record<string, string> = { weekly: 'Hebdomadaire', monthly: 'Mensuelle' }
 
+const CONTRIBUTION_STATUS_LABELS: Record<string, string> = {
+  succeeded: 'Réussie',
+  processing: 'En cours',
+  failed: 'Échouée',
+  voided: 'Annulée',
+}
+
+const CONTRIBUTION_STATUS_VARIANTS: Record<string, 'default' | 'outline' | 'destructive' | 'secondary'> = {
+  succeeded: 'default',
+  processing: 'outline',
+  failed: 'destructive',
+  voided: 'destructive',
+}
+
 const contributionsChartConfig = {
   total: { label: 'Cotisations', color: 'var(--chart-1)' },
 } satisfies ChartConfig
@@ -78,10 +92,19 @@ export function GroupDetailPage() {
   const memberRows = useMemo(() => {
     if (!group) return []
 
-    return group.members.map((member) => ({
+    const active = group.members.map((member) => ({
       member,
+      removedAt: null as string | null,
       total: group.contributions.filter((c) => c.user_id === member.id).reduce((sum, c) => sum + Number(c.amount), 0),
     }))
+
+    const removed = group.removed_members.map((member) => ({
+      member,
+      removedAt: member.pivot.removed_at,
+      total: group.contributions.filter((c) => c.user_id === member.id).reduce((sum, c) => sum + Number(c.amount), 0),
+    }))
+
+    return [...active, ...removed]
   }, [group])
 
   return (
@@ -112,7 +135,16 @@ export function GroupDetailPage() {
                   <Badge variant="outline">{FREQUENCY_LABELS[group.frequency] ?? group.frequency}</Badge>
                   <Badge variant="outline">Cotisation {currency.format(Number(group.contribution_amount))}</Badge>
                   <Badge variant="outline">Code {group.invite_code}</Badge>
+                  <Badge variant="outline">Tour n°{group.round_number}</Badge>
+                  <Badge variant={group.round_status === 'completed' ? 'default' : 'outline'}>
+                    {group.round_status === 'completed' ? 'Tour terminé' : 'Tour en cours'}
+                  </Badge>
                 </CardDescription>
+                {group.recipient_order_updated_at && (
+                  <CardDescription className="pt-1 text-xs">
+                    Ordre de passage modifié le {new Date(group.recipient_order_updated_at).toLocaleDateString('fr-FR')}
+                  </CardDescription>
+                )}
               </CardHeader>
             </Card>
 
@@ -153,18 +185,19 @@ export function GroupDetailPage() {
                 <TableRow>
                   <TableHead>Membre</TableHead>
                   <TableHead>Rejoint le</TableHead>
+                  <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Total cotisé</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {memberRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
                       Aucun membre.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  memberRows.map(({ member, total }) => (
+                  memberRows.map(({ member, removedAt, total }) => (
                     <TableRow key={member.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -176,6 +209,13 @@ export function GroupDetailPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{format(new Date(member.pivot.joined_at), 'd MMM y', { locale: fr })}</TableCell>
+                      <TableCell>
+                        {removedAt ? (
+                          <Badge variant="destructive">Retiré le {format(new Date(removedAt), 'd MMM y', { locale: fr })}</Badge>
+                        ) : (
+                          <Badge variant="outline">Actif</Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">{currency.format(total)}</TableCell>
                     </TableRow>
                   ))
@@ -184,38 +224,89 @@ export function GroupDetailPage() {
             </Table>
           </TabsContent>
 
-          <TabsContent value="transactions">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Membre</TableHead>
-                  <TableHead>Cycle</TableHead>
-                  <TableHead>Montant</TableHead>
-                  <TableHead className="text-right">Payé le</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {group.contributions.length === 0 ? (
+          <TabsContent value="transactions" className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Cotisations</h3>
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      Aucune cotisation.
-                    </TableCell>
+                    <TableHead>Membre</TableHead>
+                    <TableHead>Cycle</TableHead>
+                    <TableHead>Montant</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Payé le</TableHead>
                   </TableRow>
-                ) : (
-                  group.contributions
-                    .slice()
-                    .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
-                    .map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium">{c.user.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{c.cycle_period}</TableCell>
-                        <TableCell>{currency.format(Number(c.amount))}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{format(new Date(c.paid_at), 'd MMM y', { locale: fr })}</TableCell>
-                      </TableRow>
-                    ))
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {group.contributions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        Aucune cotisation.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    group.contributions
+                      .slice()
+                      .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
+                      .map((c) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium">{c.user.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{c.cycle_period}</TableCell>
+                          <TableCell>{currency.format(Number(c.amount))}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              <Badge variant={CONTRIBUTION_STATUS_VARIANTS[c.status] ?? 'outline'}>
+                                {CONTRIBUTION_STATUS_LABELS[c.status] ?? c.status}
+                              </Badge>
+                              {c.provider === 'manual' && <Badge variant="secondary">Manuel</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">{format(new Date(c.paid_at), 'd MMM y', { locale: fr })}</TableCell>
+                        </TableRow>
+                      ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Versements</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bénéficiaire</TableHead>
+                    <TableHead>Cycle</TableHead>
+                    <TableHead>Tour</TableHead>
+                    <TableHead>Montant</TableHead>
+                    <TableHead className="text-right">Versé le</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {group.cycle_recipients.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        Aucun versement.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    group.cycle_recipients
+                      .slice()
+                      .sort((a, b) => new Date(b.paid_out_at).getTime() - new Date(a.paid_out_at).getTime())
+                      .map((payout) => (
+                        <TableRow key={payout.id}>
+                          <TableCell className="font-medium">{payout.user?.name ?? '—'}</TableCell>
+                          <TableCell className="text-muted-foreground">{payout.cycle_period}</TableCell>
+                          <TableCell className="text-muted-foreground">Tour {payout.round_number}</TableCell>
+                          <TableCell>{currency.format(Number(payout.vault_movement?.amount ?? 0))}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {format(new Date(payout.paid_out_at), 'd MMM y', { locale: fr })}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </TabsContent>
 
           <TabsContent value="analytique" className="flex flex-col gap-4">

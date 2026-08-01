@@ -22,6 +22,7 @@ class PermissionSeeder extends Seeder
             'Produits' => ['products.view' => 'Voir les produits', 'products.delete' => 'Supprimer des produits'],
             'Sessions de caisse' => ['cash_sessions.view' => 'Voir les sessions de caisse', 'cash_sessions.delete' => 'Supprimer des sessions de caisse'],
             'Support' => ['support_tickets.view' => 'Voir les tickets de support', 'support_tickets.delete' => 'Supprimer des tickets de support'],
+            'Contact' => ['contact_messages.view' => 'Voir les messages de contact', 'contact_messages.delete' => 'Supprimer des messages de contact'],
             'Personnel' => ['personnel.view' => 'Voir le personnel', 'personnel.manage' => 'Gérer le personnel'],
             'Rôles' => ['roles.view' => 'Voir les rôles', 'roles.manage' => 'Gérer les rôles et permissions'],
             'Paramètres' => ['settings.view' => 'Voir les paramètres', 'settings.manage' => 'Gérer les paramètres et la notation de crédit'],

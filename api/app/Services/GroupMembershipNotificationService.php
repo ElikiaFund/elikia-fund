@@ -53,6 +53,64 @@ class GroupMembershipNotificationService
         );
     }
 
+    /**
+     * Broadcast to every member whenever the rotation order changes — this codebase deliberately
+     * doesn't lock recipient_order against being changed (a resolved cycle is immutable regardless
+     * of later reordering, so there's nothing to exploit), but members previously had no way to
+     * know if/when it changed. Visibility, not restriction, is the fix.
+     */
+    public function recipientOrderChanged(Group $group, User $changedBy): void
+    {
+        $group->members()->get()->each(
+            fn (User $member) => $this->notify(
+                $member,
+                $group,
+                'tontine_recipient_order_changed',
+                'Ordre de passage modifié',
+                "{$changedBy->name} a modifié l'ordre de passage de « {$group->name} ».",
+            )
+        );
+    }
+
+    /** Broadcast to every member whenever a cycle's recipient is first decided or manually overridden — same transparency rationale as recipientOrderChanged(). */
+    public function recipientDecided(Group $group, User $recipient): void
+    {
+        $group->members()->get()->each(
+            fn (User $member) => $this->notify(
+                $member,
+                $group,
+                'tontine_recipient_decided',
+                'Bénéficiaire désigné',
+                "{$recipient->name} est désigné comme bénéficiaire du cycle de « {$group->name} ».",
+            )
+        );
+    }
+
+    public function memberRemoved(User $removedMember, Group $group): void
+    {
+        $this->notify(
+            $removedMember,
+            $group,
+            'tontine_member_removed',
+            'Retiré de la tontine',
+            "Vous avez été retiré de « {$group->name} » par le créateur.",
+        );
+    }
+
+    /** Called after the status flip, on a fresh members() query — the removed user is already excluded. */
+    public function memberRemovedBroadcast(Group $group, User $removedMember): void
+    {
+        $group->members()->get()->each(
+            fn (User $member) => $this->notify(
+                $member,
+                $group,
+                'tontine_member_removed_broadcast',
+                'Membre retiré',
+                "{$removedMember->name} a été retiré de « {$group->name} ».",
+            )
+        );
+    }
+
     private function notify(User $user, Group $group, string $type, string $title, string $body): void
     {
         Notification::create([

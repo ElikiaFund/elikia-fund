@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Contribution;
 use App\Models\VaultMovement;
+use App\Services\ContributionService;
 use App\Services\Payment\YabetoConfig;
 use App\Services\Payment\YabetoWebhookVerifier;
 use App\Services\PaymentNotificationService;
+use App\Services\TontinePayoutService;
+use App\Services\VaultTransactionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -24,6 +26,9 @@ class YabetoWebhookController extends Controller
         private readonly YabetoWebhookVerifier $verifier,
         private readonly YabetoConfig $config,
         private readonly PaymentNotificationService $paymentNotifications,
+        private readonly VaultTransactionService $vaultTransactions,
+        private readonly ContributionService $contributions,
+        private readonly TontinePayoutService $payouts,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -38,7 +43,7 @@ class YabetoWebhookController extends Controller
             $request->getContent(),
             (string) $request->header('X-Yabetoo-Webhook-Timestamp', ''),
             (string) $request->header('X-Yabetoo-Webhook-Signature', ''),
-            $config->webhookSecret,
+            $this->config->webhookSecret,
         );
 
         if (! $verified) {
@@ -71,51 +76,50 @@ class YabetoWebhookController extends Controller
 
     /**
      * A payment intent reference can belong to either a vault deposit or a tontine contribution
-     * — both are created via YabetoService::createPaymentIntent/confirmPaymentIntent.
+     * — both are created via YabetoService::createPaymentIntent/confirmPaymentIntent. Resolution
+     * itself (locking, the balance side-effect, no-op on a stale/duplicate delivery) lives in
+     * VaultTransactionService/ContributionService — this only decides which one owns the
+     * reference and fires the matching notification once a transition actually happened.
      */
     private function resolvePaymentIntent(string $reference, string $status): void
     {
         $movement = VaultMovement::where('type', 'deposit')->where('yabeto_reference', $reference)->first();
 
         if ($movement) {
-            $this->finalizeDeposit($movement, $status);
+            $resolved = $this->vaultTransactions->resolveMovementStatus($movement->id, $status);
 
-            return;
-        }
-
-        $contribution = Contribution::with(['user', 'group'])->where('yabeto_reference', $reference)->first();
-
-        if (! $contribution || $contribution->status === $status) {
-            return;
-        }
-
-        $contribution->update(['status' => $status]);
-
-        if ($status === 'succeeded') {
-            $this->paymentNotifications->contributionSucceeded($contribution->user, $contribution->group, (float) $contribution->amount);
-        } elseif ($status === 'failed') {
-            $this->paymentNotifications->contributionFailed($contribution->user, $contribution->group, (float) $contribution->amount);
-        }
-    }
-
-    private function finalizeDeposit(VaultMovement $movement, string $status): void
-    {
-        if ($movement->status === $status) {
-            return;
-        }
-
-        DB::transaction(function () use ($movement, $status) {
-            if ($status === 'succeeded' && $movement->status !== 'succeeded') {
-                $movement->vault()->increment('balance', $movement->amount);
+            if (! $resolved) {
+                return;
             }
 
-            $movement->update(['status' => $status]);
-        });
+            if ($status === 'succeeded') {
+                $this->paymentNotifications->depositSucceeded($resolved->vault->user, (float) $resolved->amount);
+            } elseif ($status === 'failed') {
+                $this->paymentNotifications->depositFailed($resolved->vault->user, (float) $resolved->amount);
+            }
+
+            return;
+        }
+
+        $contribution = Contribution::where('yabeto_reference', $reference)->first();
+
+        if (! $contribution) {
+            return;
+        }
+
+        $resolved = $this->contributions->resolveStatus($contribution->id, $status);
+
+        if (! $resolved) {
+            return;
+        }
+
+        $resolved->loadMissing(['user', 'group']);
 
         if ($status === 'succeeded') {
-            $this->paymentNotifications->depositSucceeded($movement->vault->user, (float) $movement->amount);
+            $this->paymentNotifications->contributionSucceeded($resolved->user, $resolved->group, (float) $resolved->amount);
+            $this->payouts->disburseIfEligibleAndNotify($resolved->group, $resolved->cycle_period);
         } elseif ($status === 'failed') {
-            $this->paymentNotifications->depositFailed($movement->vault->user, (float) $movement->amount);
+            $this->paymentNotifications->contributionFailed($resolved->user, $resolved->group, (float) $resolved->amount);
         }
     }
 
@@ -123,24 +127,20 @@ class YabetoWebhookController extends Controller
     {
         $movement = VaultMovement::where('type', 'withdraw')->where('yabeto_reference', $reference)->first();
 
-        if (! $movement || $movement->status === $status) {
+        if (! $movement) {
             return;
         }
 
-        DB::transaction(function () use ($movement, $status) {
-            // Withdrawals reserve funds immediately (VaultController::withdrawViaYabeto) — refund
-            // if the payout ultimately failed.
-            if ($status === 'failed' && $movement->status !== 'failed') {
-                $movement->vault()->increment('balance', $movement->amount);
-            }
+        $resolved = $this->vaultTransactions->resolveMovementStatus($movement->id, $status);
 
-            $movement->update(['status' => $status]);
-        });
+        if (! $resolved) {
+            return;
+        }
 
         if ($status === 'succeeded') {
-            $this->paymentNotifications->withdrawSucceeded($movement->vault->user, (float) $movement->amount);
+            $this->paymentNotifications->withdrawSucceeded($resolved->vault->user, (float) $resolved->amount);
         } elseif ($status === 'failed') {
-            $this->paymentNotifications->withdrawFailed($movement->vault->user, (float) $movement->amount);
+            $this->paymentNotifications->withdrawFailed($resolved->vault->user, (float) $resolved->amount);
         }
     }
 }

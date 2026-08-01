@@ -16,6 +16,8 @@ use Illuminate\Support\Collection;
  */
 class GroupCycleRecipientService
 {
+    public function __construct(private readonly GroupMembershipNotificationService $membershipNotifications) {}
+
     public function resolveFor(Group $group, string $cyclePeriod): GroupCycleRecipient
     {
         $existing = GroupCycleRecipient::where('group_id', $group->id)
@@ -24,6 +26,17 @@ class GroupCycleRecipientService
 
         if ($existing) {
             return $existing;
+        }
+
+        // Never meant to be caught — a signal that a caller forgot to guard against a locked
+        // round before reaching here. Resolving a new recipient while locked would consume a real
+        // rotation slot for a cycle that shouldn't exist yet, corrupting the next round's order.
+        // Every real call site (GroupController::withCycleStatus/previewPayout/designateRecipient,
+        // TontinePayoutService::disburse) must check Group::isRoundLocked() first.
+        if ($group->round_status === 'completed') {
+            throw new \LogicException(
+                "resolveFor() called for a locked round (group #{$group->id}) — callers must check Group::isRoundLocked() first.",
+            );
         }
 
         $members = $group->members()->orderBy('group_members.joined_at')->get();
@@ -35,13 +48,24 @@ class GroupCycleRecipientService
             default => $this->joinOrder($group, $members),
         };
 
-        return GroupCycleRecipient::create([
+        $cycleRecipient = GroupCycleRecipient::create([
             'group_id' => $group->id,
             'cycle_period' => $cyclePeriod,
             'user_id' => $userId,
             'method' => $group->recipient_mode,
             'decided_at' => $userId ? now() : null,
+            'round_number' => $group->round_number,
         ]);
+
+        if ($userId) {
+            $recipient = $members->firstWhere('id', $userId);
+
+            if ($recipient) {
+                $this->membershipNotifications->recipientDecided($group, $recipient);
+            }
+        }
+
+        return $cycleRecipient;
     }
 
     /**
@@ -50,10 +74,14 @@ class GroupCycleRecipientService
      */
     public function designate(Group $group, string $cyclePeriod, User $recipient): GroupCycleRecipient
     {
-        return GroupCycleRecipient::updateOrCreate(
+        $cycleRecipient = GroupCycleRecipient::updateOrCreate(
             ['group_id' => $group->id, 'cycle_period' => $cyclePeriod],
-            ['user_id' => $recipient->id, 'method' => 'admin', 'decided_at' => now()],
+            ['user_id' => $recipient->id, 'method' => 'admin', 'decided_at' => now(), 'round_number' => $group->round_number],
         );
+
+        $this->membershipNotifications->recipientDecided($group, $recipient);
+
+        return $cycleRecipient;
     }
 
     /** How many cycles have already had a recipient picked — the rotation's current position. */

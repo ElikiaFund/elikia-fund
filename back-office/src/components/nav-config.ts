@@ -5,6 +5,7 @@ import {
   HelpCircleIcon,
   LayoutDashboardIcon,
   MailIcon,
+  MessageSquareIcon,
   SettingsIcon,
   ShieldIcon,
   UsersIcon,
@@ -18,6 +19,7 @@ export const navMain = [
   { title: "Entreprises", url: "/entreprises", icon: BuildingIcon },
   { title: "Liste d'attente", url: "/liste-attente", icon: MailIcon },
   { title: "Support", url: "/support", icon: HelpCircleIcon },
+  { title: "Contact", url: "/contact", icon: MessageSquareIcon },
   { title: "Personnel", url: "/personnel", icon: ShieldIcon },
   { title: "Paramètres", url: "/parametres", icon: SettingsIcon },
 ]

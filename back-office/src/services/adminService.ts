@@ -75,6 +75,15 @@ export type AdminContribution = {
 
 export type AdminContributionWithUser = AdminContribution & { user: AdminUser }
 
+export type AdminPayout = {
+  id: number
+  cycle_period: string
+  round_number: number
+  paid_out_at: string
+  user: AdminUser | null
+  vault_movement: { amount: string } | null
+}
+
 export type AdminGroupBase = {
   id: number
   uuid: string
@@ -84,6 +93,10 @@ export type AdminGroupBase = {
   max_members: number | null
   invite_code: string
   owner_id: number
+  auto_payout_enabled: boolean
+  round_number: number
+  round_status: 'active' | 'completed'
+  recipient_order_updated_at: string | null
   created_at: string
 }
 
@@ -99,7 +112,9 @@ export type AdminGroupDetail = AdminGroupBase & {
   contributions_sum_amount: string | null
   owner: AdminUser
   members: (AdminUser & { pivot: { joined_at: string } })[]
+  removed_members: (AdminUser & { pivot: { joined_at: string; removed_at: string } })[]
   contributions: AdminContributionWithUser[]
+  cycle_recipients: AdminPayout[]
 }
 
 export type AdminCompanyWithOwner = AdminCompany & { user: AdminUser }
@@ -204,6 +219,15 @@ export type AdminSupportTicket = {
   user: AdminUser
 }
 
+export type AdminContactMessage = {
+  id: number
+  name: string
+  email: string
+  subject: string
+  message: string
+  created_at: string
+}
+
 export type YabetoSettings = {
   mode: 'sandbox' | 'live'
   account_id: string | null
@@ -298,6 +322,14 @@ export const adminService = {
 
   deleteSupportTicket(id: number) {
     return apiService.delete(`/admin/support-tickets/${id}`)
+  },
+
+  listContactMessages() {
+    return apiService.get<AdminContactMessage[]>('/admin/contact-messages').then((r) => r.data)
+  },
+
+  deleteContactMessage(id: number) {
+    return apiService.delete(`/admin/contact-messages/${id}`)
   },
 
   listPermissions() {

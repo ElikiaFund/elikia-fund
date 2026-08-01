@@ -66,7 +66,7 @@ class CreditScoreService
             'transaction_regularity' => (float) $user->transactions()->where('occurred_at', '>=', now()->subDays(90))->count(),
             'savings_behavior' => (float) ($user->vault?->balance ?? 0),
             'income_expense_ratio' => $this->incomeExpenseRatio($user),
-            'tontine_participation' => (float) $user->contributions()->count(),
+            'tontine_participation' => (float) $user->contributions()->where('status', 'succeeded')->count(),
             'company_profile' => $user->company()->exists() ? 1.0 : 0.0,
             default => 0.0,
         };

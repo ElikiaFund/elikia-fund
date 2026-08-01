@@ -17,6 +17,7 @@ import { adminService, type AdminGroup } from '@/services/adminService'
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 
 const FREQUENCY_LABELS: Record<string, string> = { weekly: 'Hebdomadaire', monthly: 'Mensuelle' }
+const ROUND_STATUS_LABELS: Record<string, string> = { active: 'En cours', completed: 'Terminé' }
 
 const columns: ColumnDef<AdminGroup>[] = [
   createSelectColumn<AdminGroup>(),
@@ -44,6 +45,20 @@ const columns: ColumnDef<AdminGroup>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Membres" />,
     cell: ({ row }) => `${row.original.members_count} / ${row.original.max_members ?? 1000}`,
     meta: { label: 'Membres' },
+  },
+  {
+    accessorKey: 'round_status',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Tour" />,
+    cell: ({ row }) => (
+      <div className="flex items-center gap-1">
+        <span className="text-muted-foreground">N°{row.original.round_number}</span>
+        <Badge variant={row.original.round_status === 'completed' ? 'default' : 'outline'}>
+          {ROUND_STATUS_LABELS[row.original.round_status] ?? row.original.round_status}
+        </Badge>
+      </div>
+    ),
+    filterFn: facetedFilterFn,
+    meta: { label: 'Tour' },
   },
   {
     id: 'owner',
@@ -105,6 +120,14 @@ export function GroupsPage() {
           options: [
             { label: 'Hebdomadaire', value: 'weekly' },
             { label: 'Mensuelle', value: 'monthly' },
+          ],
+        },
+        {
+          columnId: 'round_status',
+          title: 'Tour',
+          options: [
+            { label: 'En cours', value: 'active' },
+            { label: 'Terminé', value: 'completed' },
           ],
         },
       ]}

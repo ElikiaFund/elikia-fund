@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\CashSessionController as AdminCashSessionController;
 use App\Http\Controllers\Api\Admin\CompanyController as AdminCompanyController;
+use App\Http\Controllers\Api\Admin\ContactMessageController as AdminContactMessageController;
 use App\Http\Controllers\Api\Admin\CreditScoreController;
 use App\Http\Controllers\Api\Admin\GroupController as AdminGroupController;
 use App\Http\Controllers\Api\Admin\PermissionController;
@@ -20,6 +21,7 @@ use App\Http\Controllers\Api\Admin\YabetoSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CashSessionController;
 use App\Http\Controllers\Api\ContactController;
+use App\Http\Controllers\Api\ContactMessageController;
 use App\Http\Controllers\Api\CreditScoreController as MeCreditScoreController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\NotificationController;
@@ -41,6 +43,14 @@ Route::post('/webhooks/yabeto', YabetoWebhookController::class);
 
 // Marketing website waitlist — public, no Sanctum user (website has no login). Throttled against spam.
 Route::post('/waitlist', [WaitlistController::class, 'store'])->middleware('throttle:5,1');
+
+// Contact info (support e-mail/phone/whatsapp/address/hours) — public: read by both the mobile
+// app's "Aide et support" sheet and the website's /contact page, neither of which is guaranteed
+// to have an authenticated user.
+Route::get('/settings/contact', [ContactController::class, 'show']);
+
+// Marketing website contact form — public, no Sanctum user. Throttled against spam.
+Route::post('/contact-messages', [ContactMessageController::class, 'store'])->middleware('throttle:5,1');
 
 // Mobile app auth — OAuth ("continuer avec Google/Apple/Facebook") + email/password.
 Route::middleware('throttle:10,1')->group(function () {
@@ -66,7 +76,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/me/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/me/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
-    Route::get('/settings/contact', [ContactController::class, 'show']);
     Route::post('/support-tickets', [SupportTicketController::class, 'store']);
 
     Route::post('/onboarding/company', [OnboardingController::class, 'createCompany']);
@@ -84,8 +93,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/vault/pin', [VaultController::class, 'updatePin'])->middleware('throttle:5,1');
     Route::get('/vault', [VaultController::class, 'show']);
     Route::get('/vault/movements', [VaultController::class, 'movements']);
-    Route::post('/vault/deposit', [VaultController::class, 'deposit']);
-    Route::post('/vault/withdraw', [VaultController::class, 'withdraw']);
+    Route::post('/vault/deposit', [VaultController::class, 'deposit'])->middleware('throttle:10,1');
+    Route::post('/vault/withdraw', [VaultController::class, 'withdraw'])->middleware('throttle:10,1');
+    Route::post('/vault/movements/{movement}/refresh-status', [VaultController::class, 'refreshMovementStatus']);
 
     Route::get('/groups', [GroupController::class, 'index']);
     Route::post('/groups', [GroupController::class, 'store']);
@@ -94,13 +104,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/groups/{group}', [GroupController::class, 'show']);
     Route::post('/groups/{group}/contribute', [GroupController::class, 'contribute']);
     Route::post('/groups/{group}/contributions/{contribution}/refresh-status', [GroupController::class, 'refreshContributionStatus']);
+    Route::post('/groups/{group}/members/{user}/contributions', [GroupController::class, 'recordContribution'])->middleware('throttle:20,1');
+    Route::post('/groups/{group}/contributions/{contribution}/void', [GroupController::class, 'voidContribution'])->middleware('throttle:20,1');
     Route::get('/groups/{group}/report', [GroupController::class, 'report']);
     Route::get('/groups/{group}/cycles', [GroupController::class, 'cycles']);
     Route::get('/groups/{group}/requests', [GroupController::class, 'requests']);
     Route::post('/groups/{group}/requests/{user}/approve', [GroupController::class, 'approveRequest']);
     Route::post('/groups/{group}/requests/{user}/decline', [GroupController::class, 'declineRequest']);
+    Route::get('/groups/{group}/members/{user}/removal-preview', [GroupController::class, 'previewMemberRemoval']);
+    Route::delete('/groups/{group}/members/{user}', [GroupController::class, 'removeMember'])->middleware('throttle:20,1');
     Route::put('/groups/{group}/recipient-order', [GroupController::class, 'updateRecipientOrder']);
     Route::put('/groups/{group}/cycle-recipient', [GroupController::class, 'designateRecipient']);
+    Route::put('/groups/{group}/settings', [GroupController::class, 'updateSettings']);
+    Route::post('/groups/{group}/renew-round', [GroupController::class, 'renewRound']);
+    Route::get('/groups/{group}/payout', [GroupController::class, 'previewPayout']);
+    Route::post('/groups/{group}/payout', [GroupController::class, 'payoutCycle'])->middleware('throttle:10,1');
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::post('/products', [ProductController::class, 'store']);
@@ -141,6 +159,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/support-tickets', [AdminSupportTicketController::class, 'index']);
         Route::delete('/support-tickets/{supportTicket}', [AdminSupportTicketController::class, 'destroy'])->middleware('permission:support_tickets.delete');
+
+        Route::get('/contact-messages', [AdminContactMessageController::class, 'index']);
+        Route::delete('/contact-messages/{contactMessage}', [AdminContactMessageController::class, 'destroy'])->middleware('permission:contact_messages.delete');
 
         // Read access to a user's products/cash sessions is bundled into GET /admin/users/{user}
         // (the "Produits"/"Sessions de caisse" tabs) — these two routes only add delete.

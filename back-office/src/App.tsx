@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { AuthProvider } from '@/context/auth-context'
 import { CompaniesPage } from '@/pages/companies'
 import { CompanyDetailPage } from '@/pages/company-detail'
+import { ContactPage } from '@/pages/contact'
 import { DashboardPage } from '@/pages/dashboard'
 import { GroupDetailPage } from '@/pages/group-detail'
 import { GroupsPage } from '@/pages/groups'
@@ -37,6 +38,7 @@ function App() {
             <Route path="/entreprises/:id" element={<CompanyDetailPage />} />
             <Route path="/liste-attente" element={<WaitlistPage />} />
             <Route path="/support" element={<SupportTicketsPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="/personnel" element={<PersonnelPage />} />
             <Route path="/parametres" element={<SettingsPage />} />
             <Route path="/profil" element={<ProfilePage />} />

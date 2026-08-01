@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'uuid', 'name', 'contribution_amount', 'frequency', 'max_members', 'invite_code', 'owner_id',
     'contribution_day', 'contribution_time', 'recipient_mode', 'recipient_order',
+    'auto_payout_enabled', 'round_number', 'round_status',
+    'recipient_order_updated_at', 'recipient_order_updated_by',
 ])]
 class Group extends Model
 {
@@ -25,7 +27,15 @@ class Group extends Model
         return [
             'contribution_amount' => 'decimal:2',
             'recipient_order' => 'array',
+            'auto_payout_enabled' => 'boolean',
+            'recipient_order_updated_at' => 'datetime',
         ];
+    }
+
+    /** A round (one full pass through the rotation) is locked once everyone's been paid out — see TontinePayoutService::completeRoundIfDone(). */
+    public function isRoundLocked(): bool
+    {
+        return $this->round_status === 'completed';
     }
 
     public function owner(): BelongsTo
@@ -47,6 +57,14 @@ class Group extends Model
         return $this->belongsToMany(User::class, 'group_members')
             ->withPivot('joined_at', 'status')
             ->wherePivot('status', 'pending');
+    }
+
+    /** Members removed by the owner — kept for history (see GroupController::removeMember), not shown to mobile clients. */
+    public function removedMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'group_members')
+            ->withPivot('joined_at', 'approved_at', 'removed_at')
+            ->wherePivot('status', 'removed');
     }
 
     public function contributions(): HasMany

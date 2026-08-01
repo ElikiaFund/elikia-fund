@@ -279,7 +279,7 @@ POST https://pay.sandbox.yabetoopay.com/v1/account/{accountId}/webhooks
 Authorization: Bearer sk_test_...
 
 {
-  "url": "https://api.elikia-fund.test/api/webhooks/yabeto",
+  "url": "https://api.elikiafund.com/api/webhooks/yabeto",
   "description": "Elikia Fund production webhook",
   "enabled_events": ["intent.completed", "disbursement.completed"],
   "metadata": { "environment": "production" }
@@ -364,6 +364,7 @@ Being upfront about this rather than presenting the docs as more coherent than t
 8. **No documented minimum/maximum transaction amount** — worth confirming for both vault deposits (could be small, e.g. 100 XAF) and tontine contributions (recurring, potentially larger).
 9. **Fees**: not documented anywhere in what was fetched — need direct confirmation from Yabetoo (their cut per transaction, and whether it's on top of or deducted from the amount) before this can factor into Elikia Fund's own 3% tontine management fee math (`GroupController::MANAGEMENT_FEE_RATE`) or any vault fee.
 10. There's an **OpenAPI spec** at `https://docs.yabetoopay.com/en/api-reference/openapi.json` — worth running through a codegen tool (or at minimum diffing against this doc) right before implementation, since it's more likely to be internally consistent than the prose docs.
+11. **Sub-accounts / payment splitting**: not a documentation gap so much as a confirmed absence — see §10.6. Yabetoo's own marketplace-style example (ride-hailing) does commission math in application code, not via any Yabetoo split/sub-account feature, and no such resource appears anywhere in the doc sitemap. Still worth a direct one-line confirmation from Yabetoo support ("no split-payment/sub-account primitive exists today, correct?") before relying on that absence long-term, but this is no longer a "how do we use it" question — it's a "please confirm we're not missing an undocumented feature" question.
 
 ---
 
@@ -445,7 +446,15 @@ Yabetoo's own docs include a worked example — `platforms/examples/savings-vaul
 
 The deposit→webhook→credit and withdraw→disburse→debit shape maps directly onto `VaultController`; the maturity/lock-period stuff doesn't apply to Elikia Fund's vault design and shouldn't be copied in just because the example has it.
 
-### 10.6 Security / operational checklist for whenever this is built
+### 10.6 The Ride-Hailing case study (confirms the tontine fee-split has no Yabetoo-side equivalent)
+
+Yabetoo's other multi-party worked example — `platforms/examples/ride-hailing.md` (fetched 2026-07-30, under `/en/` not `/fr/`) — is structurally close to a tontine payout: one party pays in full, a platform commission is taken, a second party receives the net. Checked in detail because it's the closest thing in Yabetoo's docs to Elikia Fund's `GroupController::contribute()` (3% `MANAGEMENT_FEE_RATE`, `fee_amount`/`net_amount` split). Findings:
+
+1. **No sub-account or payment-split primitive exists, even in Yabetoo's own marketplace example.** The commission math is plain application code: `platformFee = Math.round(totalFare * PLATFORM_COMMISSION); driverEarnings = totalFare - platformFee`. Money only ever moves through the platform's single primary account — exactly what §9 already suspected, now corroborated by Yabetoo's own reference implementation rather than just an absence of documentation.
+2. **"Wallets" in that example are not a Yabetoo API resource** — don't be misled by the terminology. `topUpWallet()` calls `yabetoo.payments.create()` (a real Payment Intent) and `requestDriverPayout()` calls `yabetoo.disbursements.create()` (a real Disbursement), but the balance itself (`db.wallets.incrementBalance()`/`decrementBalance()`) is plain local database bookkeeping in *their* example app — there is no `yabetoo.wallets.*` SDK method anywhere, and `https://docs.yabetoopay.com/llms.txt` has no wallet/sub-account/split/marketplace-fee page at all. Confirmed by reading the actual code snippets, not just the prose summary.
+3. **Conclusion for Elikia Fund**: only two Yabetoo primitives ever touch tontine money — a Payment Intent for the gross `contribution_amount` (collect), a Disbursement for a member's net payout (pay out). The `fee_amount`/`net_amount` split already implemented in `GroupController::contribute()` is exactly the right place for that logic to live — there's no Yabetoo-side feature to migrate it to, and no reason to keep asking Yabetoo support for a sub-account/split feature; the open question worth asking instead is narrower — see §9.11.
+
+### 10.7 Security / operational checklist for whenever this is built
 
 - Secret key only ever touches the Laravel backend — **never** shipped to mobile or back-office.
 - Webhook route excluded from CSRF (already true for all of `routes/api.php`) but must verify HMAC signature before trusting the payload.
@@ -459,4 +468,4 @@ The deposit→webhook→credit and withdraw→disburse→debit shape maps direct
 ## Appendix: source pages fetched
 
 All under `https://docs.yabetoopay.com/fr/` unless noted:
-`api-reference/introduction`, `api-reference/authentication`, `api-reference/errors`, `api-reference/currencies`, `quickstart`, `guides/concepts/payment-flow`, `guides/concepts/statuses`, `guides/concepts/mobile-money`, `guides/glossary`, `api-reference/payment-intent/{create,confirm,get}`, `api-reference/checkout-session/{create,get}`, `payments/payment-link/{intro,create}`, `api-reference/webhook/{create,all}`, `developer-tools/webhook/{overview,events}`, `developer-tools/test/overview`, `developer-tools/sdk/php`, `platforms/examples/savings-vault`, `payments/disbursement/overview`, `api-reference/disbursement/{create,get}`, `api-reference/remittance/create`. Full sitemap: `https://docs.yabetoopay.com/llms.txt`. OpenAPI spec: `https://docs.yabetoopay.com/en/api-reference/openapi.json`.
+`api-reference/introduction`, `api-reference/authentication`, `api-reference/errors`, `api-reference/currencies`, `quickstart`, `guides/concepts/payment-flow`, `guides/concepts/statuses`, `guides/concepts/mobile-money`, `guides/glossary`, `api-reference/payment-intent/{create,confirm,get}`, `api-reference/checkout-session/{create,get}`, `payments/payment-link/{intro,create}`, `api-reference/webhook/{create,all}`, `developer-tools/webhook/{overview,events}`, `developer-tools/test/overview`, `developer-tools/sdk/php`, `platforms/examples/savings-vault`, `payments/disbursement/overview`, `api-reference/disbursement/{create,get}`, `api-reference/remittance/create`. Full sitemap: `https://docs.yabetoopay.com/llms.txt`. OpenAPI spec: `https://docs.yabetoopay.com/en/api-reference/openapi.json`. Also fetched (2026-07-30, under `/en/`): `platforms/examples/ride-hailing` (see §10.6) and re-checked `api-reference/introduction` + `llms.txt` specifically for any wallet/sub-account/split resource — none found.
