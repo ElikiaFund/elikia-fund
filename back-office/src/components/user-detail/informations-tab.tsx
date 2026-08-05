@@ -1,5 +1,6 @@
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { Link } from 'react-router-dom'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -40,10 +41,16 @@ export function InformationsTab({ user }: InformationsTabProps) {
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {user.role && <Badge>{user.role.name}</Badge>}
-          {user.company && (
-            <Badge variant="outline">
-              {user.company.name} — {formatCompanyCategory(user.company.category, user.company.other_category)}
-            </Badge>
+          {user.companies.length === 0 ? (
+            <Badge variant="outline">Aucune entreprise</Badge>
+          ) : (
+            user.companies.map((company) => (
+              <Badge key={company.id} variant="outline" asChild>
+                <Link to={`/entreprises/${company.id}`}>
+                  {company.name} — {formatCompanyCategory(company.category, company.other_category)}
+                </Link>
+              </Badge>
+            ))
           )}
           <Badge variant="outline">Inscrit le {format(new Date(user.created_at), 'd MMM y', { locale: fr })}</Badge>
         </CardContent>

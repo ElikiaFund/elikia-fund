@@ -27,10 +27,11 @@ const columns: ColumnDef<AdminUser>[] = [
     meta: { label: 'E-mail' },
   },
   {
-    id: 'company',
-    accessorFn: (row) => row.company?.name ?? '—',
-    header: 'Entreprise',
-    meta: { label: 'Entreprise' },
+    id: 'companies_count',
+    accessorFn: (row) => row.companies_count,
+    header: 'Entreprises',
+    cell: ({ row }) => <Badge variant="outline">{row.original.companies_count}</Badge>,
+    meta: { label: 'Entreprises' },
   },
   {
     id: 'is_admin',

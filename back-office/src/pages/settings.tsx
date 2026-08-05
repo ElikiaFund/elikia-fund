@@ -1,4 +1,5 @@
 import { CreditScoringTab } from '@/components/settings/credit-scoring-tab'
+import { FeesTab } from '@/components/settings/fees-tab'
 import { GeneralTab } from '@/components/settings/general-tab'
 import { PaymentsTab } from '@/components/settings/payments-tab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -13,6 +14,7 @@ export function SettingsPage() {
         <TabsTrigger value="general">Général</TabsTrigger>
         <TabsTrigger value="credit-scoring">Notation de crédit</TabsTrigger>
         <TabsTrigger value="payments">Paiements</TabsTrigger>
+        <TabsTrigger value="fees">Frais</TabsTrigger>
       </TabsList>
 
       <TabsContent value="general">
@@ -25,6 +27,10 @@ export function SettingsPage() {
 
       <TabsContent value="payments">
         <PaymentsTab />
+      </TabsContent>
+
+      <TabsContent value="fees">
+        <FeesTab />
       </TabsContent>
     </Tabs>
   )

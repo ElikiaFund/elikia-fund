@@ -19,20 +19,20 @@ const VERDICT_CLASSES: Record<CreditScoreVerdict, string> = {
 }
 
 type CreditScoreTabProps = {
-  userId: number
+  companyId: number
 }
 
-export function CreditScoreTab({ userId }: CreditScoreTabProps) {
+export function CreditScoreTab({ companyId }: CreditScoreTabProps) {
   const [score, setScore] = useState<CreditScore | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     setIsLoading(true)
     adminService
-      .getCreditScore(userId)
+      .getCompanyCreditScore(companyId)
       .then(setScore)
       .finally(() => setIsLoading(false))
-  }, [userId])
+  }, [companyId])
 
   if (isLoading || !score) {
     return <Skeleton className="h-96" />

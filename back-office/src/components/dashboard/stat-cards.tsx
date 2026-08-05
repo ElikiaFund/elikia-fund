@@ -7,14 +7,14 @@ import type { Contribution, NewUser, Transaction } from '@/components/dashboard/
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 const number = new Intl.NumberFormat('fr-FR')
 
-function trend(current: number, previous: number) {
+export function trend(current: number, previous: number) {
   if (previous === 0) {
     return current === 0 ? 0 : 100
   }
   return ((current - previous) / previous) * 100
 }
 
-function TrendBadge({ value }: { value: number }) {
+export function TrendBadge({ value }: { value: number }) {
   const isUp = value >= 0
   const Icon = isUp ? TrendingUpIcon : TrendingDownIcon
 

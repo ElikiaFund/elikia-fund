@@ -8,6 +8,7 @@ import { CompaniesPage } from '@/pages/companies'
 import { CompanyDetailPage } from '@/pages/company-detail'
 import { ContactPage } from '@/pages/contact'
 import { DashboardPage } from '@/pages/dashboard'
+import { FinancePage } from '@/pages/finance'
 import { GroupDetailPage } from '@/pages/group-detail'
 import { GroupsPage } from '@/pages/groups'
 import { LoginPage } from '@/pages/login'
@@ -29,6 +30,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/finances" element={<FinancePage />} />
             <Route path="/utilisateurs" element={<UsersPage />} />
             <Route path="/utilisateurs/:id" element={<UserDetailPage />} />
             <Route path="/transactions" element={<TransactionsPage />} />

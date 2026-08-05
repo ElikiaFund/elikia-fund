@@ -9,10 +9,12 @@ import {
   SettingsIcon,
   ShieldIcon,
   UsersIcon,
+  WalletIcon,
 } from "lucide-react"
 
 export const navMain = [
   { title: "Tableau de bord", url: "/", end: true, icon: LayoutDashboardIcon },
+  { title: "Finances", url: "/finances", icon: WalletIcon },
   { title: "Utilisateurs", url: "/utilisateurs", icon: UsersIcon },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRightIcon },
   { title: "Tontines", url: "/tontines", icon: CircleDollarSignIcon },

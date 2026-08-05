@@ -40,14 +40,14 @@ export type AdminUser = {
   onboarding_completed_at: string | null
   created_at: string
   updated_at: string
-  company: AdminCompany | null
+  companies_count: number
   role?: AdminRole | null
 }
 
 export type AdminTransactionBase = {
   id: number
   uuid: string
-  user_id: number
+  company_id: number
   type: 'income' | 'expense'
   amount: string
   category: string
@@ -58,7 +58,7 @@ export type AdminTransactionBase = {
   created_at: string
 }
 
-export type AdminTransaction = AdminTransactionBase & { user: AdminUser }
+export type AdminTransaction = AdminTransactionBase & { company: AdminCompanyWithOwner }
 
 export type AdminContribution = {
   id: number
@@ -66,6 +66,8 @@ export type AdminContribution = {
   user_id: number
   amount: string
   fee_amount: string
+  provider_fee_amount: string
+  platform_fee_amount: string
   net_amount: string
   cycle_period: string
   paid_at: string
@@ -119,6 +121,12 @@ export type AdminGroupDetail = AdminGroupBase & {
 
 export type AdminCompanyWithOwner = AdminCompany & { user: AdminUser }
 
+export type AdminCompanyDetail = AdminCompanyWithOwner & {
+  transactions: AdminTransactionBase[]
+  products: AdminProduct[]
+  cash_sessions: AdminCashSession[]
+}
+
 export type AdminWaitlistEntry = {
   id: number
   name: string | null
@@ -135,6 +143,7 @@ export type AdminProductCategory = {
 
 export type AdminProduct = {
   id: number
+  company_id: number
   name: string
   category: AdminProductCategory | null
   sell_price: string
@@ -148,6 +157,7 @@ export type AdminProduct = {
 export type AdminCashSession = {
   id: number
   uuid: string
+  company_id: number
   period_start: string | null
   closed_at: string
   expected_balance: string
@@ -157,11 +167,9 @@ export type AdminCashSession = {
 }
 
 export type AdminUserDetail = AdminUser & {
-  transactions: AdminTransactionBase[]
+  companies: AdminCompany[]
   vault: { id: number; balance: string; pin_set_at: string | null } | null
   groups: AdminGroupBase[]
-  products: AdminProduct[]
-  cash_sessions: AdminCashSession[]
 }
 
 export type AdminStats = {
@@ -204,10 +212,47 @@ export type CreditScore = {
   breakdown: CreditScoreBreakdownItem[]
 }
 
+export type AdminVaultMovement = {
+  id: number
+  vault_id: number
+  type: 'deposit' | 'withdraw' | 'tontine_payout'
+  amount: string
+  fee_amount: string
+  provider_fee_amount: string
+  platform_fee_amount: string
+  net_amount: string
+  status: string
+  created_at: string
+  vault: { id: number; user: { id: number; name: string } }
+}
+
+export type VaultSecurityEventType = 'pin_failed' | 'pin_locked' | 'activated' | 'flagged_transaction'
+
+export type VaultSecurityEvent = {
+  id: number
+  vault_id: number
+  user_id: number
+  type: VaultSecurityEventType
+  vault_movement_id: number | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+  vault_movement: { id: number; type: string; amount: string } | null
+}
+
 export type AdminSettings = {
   platform: { name: string; support_email: string }
   credit_scoring: { min_score_eligible: number; min_score_review: number }
   contact: { phone: string | null; whatsapp: string | null; address: string | null; hours: string | null }
+  fees: {
+    contribution_yabeto_percent: number
+    contribution_elikia_percent: number
+    deposit_yabeto_percent: number
+    deposit_elikia_percent: number
+    deposit_yabeto_fixed: number
+    deposit_elikia_fixed: number
+    withdrawal_yabeto_percent: number
+    withdrawal_elikia_percent: number
+  }
 }
 
 export type AdminSupportTicket = {
@@ -293,7 +338,7 @@ export const adminService = {
   },
 
   getCompany(id: number) {
-    return apiService.get<AdminCompanyWithOwner>(`/admin/companies/${id}`).then((r) => r.data)
+    return apiService.get<AdminCompanyDetail>(`/admin/companies/${id}`).then((r) => r.data)
   },
 
   deleteCompany(id: number) {
@@ -368,8 +413,16 @@ export const adminService = {
     return apiService.delete(`/admin/personnel/${id}`)
   },
 
-  getCreditScore(userId: number) {
-    return apiService.get<CreditScore>(`/admin/users/${userId}/credit-score`).then((r) => r.data)
+  getCompanyCreditScore(companyId: number) {
+    return apiService.get<CreditScore>(`/admin/companies/${companyId}/credit-score`).then((r) => r.data)
+  },
+
+  getVaultSecurityEvents(userId: number) {
+    return apiService.get<VaultSecurityEvent[]>(`/admin/users/${userId}/vault-security-events`).then((r) => r.data)
+  },
+
+  listVaultMovements() {
+    return apiService.get<AdminVaultMovement[]>('/admin/vault-movements').then((r) => r.data)
   },
 
   listScoringCriteria() {

@@ -19,10 +19,10 @@ const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: '
 const columns: ColumnDef<AdminTransaction>[] = [
   createSelectColumn<AdminTransaction>(),
   {
-    id: 'user',
-    accessorFn: (row) => row.user.name,
-    header: ({ column }) => <DataTableColumnHeader column={column} title="Utilisateur" />,
-    meta: { label: 'Utilisateur' },
+    id: 'company',
+    accessorFn: (row) => row.company.name,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Entreprise" />,
+    meta: { label: 'Entreprise' },
   },
   {
     accessorKey: 'type',
@@ -102,7 +102,7 @@ export function TransactionsPage() {
       id: 'actions',
       cell: ({ row }) => (
         <DataTableRowActions
-          itemLabel={`la transaction de ${row.original.user.name}`}
+          itemLabel={`la transaction de ${row.original.company.name}`}
           confirmValue={currency.format(Number(row.original.amount))}
           onDelete={() => handleDelete(row.original.id)}
         />

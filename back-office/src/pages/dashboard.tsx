@@ -8,6 +8,7 @@ import {
   aggregateByDepartment,
   aggregateByTontine,
   aggregateDaily,
+  aggregateTransactionVolumeByDepartment,
   filterByRange,
   previousRange,
 } from '@/components/dashboard/aggregations'
@@ -45,11 +46,12 @@ export function DashboardPage() {
         setTransactions(
           apiTransactions.map((t) => ({
             id: t.id,
-            user: t.user.name,
+            user: t.company.name,
             type: t.type,
             category: t.category,
             amount: Number(t.amount),
             date: new Date(t.occurred_at),
+            department: t.company.department,
           })),
         )
 
@@ -109,6 +111,7 @@ export function DashboardPage() {
     () => aggregateByCategory(current.transactions.filter((t) => t.type === 'income')),
     [current.transactions],
   )
+  const transactionsByZone = useMemo(() => aggregateTransactionVolumeByDepartment(current.transactions), [current.transactions])
 
   // Merchant profile snapshot — who our companies are today, not scoped to the selected date
   // range (a company created 3 months ago is still part of "how our merchants break down now").
@@ -145,8 +148,13 @@ export function DashboardPage() {
 
       <div>
         <h2 className="mb-3 text-sm font-semibold text-muted-foreground">Activité sur la période</h2>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <DistributionDonutChart data={incomeExpenseData} title="Revenus vs dépenses" valueFormatter={currency.format} />
+          <TontinesChart
+            data={transactionsByZone}
+            title="Transactions par zone"
+            description="Volume par département sur la période sélectionnée"
+          />
           <TontinesChart data={topExpenseCategories} title="Top catégories de dépenses" description="Top 5 sur la période sélectionnée" />
           <TontinesChart data={topIncomeCategories} title="Top catégories de revenus" description="Top 5 sur la période sélectionnée" />
         </div>

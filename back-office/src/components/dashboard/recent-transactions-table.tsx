@@ -24,7 +24,7 @@ export function RecentTransactionsTable({ transactions }: RecentTransactionsTabl
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Utilisateur</TableHead>
+            <TableHead>Entreprise</TableHead>
             <TableHead>Catégorie</TableHead>
             <TableHead>Montant</TableHead>
             <TableHead className="text-right">Date</TableHead>
