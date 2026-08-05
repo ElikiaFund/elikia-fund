@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('cash_sessions', function (Blueprint $table) {
-            $table->dropIndex(['user_id', 'closed_at']);
             $table->dropConstrainedForeignId('user_id');
             $table->foreignId('company_id')->after('uuid')->constrained()->cascadeOnDelete();
             $table->index(['company_id', 'closed_at']);
+            $table->dropIndex(['user_id', 'closed_at']);
         });
     }
 
@@ -25,10 +25,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('cash_sessions', function (Blueprint $table) {
-            $table->dropIndex(['company_id', 'closed_at']);
             $table->dropConstrainedForeignId('company_id');
             $table->foreignId('user_id')->after('uuid')->constrained()->cascadeOnDelete();
             $table->index(['user_id', 'closed_at']);
+            $table->dropIndex(['company_id', 'closed_at']);
         });
     }
 };

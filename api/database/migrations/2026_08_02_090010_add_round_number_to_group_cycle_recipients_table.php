@@ -24,8 +24,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('group_cycle_recipients', function (Blueprint $table) {
-            $table->dropIndex(['group_id', 'round_number']);
             $table->dropColumn('round_number');
+            $table->dropIndex(['group_id', 'round_number']);
         });
     }
 };
