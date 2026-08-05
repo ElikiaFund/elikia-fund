@@ -86,6 +86,11 @@ class Company extends Model
         return $this->hasMany(ProductCategory::class);
     }
 
+    public function transactionCategories(): HasMany
+    {
+        return $this->hasMany(TransactionCategory::class);
+    }
+
     public function cashSessions(): HasMany
     {
         return $this->hasMany(CashSession::class);

@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\SyncController;
+use App\Http\Controllers\Api\TransactionCategoryController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\VaultController;
 use App\Http\Controllers\Api\WaitlistController;
@@ -81,8 +82,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/support-tickets', [SupportTicketController::class, 'store']);
 
     // No active-company header needed here — listing/creating companies is how you get one.
+    // Deletion also stays outside the header-scoped group: it targets a company by id directly
+    // (own ownership check inside the controller, same standalone idiom as credit-score) and must
+    // work even for a company that isn't the currently active one.
     Route::get('/companies', [CompanyController::class, 'index']);
     Route::post('/companies', [CompanyController::class, 'store']);
+    Route::delete('/companies/{company}', [CompanyController::class, 'destroy']);
 
     // Every route below requires X-Company-Id — resolved + ownership-checked by
     // ResolveActiveCompany, exposed as $request->company(). Isolates each company's cash flow,
@@ -109,6 +114,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/product-categories', [ProductCategoryController::class, 'store']);
         Route::put('/product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
         Route::delete('/product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
+
+        Route::get('/transaction-categories', [TransactionCategoryController::class, 'index']);
+        Route::post('/transaction-categories', [TransactionCategoryController::class, 'store']);
+        Route::put('/transaction-categories/{transactionCategory}', [TransactionCategoryController::class, 'update']);
+        Route::delete('/transaction-categories/{transactionCategory}', [TransactionCategoryController::class, 'destroy']);
 
         Route::get('/companies/{company}/credit-score', CompanyCreditScoreController::class);
     });

@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Vault;
 use Database\Factories\ProductFactory;
@@ -61,6 +62,8 @@ class DatabaseSeeder extends Seeder
 
                     for ($i = 0; $i < $companyCount; $i++) {
                         $company = Company::factory()->create(['user_id' => $user->id]);
+
+                        TransactionCategory::seedDefaultsFor($company);
 
                         if (array_key_exists($company->category, ProductFactory::CATALOG)) {
                             ProductCategory::seedDefaultsFor($company);

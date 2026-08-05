@@ -29,6 +29,7 @@ class SyncTransactionsRequest extends FormRequest
             'transactions.*.type' => ['required', 'string', Rule::in(['income', 'expense'])],
             'transactions.*.amount' => ['required', 'numeric', 'min:0.01'],
             'transactions.*.category' => ['required', 'string', 'max:255'],
+            'transactions.*.payment_method' => ['required', 'string', Rule::in(['cash', 'mtn_momo', 'airtel_money'])],
             'transactions.*.note' => ['nullable', 'string'],
             'transactions.*.product_name' => ['nullable', 'string', 'max:255'],
             'transactions.*.quantity' => ['nullable', 'integer', 'min:1'],

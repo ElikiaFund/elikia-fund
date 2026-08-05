@@ -28,6 +28,7 @@ class StoreTransactionRequest extends FormRequest
             'type' => ['required', 'string', Rule::in(['income', 'expense'])],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'category' => ['required', 'string', 'max:255'],
+            'payment_method' => ['required', 'string', Rule::in(['cash', 'mtn_momo', 'airtel_money'])],
             'note' => ['nullable', 'string'],
             'product_name' => ['nullable', 'string', 'max:255'],
             'quantity' => ['nullable', 'integer', 'min:1'],

@@ -33,6 +33,7 @@ class TransactionFactory extends Factory
                 ? fake()->randomFloat(2, 40000, 220000)
                 : fake()->randomFloat(2, 3000, 60000),
             'category' => fake()->randomElement($type === 'income' ? self::INCOME_CATEGORIES : self::EXPENSE_CATEGORIES),
+            'payment_method' => fake()->randomElement(['cash', 'mtn_momo', 'airtel_money']),
             'note' => fake()->boolean(30) ? fake()->sentence(4) : null,
             'occurred_at' => fake()->dateTimeBetween('-90 days', 'now'),
         ];
