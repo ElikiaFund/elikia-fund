@@ -14,8 +14,11 @@ return new class extends Migration
         Schema::table('companies', function (Blueprint $table) {
             // A user can now own multiple companies — only the uniqueness goes, user_id stays
             // NOT NULL/FK/cascadeOnDelete as the owner column, now indexed rather than unique.
-            $table->dropUnique(['user_id']);
+            // Order matters: each Blueprint command runs as its own ALTER TABLE statement, so the
+            // plain index must exist BEFORE the unique one is dropped — otherwise MySQL refuses to
+            // drop it (error 1553: the FK constraint on user_id needs a backing index at all times).
             $table->index('user_id');
+            $table->dropUnique(['user_id']);
         });
     }
 
@@ -25,8 +28,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('companies', function (Blueprint $table) {
-            $table->dropIndex(['user_id']);
             $table->unique('user_id');
+            $table->dropIndex(['user_id']);
         });
     }
 };
