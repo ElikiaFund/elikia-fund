@@ -2,6 +2,8 @@
 
 namespace App\Services\Payment\DTOs;
 
+use App\Services\Payment\YabetoFailureMessages;
+
 /**
  * Normalizes the two shapes Yabeto returns for a payment intent (the `create` response uses
  * `id`/`clientSecret`; the `confirm` response uses `intentId`/no client secret and adds
@@ -31,7 +33,7 @@ readonly class PaymentIntentResult
             id: $data['intentId'] ?? $data['id'] ?? '',
             clientSecret: null,
             status: $data['status'] ?? 'processing',
-            failureMessage: $data['failureMessage'] ?? null,
+            failureMessage: YabetoFailureMessages::translate($data['failureMessage'] ?? null),
         );
     }
 

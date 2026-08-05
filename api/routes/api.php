@@ -156,6 +156,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/groups/{group}/renew-round', [GroupController::class, 'renewRound']);
     Route::get('/groups/{group}/payout', [GroupController::class, 'previewPayout']);
     Route::post('/groups/{group}/payout', [GroupController::class, 'payoutCycle'])->middleware('throttle:10,1');
+    Route::get('/groups/{group}/deletion-request', [GroupController::class, 'showDeletionRequest']);
+    Route::post('/groups/{group}/deletion-request', [GroupController::class, 'requestDeletion'])->middleware('throttle:10,1');
+    Route::delete('/groups/{group}/deletion-request', [GroupController::class, 'cancelDeletionRequest']);
+    Route::post('/groups/{group}/deletion-request/vote', [GroupController::class, 'castDeletionVote'])->middleware('throttle:20,1');
 
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/stats', StatsController::class);

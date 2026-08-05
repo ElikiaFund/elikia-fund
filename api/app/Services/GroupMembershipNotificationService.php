@@ -6,6 +6,7 @@ use App\Models\Group;
 use App\Models\Notification;
 use App\Models\User;
 use App\Services\Notifications\ExpoPushService;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Notifies the group owner of new join requests, and the requester of the approve/decline
@@ -111,18 +112,72 @@ class GroupMembershipNotificationService
         );
     }
 
-    private function notify(User $user, Group $group, string $type, string $title, string $body): void
+    /**
+     * Proposing owner-only action — broadcasts to every OTHER approved member (the requester's
+     * own vote is implicit, see GroupDeletionService::requestAndNotify(), so they're never passed
+     * in as $recipient here).
+     */
+    public function deletionRequested(Group $group, User $requester, User $recipient): void
+    {
+        $this->notify(
+            $recipient,
+            $group,
+            'tontine_deletion_requested',
+            'Demande de suppression de la tontine',
+            "{$requester->name} propose de supprimer « {$group->name} ». Vous avez 48h pour approuver ou refuser — sans réponse de votre part, la suppression sera automatiquement approuvée.",
+        );
+    }
+
+    /**
+     * The group row is already gone by the time this fires (GroupDeletionService deletes it
+     * before dispatching notifications) — $members is the snapshot taken just before, and there's
+     * no Group left to attach the notification to, hence the null group.
+     */
+    public function deletionApproved(string $groupName, Collection $members): void
+    {
+        $members->each(fn (User $member) => $this->notify(
+            $member,
+            null,
+            'tontine_deletion_approved',
+            'Tontine supprimée',
+            "« {$groupName} » a été supprimée à la suite du vote des membres.",
+        ));
+    }
+
+    public function deletionRejected(Group $group): void
+    {
+        $group->members()->get()->each(fn (User $member) => $this->notify(
+            $member,
+            $group,
+            'tontine_deletion_rejected',
+            'Suppression refusée',
+            "La demande de suppression de « {$group->name} » a été refusée par les membres. La tontine continue normalement.",
+        ));
+    }
+
+    public function deletionCancelled(Group $group): void
+    {
+        $group->members()->get()->each(fn (User $member) => $this->notify(
+            $member,
+            $group,
+            'tontine_deletion_cancelled',
+            'Demande de suppression annulée',
+            "Le créateur a annulé la demande de suppression de « {$group->name} ».",
+        ));
+    }
+
+    private function notify(User $user, ?Group $group, string $type, string $title, string $body): void
     {
         Notification::create([
             'user_id' => $user->id,
-            'group_id' => $group->id,
+            'group_id' => $group?->id,
             'type' => $type,
             'title' => $title,
             'body' => $body,
         ]);
 
         if ($user->push_token) {
-            $this->expoPush->send($user->push_token, $title, $body, ['type' => $type, 'group_id' => $group->id]);
+            $this->expoPush->send($user->push_token, $title, $body, array_filter(['type' => $type, 'group_id' => $group?->id]));
         }
     }
 }

@@ -30,6 +30,8 @@ class GroupController extends Controller
                 'removedMembers',
                 'contributions.user',
                 ['cycleRecipients' => fn ($query) => $query->whereNotNull('paid_out_at')->with('user', 'vaultMovement')],
+                'pendingDeletionRequest.votes.user',
+                'pendingDeletionRequest.requester',
             )->loadCount('members')->loadSum('contributions', 'amount')
         );
     }

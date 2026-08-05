@@ -40,6 +40,13 @@ class VaultTransactionService
      */
     public function deposit(Vault $vault, float $amount, string $paymentMethod, string $methodLabel, string $phone): array
     {
+        // Best-effort, outside any lock: if the vault's last deposit attempt is stuck
+        // `processing` (the webhook never arrived, or the original request hit a transport error
+        // and never got a clean resolution), ask Yabeto directly before deciding to block a retry
+        // on it — otherwise a genuinely dead attempt blocks every future deposit until the
+        // scheduled payments:reconcile-pending sweep eventually catches it (up to 15 min later).
+        $this->reconcileStuck($vault, 'deposit');
+
         $fee = $this->fees->deposit($amount);
 
         $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
@@ -110,6 +117,8 @@ class VaultTransactionService
      */
     public function withdraw(Vault $vault, float $amount, string $paymentMethod, string $methodLabel, string $phone): array
     {
+        $this->reconcileStuck($vault, 'withdraw');
+
         $fee = $this->fees->withdrawal($amount);
 
         $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
@@ -221,5 +230,42 @@ class VaultTransactionService
         }
 
         return $movement;
+    }
+
+    /**
+     * If the vault's most recent deposit/withdrawal is stuck `processing` and Yabeto can now
+     * tell us what actually happened, resolve it before deposit()/withdraw()'s guard ever sees
+     * it — turning "blocked forever until someone remembers to check" into "self-heals on the
+     * very next attempt". Deliberately outside any lock/transaction (a live HTTP call has no
+     * business holding a row lock); a still-genuinely-processing or unreachable-Yabeto outcome
+     * just leaves the row as-is, and deposit()/withdraw() block exactly as before.
+     */
+    private function reconcileStuck(Vault $vault, string $type): void
+    {
+        if (! $this->yabeto->isEnabled()) {
+            return;
+        }
+
+        $stuck = $vault->movements()
+            ->where('type', $type)
+            ->where('status', 'processing')
+            ->whereNotNull('yabeto_reference')
+            ->first();
+
+        if (! $stuck) {
+            return;
+        }
+
+        try {
+            $result = $type === 'deposit'
+                ? $this->yabeto->getPaymentIntent($stuck->yabeto_reference)
+                : $this->yabeto->getDisbursement($stuck->yabeto_reference);
+        } catch (YabetoRequestException|ConnectionException) {
+            return;
+        }
+
+        if ($result->status !== 'processing') {
+            $this->resolveMovementStatus($stuck->id, $result->status);
+        }
     }
 }

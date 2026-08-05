@@ -2,6 +2,8 @@
 
 namespace App\Services\Payment\DTOs;
 
+use App\Services\Payment\YabetoFailureMessages;
+
 /** See yabeto.md §6.1 — disbursements are always created in `processing`, never synchronously terminal. */
 readonly class DisbursementResult
 {
@@ -16,7 +18,7 @@ readonly class DisbursementResult
         return new self(
             id: $data['id'] ?? '',
             status: $data['status'] ?? 'processing',
-            failureMessage: $data['failureMessage'] ?? null,
+            failureMessage: YabetoFailureMessages::translate($data['failureMessage'] ?? null),
         );
     }
 

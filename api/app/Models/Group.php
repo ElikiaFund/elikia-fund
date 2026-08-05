@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'uuid', 'name', 'contribution_amount', 'frequency', 'max_members', 'invite_code', 'owner_id',
@@ -75,6 +76,17 @@ class Group extends Model
     public function cycleRecipients(): HasMany
     {
         return $this->hasMany(GroupCycleRecipient::class);
+    }
+
+    public function deletionRequests(): HasMany
+    {
+        return $this->hasMany(GroupDeletionRequest::class);
+    }
+
+    /** The currently-active (not yet resolved) deletion vote, if any — at most one per group. */
+    public function pendingDeletionRequest(): HasOne
+    {
+        return $this->hasOne(GroupDeletionRequest::class)->where('status', 'pending');
     }
 
     public function notifications(): HasMany

@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ContributionInProgressException;
 use App\Exceptions\FeeException;
+use App\Exceptions\GroupDeletionInProgressException;
 use App\Exceptions\TontinePayoutException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Group\CastDeletionVoteRequest;
 use App\Http\Requests\Group\ContributeRequest;
 use App\Http\Requests\Group\CreateGroupRequest;
 use App\Http\Requests\Group\DesignateRecipientRequest;
@@ -22,6 +24,7 @@ use App\Models\User;
 use App\Services\ContributionService;
 use App\Services\FeeService;
 use App\Services\GroupCycleRecipientService;
+use App\Services\GroupDeletionService;
 use App\Services\GroupMembershipNotificationService;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
@@ -47,6 +50,7 @@ class GroupController extends Controller
         private readonly TontinePayoutService $payouts,
         private readonly ContributionService $contributions,
         private readonly FeeService $fees,
+        private readonly GroupDeletionService $deletions,
     ) {}
 
     /**
@@ -80,6 +84,14 @@ class GroupController extends Controller
             'recipient_mode' => $request->validated('recipient_mode') ?? 'join_order',
             'invite_code' => $this->generateInviteCode(),
             'owner_id' => $user->id,
+            // Both columns have a matching DB-level default, but Eloquent's create() never
+            // re-queries the row afterward — leaving these null on the in-memory $group used
+            // a few lines below (withCycleStatus() -> resolveFor(), which persists
+            // $group->round_number onto the first GroupCycleRecipient row). That column has no
+            // default and is NOT NULL, so a null in-memory round_number crashed every group
+            // creation. Setting both explicitly here keeps memory and DB in sync from the start.
+            'round_number' => 1,
+            'round_status' => 'active',
         ]);
 
         $group->members()->attach($user->id, ['status' => 'approved', 'joined_at' => now(), 'approved_at' => now()]);
@@ -435,6 +447,86 @@ class GroupController extends Controller
             'amount' => $result['amount'],
             'round_completed' => $result['round_completed'],
         ]);
+    }
+
+    /**
+     * GET /groups/{group}/deletion-request — the tontine's current pending deletion vote, if any.
+     * Any member can view it (not owner-only — every member needs to see what they're voting on).
+     */
+    public function showDeletionRequest(Request $request, Group $group): JsonResponse
+    {
+        abort_unless($group->members()->where('users.id', $request->user()->id)->exists(), 403);
+
+        return response()->json($group->pendingDeletionRequest()->with('votes.user', 'requester')->first());
+    }
+
+    /**
+     * POST /groups/{group}/deletion-request — owner-only, proposes deleting the tontine. Every
+     * other approved member gets 48h to approve or decline (silence counts as approval — see
+     * GroupDeletionService); a solo-member tontine (just the owner) deletes immediately.
+     */
+    public function requestDeletion(Request $request, Group $group): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        try {
+            $deletionRequest = $this->deletions->requestAndNotify($group, $request->user());
+        } catch (GroupDeletionInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
+
+        return response()->json($deletionRequest->load('votes.user'), 201);
+    }
+
+    /**
+     * POST /groups/{group}/deletion-request/vote — any approved member except the requester (who
+     * already implicitly approved by proposing it) casts approve/decline.
+     */
+    public function castDeletionVote(CastDeletionVoteRequest $request, Group $group): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless($group->members()->where('users.id', $user->id)->exists(), 403);
+
+        $deletionRequest = $group->pendingDeletionRequest()->first();
+
+        if (! $deletionRequest) {
+            return response()->json(['message' => 'Aucune demande de suppression en cours pour cette tontine.'], 404);
+        }
+
+        try {
+            $outcome = $this->deletions->castVoteAndNotify($deletionRequest, $user, $request->validated('decision'));
+        } catch (GroupDeletionInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
+
+        return response()->json([
+            'outcome' => $outcome,
+            'deletion_request' => $outcome === 'approved' ? null : $deletionRequest->fresh()->load('votes.user'),
+        ]);
+    }
+
+    /**
+     * DELETE /groups/{group}/deletion-request — owner-only, withdraws a pending deletion request
+     * before it resolves.
+     */
+    public function cancelDeletionRequest(Request $request, Group $group): JsonResponse
+    {
+        abort_unless($group->owner_id === $request->user()->id, 403);
+
+        $deletionRequest = $group->pendingDeletionRequest()->first();
+
+        if (! $deletionRequest) {
+            return response()->json(['message' => 'Aucune demande de suppression en cours pour cette tontine.'], 404);
+        }
+
+        try {
+            $this->deletions->cancelAndNotify($deletionRequest);
+        } catch (GroupDeletionInProgressException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        }
+
+        return response()->json(['message' => 'Demande de suppression annulée.']);
     }
 
     /**

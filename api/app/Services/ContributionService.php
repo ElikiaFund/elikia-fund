@@ -6,6 +6,9 @@ use App\Exceptions\ContributionInProgressException;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\User;
+use App\Services\Payment\YabetoRequestException;
+use App\Services\Payment\YabetoService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,6 +20,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ContributionService
 {
+    public function __construct(private readonly YabetoService $yabeto) {}
+
     /**
      * @param  array{fee_amount: float, provider_fee_amount: float, platform_fee_amount: float, net_amount: float}  $fee
      *                                                                                                                    FeeService::contribution()'s return shape
@@ -34,6 +39,14 @@ class ContributionService
         ?string $provider = null,
         ?int $recordedBy = null,
     ): Contribution {
+        // Best-effort, outside any lock: if the member's last attempt for this cycle is stuck
+        // `processing` (the webhook never arrived, or the original request hit a transport error
+        // and never got a clean resolution — see VaultTransactionService's equivalent), ask
+        // Yabeto directly before deciding to block a retry on it. Otherwise a genuinely dead
+        // attempt would block every future contribution for this cycle until the scheduled
+        // payments:reconcile-pending sweep eventually catches it (up to 15 minutes later).
+        $this->reconcileStuck($group, $user, $cyclePeriod);
+
         return DB::transaction(function () use ($group, $user, $cyclePeriod, $amount, $fee, $status, $provider, $recordedBy) {
             Group::whereKey($group->id)->lockForUpdate()->firstOrFail();
 
@@ -88,5 +101,41 @@ class ContributionService
 
             return $contribution->fresh();
         });
+    }
+
+    /**
+     * If this member's most recent contribution for this cycle is stuck `processing` and Yabeto
+     * can now tell us what actually happened, resolve it before reserve()'s guard ever sees it —
+     * turning "blocked forever until someone remembers to check" into "self-heals on the very
+     * next attempt". Deliberately outside any lock/transaction (a live HTTP call has no business
+     * holding a row lock); a still-genuinely-processing or unreachable-Yabeto outcome just leaves
+     * the row as-is, and reserve() blocks exactly as before.
+     */
+    private function reconcileStuck(Group $group, User $user, string $cyclePeriod): void
+    {
+        if (! $this->yabeto->isEnabled()) {
+            return;
+        }
+
+        $stuck = Contribution::where('group_id', $group->id)
+            ->where('user_id', $user->id)
+            ->where('cycle_period', $cyclePeriod)
+            ->where('status', 'processing')
+            ->whereNotNull('yabeto_reference')
+            ->first();
+
+        if (! $stuck) {
+            return;
+        }
+
+        try {
+            $result = $this->yabeto->getPaymentIntent($stuck->yabeto_reference);
+        } catch (YabetoRequestException|ConnectionException) {
+            return;
+        }
+
+        if ($result->status !== 'processing') {
+            $this->resolveStatus($stuck->id, $result->status);
+        }
     }
 }
