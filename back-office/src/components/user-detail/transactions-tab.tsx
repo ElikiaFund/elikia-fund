@@ -6,6 +6,7 @@ import type { Transaction } from '@/components/dashboard/types'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { paymentMethodLabel } from '@/lib/payment-methods'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 
@@ -43,6 +44,7 @@ export function TransactionsTab({ transactions }: TransactionsTabProps) {
           <TableRow>
             <TableHead>Type</TableHead>
             <TableHead>Catégorie</TableHead>
+            <TableHead>Paiement</TableHead>
             <TableHead>Montant</TableHead>
             <TableHead className="text-right">Date</TableHead>
           </TableRow>
@@ -50,7 +52,7 @@ export function TransactionsTab({ transactions }: TransactionsTabProps) {
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
+              <TableCell colSpan={5} className="text-center text-muted-foreground">
                 Aucune transaction sur cette période.
               </TableCell>
             </TableRow>
@@ -61,6 +63,7 @@ export function TransactionsTab({ transactions }: TransactionsTabProps) {
                   <Badge variant={t.type === 'income' ? 'default' : 'outline'}>{t.type === 'income' ? 'Revenu' : 'Dépense'}</Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{t.category}</TableCell>
+                <TableCell className="text-muted-foreground">{paymentMethodLabel(t.paymentMethod ?? null)}</TableCell>
                 <TableCell>{currency.format(t.amount)}</TableCell>
                 <TableCell className="text-right text-muted-foreground">{format(t.date, 'd MMM y', { locale: fr })}</TableCell>
               </TableRow>

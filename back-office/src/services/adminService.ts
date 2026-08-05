@@ -51,6 +51,7 @@ export type AdminTransactionBase = {
   type: 'income' | 'expense'
   amount: string
   category: string
+  payment_method: 'cash' | 'mtn_momo' | 'airtel_money' | null
   note: string | null
   product_name: string | null
   quantity: number | null
@@ -109,6 +110,26 @@ export type AdminGroup = AdminGroupBase & {
   owner: AdminUser
 }
 
+export type AdminDeletionVote = {
+  id: number
+  user_id: number
+  decision: 'approved' | 'declined'
+  decided_at: string
+  user: AdminUser
+}
+
+export type AdminGroupDeletionRequest = {
+  id: number
+  group_id: number
+  requested_by: number
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  expires_at: string
+  resolved_at: string | null
+  created_at: string
+  votes?: AdminDeletionVote[]
+  requester: AdminUser
+}
+
 export type AdminGroupDetail = AdminGroupBase & {
   members_count: number
   contributions_sum_amount: string | null
@@ -117,6 +138,7 @@ export type AdminGroupDetail = AdminGroupBase & {
   removed_members: (AdminUser & { pivot: { joined_at: string; removed_at: string } })[]
   contributions: AdminContributionWithUser[]
   cycle_recipients: AdminPayout[]
+  pending_deletion_request: AdminGroupDeletionRequest | null
 }
 
 export type AdminCompanyWithOwner = AdminCompany & { user: AdminUser }

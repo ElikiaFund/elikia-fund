@@ -3,6 +3,7 @@ export type Transaction = {
   user: string
   type: 'income' | 'expense'
   category: string
+  paymentMethod?: string | null
   amount: number
   date: Date
   /** Owning company's department — only set where the caller has it (dashboard.tsx's zone chart); optional everywhere else. */

@@ -12,6 +12,7 @@ import { createSelectColumn } from '@/components/data-table/select-column'
 import { facetedFilterFn } from '@/components/data-table/types'
 import { Badge } from '@/components/ui/badge'
 import { usePageTitle } from '@/hooks/use-page-title'
+import { paymentMethodLabel } from '@/lib/payment-methods'
 import { adminService, type AdminTransaction } from '@/services/adminService'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
@@ -36,6 +37,13 @@ const columns: ColumnDef<AdminTransaction>[] = [
     header: ({ column }) => <DataTableColumnHeader column={column} title="Catégorie" />,
     filterFn: facetedFilterFn,
     meta: { label: 'Catégorie' },
+  },
+  {
+    accessorKey: 'payment_method',
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Paiement" />,
+    cell: ({ row }) => <span className="text-muted-foreground">{paymentMethodLabel(row.original.payment_method)}</span>,
+    filterFn: facetedFilterFn,
+    meta: { label: 'Paiement' },
   },
   {
     id: 'product',
@@ -126,6 +134,15 @@ export function TransactionsPage() {
           ],
         },
         { columnId: 'category', title: 'Catégorie', options: categoryOptions },
+        {
+          columnId: 'payment_method',
+          title: 'Paiement',
+          options: [
+            { label: 'Espèces', value: 'cash' },
+            { label: 'MTN MoMo', value: 'mtn_momo' },
+            { label: 'Airtel Money', value: 'airtel_money' },
+          ],
+        },
       ]}
       bulkActions={(rows, clearSelection) => (
         <BulkDeleteButton

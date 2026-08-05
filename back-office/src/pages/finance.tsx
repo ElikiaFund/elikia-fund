@@ -36,23 +36,32 @@ export function FinancePage() {
   useEffect(() => {
     Promise.all([adminService.listGroups(), adminService.listVaultMovements()])
       .then(([groups, vaultMovements]) => {
+        // fee_amount/provider_fee_amount/platform_fee_amount are computed and persisted once, at
+        // creation time (FeeService), before Yabeto has confirmed anything — a contribution/
+        // movement still 'processing' or that later resolves 'failed' carries the same fee fields
+        // as a real success, but the money was never actually collected. Only count terminal
+        // successes toward revenue. Vault movements have two different success labels depending
+        // on the path taken: 'succeeded' (real Yabeto) and 'completed' (the simulated fallback
+        // used while Yabeto isn't configured/enabled) — contributions only ever use 'succeeded'.
         const contributionEvents: RevenueEvent[] = groups.flatMap((group) =>
-          group.contributions.map((c) => ({
-            id: `contribution-${c.id}`,
-            source: 'contribution' as const,
-            userId: c.user_id,
-            grossAmount: Number(c.amount),
-            feeAmount: Number(c.fee_amount),
-            providerFeeAmount: Number(c.provider_fee_amount),
-            platformFeeAmount: Number(c.platform_fee_amount),
-            date: new Date(c.paid_at),
-          })),
+          group.contributions
+            .filter((c) => c.status === 'succeeded')
+            .map((c) => ({
+              id: `contribution-${c.id}`,
+              source: 'contribution' as const,
+              userId: c.user_id,
+              grossAmount: Number(c.amount),
+              feeAmount: Number(c.fee_amount),
+              providerFeeAmount: Number(c.provider_fee_amount),
+              platformFeeAmount: Number(c.platform_fee_amount),
+              date: new Date(c.paid_at),
+            })),
         )
 
         // tontine_payout movements carry no fee — the fee was already taken at contribution
         // time, a payout just moves already-taxed money into the recipient's vault.
         const vaultEvents: RevenueEvent[] = vaultMovements
-          .filter((m) => m.type === 'deposit' || m.type === 'withdraw')
+          .filter((m) => (m.type === 'deposit' || m.type === 'withdraw') && (m.status === 'succeeded' || m.status === 'completed'))
           .map((m) => ({
             id: `vault-${m.id}`,
             source: m.type === 'deposit' ? ('vault_deposit' as const) : ('vault_withdraw' as const),

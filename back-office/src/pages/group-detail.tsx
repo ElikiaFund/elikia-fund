@@ -177,6 +177,38 @@ export function GroupDetailPage() {
                 </CardHeader>
               </Card>
             </div>
+
+            {group.pending_deletion_request && (
+              <Card className="border-destructive/50">
+                <CardHeader>
+                  <CardTitle className="text-destructive">Demande de suppression en cours</CardTitle>
+                  <CardDescription>
+                    Proposée par {group.pending_deletion_request.requester.name} · expire le{' '}
+                    {format(new Date(group.pending_deletion_request.expires_at), 'd MMM y à HH:mm', { locale: fr })}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {(() => {
+                    const votes = group.pending_deletion_request?.votes ?? []
+                    const approved = votes.filter((v) => v.decision === 'approved').length
+                    const declined = votes.filter((v) => v.decision === 'declined').length
+                    const pending = Math.max(group.members_count - votes.length, 0)
+
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="default">{approved} approuvé(s)</Badge>
+                        <Badge variant="destructive">{declined} refusé(s)</Badge>
+                        <Badge variant="outline">{pending} sans réponse</Badge>
+                      </div>
+                    )
+                  })()}
+                  <p className="text-xs text-muted-foreground">
+                    Sans réponse après le délai de 48h, un membre est compté comme ayant approuvé — la suppression n&apos;est
+                    bloquée que si une majorité de membres refuse explicitement.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="membres">

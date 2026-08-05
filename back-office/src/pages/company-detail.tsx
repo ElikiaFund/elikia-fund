@@ -55,6 +55,7 @@ export function CompanyDetailPage() {
         user: company?.name ?? '',
         type: t.type,
         category: t.category,
+        paymentMethod: t.payment_method,
         amount: Number(t.amount),
         date: new Date(t.occurred_at),
       })),
