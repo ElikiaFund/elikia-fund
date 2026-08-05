@@ -91,7 +91,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user()->load('company', 'role'));
+        return response()->json($request->user()->load('companies', 'role'));
     }
 
     /**
@@ -127,7 +127,7 @@ class AuthController extends Controller
     private function tokenResponse(User $user): JsonResponse
     {
         return response()->json([
-            'user' => $user->load('company'),
+            'user' => $user->load('companies'),
             'token' => $user->createToken('mobile')->plainTextToken,
         ]);
     }

@@ -28,7 +28,7 @@ class ProfileController extends Controller
         $user->phone = $request->validated('phone');
         $user->save();
 
-        return response()->json($user->load('company', 'role'));
+        return response()->json($user->load('companies', 'role'));
     }
 
     public function uploadAvatar(Request $request): JsonResponse
