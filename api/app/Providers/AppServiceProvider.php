@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Company;
 use App\Services\Payment\YabetoConfig;
+use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -24,6 +26,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Resolved by ResolveActiveCompany from the X-Company-Id header — works inside
+        // FormRequests too, since FormRequest extends Request.
+        Request::macro('company', function (): ?Company {
+            /** @var Request $this */
+            return $this->attributes->get('company');
+        });
     }
 }

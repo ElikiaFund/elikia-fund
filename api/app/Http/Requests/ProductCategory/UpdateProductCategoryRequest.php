@@ -27,7 +27,7 @@ class UpdateProductCategoryRequest extends FormRequest
             'name' => [
                 'required', 'string', 'max:255',
                 Rule::unique('product_categories')
-                    ->where(fn ($query) => $query->where('user_id', $this->user()->id))
+                    ->where(fn ($query) => $query->where('company_id', $this->company()->id))
                     ->ignore($this->route('productCategory')),
             ],
             'icon' => ['nullable', 'string', 'max:255'],

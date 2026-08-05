@@ -22,6 +22,8 @@ class Vault extends Model
         return [
             'balance' => 'decimal:2',
             'pin_set_at' => 'datetime',
+            'locked_until' => 'datetime',
+            'lockout_count_reset_at' => 'datetime',
         ];
     }
 
@@ -33,6 +35,11 @@ class Vault extends Model
     public function movements(): HasMany
     {
         return $this->hasMany(VaultMovement::class);
+    }
+
+    public function securityEvents(): HasMany
+    {
+        return $this->hasMany(VaultSecurityEvent::class);
     }
 
     public function hasPinSet(): bool

@@ -24,7 +24,7 @@ class StoreProductCategoryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255', Rule::unique('product_categories')->where(fn ($query) => $query->where('user_id', $this->user()->id))],
+            'name' => ['required', 'string', 'max:255', Rule::unique('product_categories')->where(fn ($query) => $query->where('company_id', $this->company()->id))],
             'icon' => ['nullable', 'string', 'max:255'],
             'color' => ['nullable', 'string', 'max:7'],
         ];

@@ -25,7 +25,6 @@ class ProductStockService
     public function recordInitialStock(Product $product): StockMovement
     {
         return $product->stockMovements()->create([
-            'user_id' => $product->user_id,
             'type' => 'adjustment',
             'quantity_change' => $product->stock_quantity,
             'unit_cost' => $product->cost_price,
@@ -55,7 +54,6 @@ class ProductStockService
             $product->update(['cost_price' => round($newCost, 2)]);
 
             $movement = $product->stockMovements()->create([
-                'user_id' => $product->user_id,
                 'type' => 'restock',
                 'quantity_change' => $quantity,
                 'unit_cost' => $unitCost,
@@ -65,7 +63,7 @@ class ProductStockService
             $transaction = null;
 
             if ($createExpense) {
-                $transaction = $product->user->transactions()->create([
+                $transaction = $product->company->transactions()->create([
                     'uuid' => (string) Str::uuid(),
                     'type' => 'expense',
                     'amount' => round($quantity * $unitCost, 2),
@@ -100,7 +98,6 @@ class ProductStockService
             $product->increment('stock_quantity', $quantityChange);
 
             return $product->stockMovements()->create([
-                'user_id' => $product->user_id,
                 'type' => 'adjustment',
                 'quantity_change' => $quantityChange,
                 'unit_cost' => $product->cost_price,
@@ -124,7 +121,7 @@ class ProductStockService
             return;
         }
 
-        $product = Product::where('id', $transaction->product_id)->where('user_id', $transaction->user_id)->first();
+        $product = Product::where('id', $transaction->product_id)->where('company_id', $transaction->company_id)->first();
 
         if (! $product) {
             return;
@@ -141,7 +138,6 @@ class ProductStockService
                 $product->decrement('stock_quantity', $quantity);
 
                 $product->stockMovements()->create([
-                    'user_id' => $transaction->user_id,
                     'type' => 'sale',
                     'quantity_change' => -$quantity,
                     'unit_cost' => $product->cost_price,

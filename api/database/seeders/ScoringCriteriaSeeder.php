@@ -76,8 +76,12 @@ class ScoringCriteriaSeeder extends Seeder
             [
                 'key' => 'company_profile',
                 'label' => 'Profil entreprise renseigné',
-                'description' => 'L\'utilisateur a configuré une entreprise.',
+                // Vacuous placeholder now that scoring is per-company (calculate() always
+                // receives an existing company) — deactivated so it doesn't pad every score
+                // with a constant. See CreditScoreService::metricFor().
+                'description' => 'Actuellement un espace réservé — désactivé par défaut, ne contribue à aucun score.',
                 'weight' => 10,
+                'is_active' => false,
                 'thresholds' => [
                     ['min' => 0, 'max' => 1, 'points' => 0],
                     ['min' => 1, 'max' => null, 'points' => 100],

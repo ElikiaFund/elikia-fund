@@ -14,11 +14,11 @@ class CashSessionController extends Controller
     public function __construct(private readonly CashSessionService $cashSessions) {}
 
     /**
-     * GET /cash-sessions — the authenticated user's closed sessions, most recent first.
+     * GET /cash-sessions — the active company's closed sessions, most recent first.
      */
     public function index(Request $request): JsonResponse
     {
-        return response()->json($request->user()->cashSessions()->latest('closed_at')->get());
+        return response()->json($request->company()->cashSessions()->latest('closed_at')->get());
     }
 
     /**
@@ -29,15 +29,16 @@ class CashSessionController extends Controller
      */
     public function current(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $last = $this->cashSessions->lastSession($user);
+        $company = $request->company();
+        $last = $this->cashSessions->lastSession($company);
         $now = now();
 
         return response()->json([
             'period_start' => $last?->closed_at,
-            'expected_balance' => $this->cashSessions->expectedBalance($user, $now),
+            'expected_balance' => $this->cashSessions->expectedBalance($company, $now),
             'as_of' => $now,
-            'schedule_label' => $user->cashSessionScheduleLabel(),
+            // Cadence preference is per-user, not per-company — unaffected by the active company.
+            'schedule_label' => $request->user()->cashSessionScheduleLabel(),
         ]);
     }
 
@@ -49,11 +50,11 @@ class CashSessionController extends Controller
      */
     public function store(StoreCashSessionRequest $request): JsonResponse
     {
-        $user = $request->user();
+        $company = $request->company();
         $validated = $request->validated();
 
         $session = CashSession::updateOrCreate(
-            ['uuid' => $validated['uuid'], 'user_id' => $user->id],
+            ['uuid' => $validated['uuid'], 'company_id' => $company->id],
             [
                 'period_start' => $validated['period_start'] ?? null,
                 'closed_at' => $validated['closed_at'],

@@ -10,20 +10,12 @@ class UserController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(User::with('company')->latest()->get());
+        return response()->json(User::withCount('companies')->latest()->get());
     }
 
     public function show(User $user): JsonResponse
     {
-        return response()->json($user->load([
-            'company',
-            'role',
-            'transactions',
-            'vault',
-            'groups',
-            'products.category',
-            'cashSessions' => fn ($query) => $query->latest('closed_at'),
-        ]));
+        return response()->json($user->load(['companies', 'role', 'vault', 'groups']));
     }
 
     public function destroy(User $user): JsonResponse

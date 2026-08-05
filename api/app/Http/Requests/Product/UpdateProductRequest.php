@@ -27,7 +27,7 @@ class UpdateProductRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'category_id' => ['nullable', 'integer', Rule::exists('product_categories', 'id')->where(fn ($query) => $query->where('user_id', $this->user()->id))],
+            'category_id' => ['nullable', 'integer', Rule::exists('product_categories', 'id')->where(fn ($query) => $query->where('company_id', $this->company()->id))],
             'sell_price' => ['nullable', 'numeric', 'min:0'],
             'cost_price' => ['nullable', 'numeric', 'min:0'],
             'tracks_stock' => ['sometimes', 'boolean'],

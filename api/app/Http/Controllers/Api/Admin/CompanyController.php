@@ -15,7 +15,12 @@ class CompanyController extends Controller
 
     public function show(Company $company): JsonResponse
     {
-        return response()->json($company->load('user'));
+        return response()->json($company->load([
+            'user',
+            'transactions' => fn ($query) => $query->latest('occurred_at'),
+            'products.category',
+            'cashSessions' => fn ($query) => $query->latest('closed_at'),
+        ]));
     }
 
     public function destroy(Company $company): JsonResponse

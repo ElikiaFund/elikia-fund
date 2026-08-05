@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\FeeException;
+use App\Exceptions\VaultLockedException;
 use App\Exceptions\VaultTransactionException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Vault\SetVaultPinRequest;
@@ -10,9 +12,12 @@ use App\Http\Requests\Vault\VaultTransactionRequest;
 use App\Http\Requests\Vault\VerifyVaultPinRequest;
 use App\Models\Vault;
 use App\Models\VaultMovement;
+use App\Services\FeeService;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use App\Services\PaymentNotificationService;
+use App\Services\VaultFraudDetectionService;
+use App\Services\VaultSecurityService;
 use App\Services\VaultTransactionService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +42,9 @@ class VaultController extends Controller
         private readonly YabetoService $yabeto,
         private readonly PaymentNotificationService $paymentNotifications,
         private readonly VaultTransactionService $vaultTransactions,
+        private readonly FeeService $fees,
+        private readonly VaultSecurityService $vaultSecurity,
+        private readonly VaultFraudDetectionService $fraudDetection,
     ) {}
 
     /**
@@ -56,6 +64,8 @@ class VaultController extends Controller
         $vault->pin_set_at = now();
         $vault->save();
 
+        $this->vaultSecurity->logActivated($vault);
+
         return response()->json($vault, 201);
     }
 
@@ -70,8 +80,12 @@ class VaultController extends Controller
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
-        if (! Hash::check($request->validated('pin'), $vault->pin_hash)) {
-            return response()->json(['message' => 'Code PIN incorrect.'], 422);
+        try {
+            if (! $this->vaultSecurity->checkPin($vault, $request->validated('pin'))) {
+                return response()->json(['message' => 'Code PIN incorrect.'], 422);
+            }
+        } catch (VaultLockedException $e) {
+            return response()->json(['message' => $e->getMessage()], 423);
         }
 
         return response()->json(['message' => 'Code PIN vérifié.']);
@@ -89,8 +103,12 @@ class VaultController extends Controller
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
-        if (! Hash::check($request->validated('current_pin'), $vault->pin_hash)) {
-            return response()->json(['message' => 'Code PIN actuel incorrect.'], 422);
+        try {
+            if (! $this->vaultSecurity->checkPin($vault, $request->validated('current_pin'))) {
+                return response()->json(['message' => 'Code PIN actuel incorrect.'], 422);
+            }
+        } catch (VaultLockedException $e) {
+            return response()->json(['message' => $e->getMessage()], 423);
         }
 
         $vault->pin_hash = Hash::make($request->validated('pin'));
@@ -161,6 +179,8 @@ class VaultController extends Controller
             $result = $this->vaultTransactions->deposit($vault, $amount, $paymentMethod, $methodLabel, $phone);
         } catch (VaultTransactionException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (FeeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
         if ($result['movement']->status === 'succeeded') {
@@ -189,10 +209,6 @@ class VaultController extends Controller
         $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
 
         if (! $this->yabeto->isEnabled()) {
-            if ($amount > $vault->balance) {
-                return response()->json(['message' => 'Solde insuffisant.'], 422);
-            }
-
             return $this->withdrawSimulated($vault, $amount, $methodLabel);
         }
 
@@ -206,6 +222,8 @@ class VaultController extends Controller
             $result = $this->vaultTransactions->withdraw($vault, $amount, $paymentMethod, $methodLabel, $phone);
         } catch (VaultTransactionException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
+        } catch (FeeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
         if ($result['movement']->status === 'succeeded') {
@@ -219,36 +237,68 @@ class VaultController extends Controller
 
     private function depositSimulated(Vault $vault, float $amount, string $methodLabel): JsonResponse
     {
-        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel) {
-            $vault->increment('balance', $amount);
+        try {
+            $fee = $this->fees->deposit($amount);
+        } catch (FeeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
+            $vault->increment('balance', $fee['net_amount']);
 
             return $vault->movements()->create([
                 'type' => 'deposit',
                 'amount' => $amount,
+                'fee_amount' => $fee['fee_amount'],
+                'provider_fee_amount' => $fee['provider_fee_amount'],
+                'platform_fee_amount' => $fee['platform_fee_amount'],
+                'net_amount' => $fee['net_amount'],
                 'note' => "Dépôt via {$methodLabel} (simulation).",
                 'status' => 'completed',
             ]);
         });
 
         $this->paymentNotifications->depositSucceeded($vault->user, $amount);
+        $this->fraudDetection->evaluate($movement);
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }
 
     private function withdrawSimulated(Vault $vault, float $amount, string $methodLabel): JsonResponse
     {
-        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel) {
-            $vault->decrement('balance', $amount);
+        try {
+            $fee = $this->fees->withdrawal($amount);
+        } catch (FeeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
-            return $vault->movements()->create([
-                'type' => 'withdraw',
-                'amount' => $amount,
-                'note' => "Retrait via {$methodLabel} (simulation).",
-                'status' => 'completed',
-            ]);
-        });
+        try {
+            $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
+                $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
+
+                if ($amount > (float) $locked->balance) {
+                    throw new VaultTransactionException('Solde insuffisant.');
+                }
+
+                $locked->decrement('balance', $amount);
+
+                return $locked->movements()->create([
+                    'type' => 'withdraw',
+                    'amount' => $amount,
+                    'fee_amount' => $fee['fee_amount'],
+                    'provider_fee_amount' => $fee['provider_fee_amount'],
+                    'platform_fee_amount' => $fee['platform_fee_amount'],
+                    'net_amount' => $fee['net_amount'],
+                    'note' => "Retrait via {$methodLabel} (simulation).",
+                    'status' => 'completed',
+                ]);
+            });
+        } catch (VaultTransactionException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
+        $this->fraudDetection->evaluate($movement);
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }
@@ -318,8 +368,12 @@ class VaultController extends Controller
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
-        if (! Hash::check($request->validated('pin'), $vault->pin_hash)) {
-            return response()->json(['message' => 'Code PIN incorrect.'], 422);
+        try {
+            if (! $this->vaultSecurity->checkPin($vault, $request->validated('pin'))) {
+                return response()->json(['message' => 'Code PIN incorrect.'], 422);
+            }
+        } catch (VaultLockedException $e) {
+            return response()->json(['message' => $e->getMessage()], 423);
         }
 
         return $vault;

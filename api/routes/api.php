@@ -16,16 +16,19 @@ use App\Http\Controllers\Api\Admin\StatsController;
 use App\Http\Controllers\Api\Admin\SupportTicketController as AdminSupportTicketController;
 use App\Http\Controllers\Api\Admin\TransactionController as AdminTransactionController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\Admin\VaultMovementController;
+use App\Http\Controllers\Api\Admin\VaultSecurityEventController;
 use App\Http\Controllers\Api\Admin\WaitlistController as AdminWaitlistController;
 use App\Http\Controllers\Api\Admin\YabetoSettingController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CashSessionController;
+use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\ContactMessageController;
-use App\Http\Controllers\Api\CreditScoreController as MeCreditScoreController;
+use App\Http\Controllers\Api\CreditScoreController as CompanyCreditScoreController;
+use App\Http\Controllers\Api\FeeSettingController;
 use App\Http\Controllers\Api\GroupController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\ProductCategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
@@ -71,22 +74,44 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/me/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::post('/me/push-token', [ProfileController::class, 'registerPushToken']);
     Route::put('/me/cash-session-settings', [ProfileController::class, 'updateCashSessionSettings']);
-    Route::get('/me/credit-score', MeCreditScoreController::class);
     Route::get('/me/notifications', [NotificationController::class, 'index']);
     Route::post('/me/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/me/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
     Route::post('/support-tickets', [SupportTicketController::class, 'store']);
 
-    Route::post('/onboarding/company', [OnboardingController::class, 'createCompany']);
+    // No active-company header needed here — listing/creating companies is how you get one.
+    Route::get('/companies', [CompanyController::class, 'index']);
+    Route::post('/companies', [CompanyController::class, 'store']);
 
-    Route::get('/transactions', [TransactionController::class, 'index']);
-    Route::post('/transactions', [TransactionController::class, 'store']);
-    Route::post('/sync', SyncController::class);
+    // Every route below requires X-Company-Id — resolved + ownership-checked by
+    // ResolveActiveCompany, exposed as $request->company(). Isolates each company's cash flow,
+    // catalog, and cash sessions from every other company, including the same user's own others.
+    Route::middleware('resolve-active-company')->group(function () {
+        Route::get('/transactions', [TransactionController::class, 'index']);
+        Route::post('/transactions', [TransactionController::class, 'store']);
+        Route::post('/sync', SyncController::class);
 
-    Route::get('/cash-sessions', [CashSessionController::class, 'index']);
-    Route::get('/cash-sessions/current', [CashSessionController::class, 'current']);
-    Route::post('/cash-sessions/close', [CashSessionController::class, 'store']);
+        Route::get('/cash-sessions', [CashSessionController::class, 'index']);
+        Route::get('/cash-sessions/current', [CashSessionController::class, 'current']);
+        Route::post('/cash-sessions/close', [CashSessionController::class, 'store']);
+
+        Route::get('/products', [ProductController::class, 'index']);
+        Route::post('/products', [ProductController::class, 'store']);
+        Route::get('/products/{product}', [ProductController::class, 'show']);
+        Route::put('/products/{product}', [ProductController::class, 'update']);
+        Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+        Route::post('/products/{product}/restock', [ProductController::class, 'restock']);
+        Route::post('/products/{product}/adjust-stock', [ProductController::class, 'adjustStock']);
+        Route::get('/products/{product}/movements', [ProductController::class, 'movements']);
+
+        Route::get('/product-categories', [ProductCategoryController::class, 'index']);
+        Route::post('/product-categories', [ProductCategoryController::class, 'store']);
+        Route::put('/product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
+        Route::delete('/product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
+
+        Route::get('/companies/{company}/credit-score', CompanyCreditScoreController::class);
+    });
 
     Route::post('/vault/activate', [VaultController::class, 'activate']);
     Route::post('/vault/pin/verify', [VaultController::class, 'verifyPin'])->middleware('throttle:5,1');
@@ -96,6 +121,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/vault/deposit', [VaultController::class, 'deposit'])->middleware('throttle:10,1');
     Route::post('/vault/withdraw', [VaultController::class, 'withdraw'])->middleware('throttle:10,1');
     Route::post('/vault/movements/{movement}/refresh-status', [VaultController::class, 'refreshMovementStatus']);
+
+    Route::get('/settings/fees', [FeeSettingController::class, 'show']);
 
     Route::get('/groups', [GroupController::class, 'index']);
     Route::post('/groups', [GroupController::class, 'store']);
@@ -120,20 +147,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/groups/{group}/payout', [GroupController::class, 'previewPayout']);
     Route::post('/groups/{group}/payout', [GroupController::class, 'payoutCycle'])->middleware('throttle:10,1');
 
-    Route::get('/products', [ProductController::class, 'index']);
-    Route::post('/products', [ProductController::class, 'store']);
-    Route::get('/products/{product}', [ProductController::class, 'show']);
-    Route::put('/products/{product}', [ProductController::class, 'update']);
-    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
-    Route::post('/products/{product}/restock', [ProductController::class, 'restock']);
-    Route::post('/products/{product}/adjust-stock', [ProductController::class, 'adjustStock']);
-    Route::get('/products/{product}/movements', [ProductController::class, 'movements']);
-
-    Route::get('/product-categories', [ProductCategoryController::class, 'index']);
-    Route::post('/product-categories', [ProductCategoryController::class, 'store']);
-    Route::put('/product-categories/{productCategory}', [ProductCategoryController::class, 'update']);
-    Route::delete('/product-categories/{productCategory}', [ProductCategoryController::class, 'destroy']);
-
     Route::middleware('admin')->prefix('admin')->group(function () {
         Route::get('/stats', StatsController::class);
         Route::post('/verify-password', [AdminAuthController::class, 'verifyPassword'])->middleware('throttle:5,1');
@@ -141,7 +154,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{user}', [AdminUserController::class, 'show']);
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy'])->middleware('permission:users.delete');
-        Route::get('/users/{user}/credit-score', CreditScoreController::class);
+        Route::get('/users/{user}/vault-security-events', VaultSecurityEventController::class);
+        Route::get('/vault-movements', [VaultMovementController::class, 'index']);
 
         Route::get('/transactions', [AdminTransactionController::class, 'index']);
         Route::delete('/transactions/{transaction}', [AdminTransactionController::class, 'destroy'])->middleware('permission:transactions.delete');
@@ -152,6 +166,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/companies', [AdminCompanyController::class, 'index']);
         Route::get('/companies/{company}', [AdminCompanyController::class, 'show']);
+        Route::get('/companies/{company}/credit-score', CreditScoreController::class);
         Route::delete('/companies/{company}', [AdminCompanyController::class, 'destroy'])->middleware('permission:companies.delete');
 
         Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
@@ -163,7 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/contact-messages', [AdminContactMessageController::class, 'index']);
         Route::delete('/contact-messages/{contactMessage}', [AdminContactMessageController::class, 'destroy'])->middleware('permission:contact_messages.delete');
 
-        // Read access to a user's products/cash sessions is bundled into GET /admin/users/{user}
+        // Read access to a company's products/cash sessions is bundled into GET /admin/companies/{company}
         // (the "Produits"/"Sessions de caisse" tabs) — these two routes only add delete.
         Route::delete('/products/{product}', [AdminProductController::class, 'destroy'])->middleware('permission:products.delete');
         Route::delete('/cash-sessions/{cashSession}', [AdminCashSessionController::class, 'destroy'])->middleware('permission:cash_sessions.delete');

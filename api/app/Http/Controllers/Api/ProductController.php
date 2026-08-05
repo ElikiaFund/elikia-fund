@@ -18,11 +18,11 @@ class ProductController extends Controller
     public function __construct(private readonly ProductStockService $stock) {}
 
     /**
-     * GET /products — the authenticated user's product/service catalog.
+     * GET /products — the active company's product/service catalog.
      */
     public function index(Request $request): JsonResponse
     {
-        return response()->json($request->user()->products()->with('category')->latest()->get());
+        return response()->json($request->company()->products()->with('category')->latest()->get());
     }
 
     /**
@@ -30,7 +30,7 @@ class ProductController extends Controller
      */
     public function show(Request $request, Product $product): JsonResponse
     {
-        abort_unless($product->user_id === $request->user()->id, 403);
+        abort_unless($product->company_id === $request->company()->id, 403);
 
         return response()->json($product->load('category'));
     }
@@ -40,7 +40,7 @@ class ProductController extends Controller
      */
     public function store(StoreProductRequest $request): JsonResponse
     {
-        $product = $request->user()->products()->create($request->validated());
+        $product = $request->company()->products()->create($request->validated());
 
         if ($product->tracks_stock && $product->stock_quantity > 0) {
             $this->stock->recordInitialStock($product);
@@ -56,7 +56,7 @@ class ProductController extends Controller
      */
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
-        abort_unless($product->user_id === $request->user()->id, 403);
+        abort_unless($product->company_id === $request->company()->id, 403);
 
         $product->update($request->validated());
 
@@ -68,7 +68,7 @@ class ProductController extends Controller
      */
     public function destroy(Request $request, Product $product): JsonResponse
     {
-        abort_unless($product->user_id === $request->user()->id, 403);
+        abort_unless($product->company_id === $request->company()->id, 403);
 
         $product->delete();
 
@@ -81,7 +81,7 @@ class ProductController extends Controller
      */
     public function restock(RestockProductRequest $request, Product $product): JsonResponse
     {
-        abort_unless($product->user_id === $request->user()->id, 403);
+        abort_unless($product->company_id === $request->company()->id, 403);
 
         if (! $product->tracks_stock) {
             return response()->json(['message' => 'Ce produit ne suit pas de stock.'], 422);
@@ -103,7 +103,7 @@ class ProductController extends Controller
      */
     public function adjustStock(AdjustStockRequest $request, Product $product): JsonResponse
     {
-        abort_unless($product->user_id === $request->user()->id, 403);
+        abort_unless($product->company_id === $request->company()->id, 403);
 
         if (! $product->tracks_stock) {
             return response()->json(['message' => 'Ce produit ne suit pas de stock.'], 422);
@@ -123,7 +123,7 @@ class ProductController extends Controller
      */
     public function movements(Request $request, Product $product): JsonResponse
     {
-        abort_unless($product->user_id === $request->user()->id, 403);
+        abort_unless($product->company_id === $request->company()->id, 403);
 
         return response()->json($product->stockMovements()->latest()->get());
     }

@@ -12,7 +12,7 @@ class SyncController extends Controller
     public function __construct(private readonly ProductStockService $productStock) {}
 
     /**
-     * POST /sync — batch upsert for the mobile sync_queue. Upserts by (user_id, uuid) so a
+     * POST /sync — batch upsert for the mobile sync_queue. Upserts by (company_id, uuid) so a
      * retried batch (e.g. the response never reached the device) is idempotent rather than
      * duplicating rows. Conflict rule is deliberately dumb per the sprint plan: last write for a
      * given uuid wins — cash flow entries are personal and mobile has no edit flow, so real
@@ -20,11 +20,11 @@ class SyncController extends Controller
      */
     public function __invoke(SyncTransactionsRequest $request): JsonResponse
     {
-        $user = $request->user();
+        $company = $request->company();
         $accepted = [];
 
         foreach ($request->validated('transactions') as $entry) {
-            $transaction = $user->transactions()->updateOrCreate(
+            $transaction = $company->transactions()->updateOrCreate(
                 ['uuid' => $entry['uuid']],
                 collect($entry)->except('uuid')->all(),
             );

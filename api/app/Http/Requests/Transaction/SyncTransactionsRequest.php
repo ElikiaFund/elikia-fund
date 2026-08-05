@@ -32,7 +32,7 @@ class SyncTransactionsRequest extends FormRequest
             'transactions.*.note' => ['nullable', 'string'],
             'transactions.*.product_name' => ['nullable', 'string', 'max:255'],
             'transactions.*.quantity' => ['nullable', 'integer', 'min:1'],
-            'transactions.*.product_id' => ['nullable', 'integer', Rule::exists('products', 'id')->where(fn ($query) => $query->where('user_id', $this->user()->id))],
+            'transactions.*.product_id' => ['nullable', 'integer', Rule::exists('products', 'id')->where(fn ($query) => $query->where('company_id', $this->company()->id))],
             'transactions.*.occurred_at' => ['required', 'date'],
         ];
     }

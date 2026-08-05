@@ -36,6 +36,16 @@ class UpdateSettingsRequest extends FormRequest
             'contact.whatsapp' => ['nullable', 'string', 'max:50'],
             'contact.address' => ['nullable', 'string', 'max:255'],
             'contact.hours' => ['nullable', 'string', 'max:255'],
+
+            'fees' => ['sometimes', 'array'],
+            'fees.contribution_yabeto_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
+            'fees.contribution_elikia_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
+            'fees.deposit_yabeto_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
+            'fees.deposit_elikia_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
+            'fees.deposit_yabeto_fixed' => ['required_with:fees', 'numeric', 'min:0'],
+            'fees.deposit_elikia_fixed' => ['required_with:fees', 'numeric', 'min:0'],
+            'fees.withdrawal_yabeto_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
+            'fees.withdrawal_elikia_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
         ];
     }
 }

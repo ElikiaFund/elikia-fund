@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\FeeException;
 use App\Exceptions\VaultTransactionException;
 use App\Models\Vault;
 use App\Models\VaultMovement;
@@ -25,16 +26,23 @@ use Illuminate\Support\Facades\Log;
  */
 class VaultTransactionService
 {
-    public function __construct(private readonly YabetoService $yabeto) {}
+    public function __construct(
+        private readonly YabetoService $yabeto,
+        private readonly FeeService $fees,
+        private readonly VaultFraudDetectionService $fraudDetection,
+    ) {}
 
     /**
      * @return array{vault: Vault, movement: VaultMovement, message?: string}
      *
      * @throws VaultTransactionException if a deposit is already processing for this vault
+     * @throws FeeException if the requested amount doesn't net anything after fees
      */
     public function deposit(Vault $vault, float $amount, string $paymentMethod, string $methodLabel, string $phone): array
     {
-        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel) {
+        $fee = $this->fees->deposit($amount);
+
+        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->movements()->where('type', 'deposit')->where('status', 'processing')->exists()) {
@@ -44,6 +52,10 @@ class VaultTransactionService
             return $locked->movements()->create([
                 'type' => 'deposit',
                 'amount' => $amount,
+                'fee_amount' => $fee['fee_amount'],
+                'provider_fee_amount' => $fee['provider_fee_amount'],
+                'platform_fee_amount' => $fee['platform_fee_amount'],
+                'net_amount' => $fee['net_amount'],
                 'note' => "Dépôt via {$methodLabel}.",
                 'provider' => 'yabeto',
                 'status' => 'processing',
@@ -94,10 +106,13 @@ class VaultTransactionService
      *
      * @throws VaultTransactionException if a withdrawal is already processing, or the balance
      *                                   (re-checked under lock, not the possibly-stale value the caller read) is insufficient
+     * @throws FeeException if the requested amount doesn't leave anything to disburse after fees
      */
     public function withdraw(Vault $vault, float $amount, string $paymentMethod, string $methodLabel, string $phone): array
     {
-        $movement = DB::transaction(function () use ($vault, $amount, $methodLabel) {
+        $fee = $this->fees->withdrawal($amount);
+
+        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->movements()->where('type', 'withdraw')->where('status', 'processing')->exists()) {
@@ -111,12 +126,18 @@ class VaultTransactionService
             // Reserve the funds immediately, before Yabeto is even called — refunded by
             // resolveMovementStatus() if the payout ultimately fails. The previous code's comment
             // claimed this already happened; the code itself only decremented after a successful
-            // Disbursement response, which this fixes.
+            // Disbursement response, which this fixes. The vault is debited the full gross amount
+            // (what the user asked to withdraw) — the fee is the gap between that and what Yabeto
+            // actually pays out below, not an extra amount taken on top of the withdrawal.
             $locked->decrement('balance', $amount);
 
             return $locked->movements()->create([
                 'type' => 'withdraw',
                 'amount' => $amount,
+                'fee_amount' => $fee['fee_amount'],
+                'provider_fee_amount' => $fee['provider_fee_amount'],
+                'platform_fee_amount' => $fee['platform_fee_amount'],
+                'net_amount' => $fee['net_amount'],
                 'note' => "Retrait via {$methodLabel}.",
                 'provider' => 'yabeto',
                 'status' => 'processing',
@@ -124,8 +145,10 @@ class VaultTransactionService
         });
 
         try {
+            // Disbursement pays out the NET amount — the vault above was already debited the full
+            // gross amount the user asked to withdraw; the difference is the fee.
             $result = $this->yabeto->createDisbursement(
-                (int) round($amount),
+                (int) round($fee['net_amount']),
                 $phone,
                 YabetoService::OPERATOR_MAP[$paymentMethod],
                 $vault->user->name,
@@ -165,7 +188,7 @@ class VaultTransactionService
      */
     public function resolveMovementStatus(int $movementId, string $newStatus): ?VaultMovement
     {
-        return DB::transaction(function () use ($movementId, $newStatus) {
+        $movement = DB::transaction(function () use ($movementId, $newStatus) {
             /** @var VaultMovement|null $movement */
             $movement = VaultMovement::where('id', $movementId)->lockForUpdate()->first();
 
@@ -177,8 +200,11 @@ class VaultTransactionService
 
             if ($vault) {
                 if ($movement->type === 'deposit' && $newStatus === 'succeeded') {
-                    $vault->increment('balance', $movement->amount);
+                    // Credit only the post-fee amount — the gap between gross (what Yabeto
+                    // collected) and net (what actually lands in the vault) is the fee.
+                    $vault->increment('balance', $movement->net_amount);
                 } elseif ($movement->type === 'withdraw' && $newStatus === 'failed') {
+                    // Refund the full gross amount that was reserved at withdraw() time.
                     $vault->increment('balance', $movement->amount);
                 }
             }
@@ -187,5 +213,13 @@ class VaultTransactionService
 
             return $movement->fresh();
         });
+
+        // Outside the transaction — evaluation must not hold the row lock, and a fraud-logging
+        // failure must never roll back a legitimate balance mutation.
+        if ($movement && $newStatus === 'succeeded') {
+            $this->fraudDetection->evaluate($movement);
+        }
+
+        return $movement;
     }
 }

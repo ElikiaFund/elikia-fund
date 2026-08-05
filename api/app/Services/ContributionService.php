@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\DB;
 class ContributionService
 {
     /**
+     * @param  array{fee_amount: float, provider_fee_amount: float, platform_fee_amount: float, net_amount: float}  $fee
+     *                                                                                                                    FeeService::contribution()'s return shape
+     *
      * @throws ContributionInProgressException if a succeeded/processing contribution already
      *                                         exists for this (group, user, cycle_period) — a prior failed attempt never blocks a retry
      */
@@ -26,12 +29,12 @@ class ContributionService
         User $user,
         string $cyclePeriod,
         float $amount,
-        float $feeAmount,
+        array $fee,
         string $status,
         ?string $provider = null,
         ?int $recordedBy = null,
     ): Contribution {
-        return DB::transaction(function () use ($group, $user, $cyclePeriod, $amount, $feeAmount, $status, $provider, $recordedBy) {
+        return DB::transaction(function () use ($group, $user, $cyclePeriod, $amount, $fee, $status, $provider, $recordedBy) {
             Group::whereKey($group->id)->lockForUpdate()->firstOrFail();
 
             $existing = Contribution::where('group_id', $group->id)
@@ -52,8 +55,10 @@ class ContributionService
                 'group_id' => $group->id,
                 'user_id' => $user->id,
                 'amount' => $amount,
-                'fee_amount' => $feeAmount,
-                'net_amount' => $amount - $feeAmount,
+                'fee_amount' => $fee['fee_amount'],
+                'provider_fee_amount' => $fee['provider_fee_amount'],
+                'platform_fee_amount' => $fee['platform_fee_amount'],
+                'net_amount' => $fee['net_amount'],
                 'cycle_period' => $cyclePeriod,
                 'paid_at' => now(),
                 'provider' => $provider,

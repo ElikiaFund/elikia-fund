@@ -31,7 +31,7 @@ class StoreTransactionRequest extends FormRequest
             'note' => ['nullable', 'string'],
             'product_name' => ['nullable', 'string', 'max:255'],
             'quantity' => ['nullable', 'integer', 'min:1'],
-            'product_id' => ['nullable', 'integer', Rule::exists('products', 'id')->where(fn ($query) => $query->where('user_id', $this->user()->id))],
+            'product_id' => ['nullable', 'integer', Rule::exists('products', 'id')->where(fn ($query) => $query->where('company_id', $this->company()->id))],
             'occurred_at' => ['required', 'date'],
         ];
     }

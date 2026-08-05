@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\Company;
 use App\Services\CreditScoreService;
 use Illuminate\Http\JsonResponse;
 
 class CreditScoreController extends Controller
 {
     /**
-     * GET /admin/users/{user}/credit-score
+     * GET /admin/companies/{company}/credit-score
      */
-    public function __invoke(User $user, CreditScoreService $creditScoreService): JsonResponse
+    public function __invoke(Company $company, CreditScoreService $creditScoreService): JsonResponse
     {
-        return response()->json($creditScoreService->calculate($user));
+        return response()->json($creditScoreService->calculate($company));
     }
 }

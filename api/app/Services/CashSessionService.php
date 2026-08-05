@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\CashSession;
-use App\Models\User;
+use App\Models\Company;
 use Carbon\Carbon;
 
 /**
@@ -15,17 +15,17 @@ use Carbon\Carbon;
  */
 class CashSessionService
 {
-    public function lastSession(User $user): ?CashSession
+    public function lastSession(Company $company): ?CashSession
     {
-        return $user->cashSessions()->latest('closed_at')->first();
+        return $company->cashSessions()->latest('closed_at')->first();
     }
 
-    public function expectedBalance(User $user, ?Carbon $asOf = null): float
+    public function expectedBalance(Company $company, ?Carbon $asOf = null): float
     {
         $asOf ??= now();
-        $last = $this->lastSession($user);
+        $last = $this->lastSession($company);
 
-        $sum = $user->transactions()
+        $sum = $company->transactions()
             ->when($last, fn ($query) => $query->where('occurred_at', '>', $last->closed_at))
             ->where('occurred_at', '<=', $asOf)
             ->get()

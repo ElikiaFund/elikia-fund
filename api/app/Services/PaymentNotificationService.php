@@ -42,6 +42,16 @@ class PaymentNotificationService
         $this->notify($user, 'vault_withdraw_failed', 'Retrait échoué', $reason ?? "Votre retrait de {$this->money($amount)} n'a pas pu être effectué.");
     }
 
+    public function vaultLocked(User $user, int $minutes): void
+    {
+        $this->notify(
+            $user,
+            'vault_locked',
+            'Coffre verrouillé',
+            "Votre coffre a été verrouillé pendant {$minutes} minute(s) suite à plusieurs codes PIN incorrects.",
+        );
+    }
+
     public function contributionSucceeded(User $user, Group $group, float $amount): void
     {
         $this->notify(

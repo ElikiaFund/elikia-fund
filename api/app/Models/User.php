@@ -62,14 +62,9 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
-    public function company(): HasOne
+    public function companies(): HasMany
     {
-        return $this->hasOne(Company::class);
-    }
-
-    public function transactions(): HasMany
-    {
-        return $this->hasMany(Transaction::class);
+        return $this->hasMany(Company::class);
     }
 
     public function vault(): HasOne
@@ -94,24 +89,9 @@ class User extends Authenticatable
         return $this->hasMany(Contribution::class);
     }
 
-    public function products(): HasMany
-    {
-        return $this->hasMany(Product::class);
-    }
-
-    public function productCategories(): HasMany
-    {
-        return $this->hasMany(ProductCategory::class);
-    }
-
     public function notifications(): HasMany
     {
         return $this->hasMany(Notification::class)->latest();
-    }
-
-    public function cashSessions(): HasMany
-    {
-        return $this->hasMany(CashSession::class);
     }
 
     public function supportTickets(): HasMany

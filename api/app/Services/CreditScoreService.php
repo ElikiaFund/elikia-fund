@@ -2,20 +2,23 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\ScoringCriterion;
 use App\Models\Setting;
-use App\Models\User;
 
 class CreditScoreService
 {
     /**
-     * Compute a user's credit/loan-admissibility score from the active, admin-configured
+     * Compute a company's credit/loan-admissibility score from the active, admin-configured
      * scoring criteria. Weights are normalized across active criteria, so admins don't need
-     * to keep raw weights summing to exactly 100.
+     * to keep raw weights summing to exactly 100. Scored per-company, not per-user: a merchant
+     * running two distinct businesses gets two distinct financial identities, not one blended
+     * one — transaction/product-derived metrics come from the company itself, while
+     * savings/tontine metrics come from its owner (see metricFor()).
      *
      * @return array{score: int, verdict: string, breakdown: array<int, array<string, mixed>>}
      */
-    public function calculate(User $user): array
+    public function calculate(Company $company): array
     {
         $criteria = ScoringCriterion::where('is_active', true)->get();
         $totalWeight = $criteria->sum('weight');
@@ -24,7 +27,7 @@ class CreditScoreService
         $score = 0.0;
 
         foreach ($criteria as $criterion) {
-            $value = $this->metricFor($criterion->key, $user);
+            $value = $this->metricFor($criterion->key, $company);
             $points = $this->pointsFor($criterion->thresholds, $value);
             $normalizedWeight = $totalWeight > 0 ? $criterion->weight / $totalWeight : 0;
             $weightedPoints = $points * $normalizedWeight;
@@ -59,23 +62,29 @@ class CreditScoreService
         ];
     }
 
-    private function metricFor(string $key, User $user): float
+    private function metricFor(string $key, Company $company): float
     {
         return match ($key) {
-            'account_age' => (float) $user->created_at->diffInMonths(now()),
-            'transaction_regularity' => (float) $user->transactions()->where('occurred_at', '>=', now()->subDays(90))->count(),
-            'savings_behavior' => (float) ($user->vault?->balance ?? 0),
-            'income_expense_ratio' => $this->incomeExpenseRatio($user),
-            'tontine_participation' => (float) $user->contributions()->where('status', 'succeeded')->count(),
-            'company_profile' => $user->company()->exists() ? 1.0 : 0.0,
+            // Company tenure, not the owner's account age — a second/third company genuinely
+            // has no track record yet, which is the point of scoring per-company.
+            'account_age' => (float) $company->created_at->diffInMonths(now()),
+            'transaction_regularity' => (float) $company->transactions()->where('occurred_at', '>=', now()->subDays(90))->count(),
+            'savings_behavior' => (float) ($company->user->vault?->balance ?? 0),
+            'income_expense_ratio' => $this->incomeExpenseRatio($company),
+            'tontine_participation' => (float) $company->user->contributions()->where('status', 'succeeded')->count(),
+            // Vacuous now that calculate() always receives an existing company (used to be a
+            // presence check: "does this user have a company at all?"). Left computing a
+            // constant 1.0 rather than repurposed into a new metric — see ScoringCriteriaSeeder,
+            // where this criterion is deactivated so it doesn't pad every score for nothing.
+            'company_profile' => 1.0,
             default => 0.0,
         };
     }
 
-    private function incomeExpenseRatio(User $user): float
+    private function incomeExpenseRatio(Company $company): float
     {
-        $income = (float) $user->transactions()->where('type', 'income')->sum('amount');
-        $expense = (float) $user->transactions()->where('type', 'expense')->sum('amount');
+        $income = (float) $company->transactions()->where('type', 'income')->sum('amount');
+        $expense = (float) $company->transactions()->where('type', 'expense')->sum('amount');
 
         if ($expense <= 0) {
             return $income > 0 ? 300.0 : 0.0;

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Contribution;
 use App\Models\Group;
@@ -54,27 +55,42 @@ class DatabaseSeeder extends Seeder
             ->create()
             ->each(function (User $user) {
                 if (fake()->boolean(70)) {
-                    $company = Company::factory()->create(['user_id' => $user->id]);
-                    $user->forceFill(['onboarding_completed_at' => now()])->save();
+                    // Most qualifying users get exactly 1 company; a minority get 2-3, so the
+                    // mobile switcher has real multi-company users to demo against.
+                    $companyCount = fake()->randomElement([1, 1, 1, 1, 1, 1, 1, 2, 2, 3]);
 
-                    if (array_key_exists($company->category, ProductFactory::CATALOG)) {
-                        ProductCategory::seedDefaultsFor($company);
-                        $tracksStock = $company->category !== 'services';
+                    for ($i = 0; $i < $companyCount; $i++) {
+                        $company = Company::factory()->create(['user_id' => $user->id]);
 
-                        foreach (ProductFactory::CATALOG[$company->category] as $item) {
-                            $categoryId = ProductCategory::where('user_id', $user->id)->where('name', $item['category'])->value('id');
+                        if (array_key_exists($company->category, ProductFactory::CATALOG)) {
+                            ProductCategory::seedDefaultsFor($company);
+                            $tracksStock = $company->category !== 'services';
 
-                            Product::factory()->create([
-                                'user_id' => $user->id,
-                                'name' => $item['name'],
-                                'category_id' => $categoryId,
-                                'sell_price' => $item['unit_price'],
-                                'cost_price' => round($item['unit_price'] * fake()->randomFloat(2, 0.5, 0.8), 2),
-                                'tracks_stock' => $tracksStock,
-                                'stock_quantity' => $tracksStock ? fake()->numberBetween(0, 50) : 0,
-                            ]);
+                            foreach (ProductFactory::CATALOG[$company->category] as $item) {
+                                $categoryId = ProductCategory::where('company_id', $company->id)->where('name', $item['category'])->value('id');
+
+                                Product::factory()->create([
+                                    'company_id' => $company->id,
+                                    'name' => $item['name'],
+                                    'category_id' => $categoryId,
+                                    'sell_price' => $item['unit_price'],
+                                    'cost_price' => round($item['unit_price'] * fake()->randomFloat(2, 0.5, 0.8), 2),
+                                    'tracks_stock' => $tracksStock,
+                                    'stock_quantity' => $tracksStock ? fake()->numberBetween(0, 50) : 0,
+                                ]);
+                            }
                         }
+
+                        Transaction::factory()
+                            ->count(fake()->numberBetween(5, 15))
+                            ->create(['company_id' => $company->id]);
+
+                        CashSession::factory()
+                            ->count(fake()->numberBetween(0, 4))
+                            ->create(['company_id' => $company->id]);
                     }
+
+                    $user->forceFill(['onboarding_completed_at' => now()])->save();
                 }
 
                 $vault = Vault::factory()->make(['user_id' => $user->id]);
@@ -85,10 +101,6 @@ class DatabaseSeeder extends Seeder
                 }
 
                 $vault->save();
-
-                Transaction::factory()
-                    ->count(fake()->numberBetween(5, 15))
-                    ->create(['user_id' => $user->id]);
             });
 
         $groups = Group::factory()
@@ -106,12 +118,19 @@ class DatabaseSeeder extends Seeder
                 ]);
 
                 if (fake()->boolean(70)) {
-                    Contribution::factory()
-                        ->count(fake()->numberBetween(1, 4))
-                        ->create([
+                    // Distinct calendar months, not independent random draws — the factory's
+                    // own cycle_period (derived from a random paid_at within the last 90 days)
+                    // can otherwise collide across rows for the same (group, member) pair and
+                    // violate contributions' active_dedupe_key unique constraint.
+                    collect(range(0, fake()->numberBetween(0, 3)))
+                        ->map(fn (int $monthsAgo) => now()->subMonthsNoOverflow($monthsAgo))
+                        ->unique(fn ($date) => $date->format('Y-m'))
+                        ->each(fn ($date) => Contribution::factory()->create([
                             'group_id' => $group->id,
                             'user_id' => $member->id,
-                        ]);
+                            'cycle_period' => $date->format('Y-m'),
+                            'paid_at' => $date,
+                        ]));
                 }
             }
         }

@@ -2,13 +2,18 @@
 
 namespace App\Models;
 
+use Database\Factories\CashSessionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['uuid', 'user_id', 'period_start', 'closed_at', 'expected_balance', 'counted_balance', 'variance', 'notes'])]
+#[Fillable(['uuid', 'company_id', 'period_start', 'closed_at', 'expected_balance', 'counted_balance', 'variance', 'notes'])]
 class CashSession extends Model
 {
+    /** @use HasFactory<CashSessionFactory> */
+    use HasFactory;
+
     protected function casts(): array
     {
         return [
@@ -20,8 +25,8 @@ class CashSession extends Model
         ];
     }
 
-    public function user(): BelongsTo
+    public function company(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Company::class);
     }
 }

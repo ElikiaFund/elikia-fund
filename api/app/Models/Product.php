@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'name', 'category_id', 'sell_price', 'cost_price', 'tracks_stock', 'stock_quantity', 'low_stock_threshold'])]
+#[Fillable(['company_id', 'name', 'category_id', 'sell_price', 'cost_price', 'tracks_stock', 'stock_quantity', 'low_stock_threshold'])]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
@@ -24,9 +24,9 @@ class Product extends Model
         ];
     }
 
-    public function user(): BelongsTo
+    public function company(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Company::class);
     }
 
     public function category(): BelongsTo

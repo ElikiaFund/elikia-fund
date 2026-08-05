@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ContributionInProgressException;
+use App\Exceptions\FeeException;
 use App\Exceptions\TontinePayoutException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Group\ContributeRequest;
@@ -19,6 +20,7 @@ use App\Models\Group;
 use App\Models\GroupCycleRecipient;
 use App\Models\User;
 use App\Services\ContributionService;
+use App\Services\FeeService;
 use App\Services\GroupCycleRecipientService;
 use App\Services\GroupMembershipNotificationService;
 use App\Services\Payment\YabetoRequestException;
@@ -37,11 +39,6 @@ use Illuminate\Support\Str;
 
 class GroupController extends Controller
 {
-    /**
-     * Percentage withheld from every contribution as a tontine management fee.
-     */
-    private const MANAGEMENT_FEE_RATE = 0.03;
-
     public function __construct(
         private readonly YabetoService $yabeto,
         private readonly PaymentNotificationService $paymentNotifications,
@@ -49,6 +46,7 @@ class GroupController extends Controller
         private readonly GroupCycleRecipientService $cycleRecipients,
         private readonly TontinePayoutService $payouts,
         private readonly ContributionService $contributions,
+        private readonly FeeService $fees,
     ) {}
 
     /**
@@ -456,11 +454,16 @@ class GroupController extends Controller
 
         $cyclePeriod = $group->currentCyclePeriod();
         $amount = (float) $group->contribution_amount;
-        $feeAmount = round($amount * self::MANAGEMENT_FEE_RATE, 2);
+
+        try {
+            $fee = $this->fees->contribution($amount);
+        } catch (FeeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         if (! $this->yabeto->isEnabled()) {
             try {
-                $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $feeAmount, 'succeeded');
+                $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $fee, 'succeeded');
             } catch (ContributionInProgressException $e) {
                 return response()->json(['message' => $e->getMessage()], 409);
             }
@@ -479,7 +482,7 @@ class GroupController extends Controller
         }
 
         try {
-            $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $feeAmount, 'processing', 'yabeto');
+            $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $fee, 'processing', 'yabeto');
         } catch (ContributionInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }
@@ -599,10 +602,15 @@ class GroupController extends Controller
         }
 
         $amount = (float) $group->contribution_amount;
-        $feeAmount = round($amount * self::MANAGEMENT_FEE_RATE, 2);
 
         try {
-            $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $feeAmount, 'succeeded', 'manual', $request->user()->id);
+            $fee = $this->fees->contribution($amount);
+        } catch (FeeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        try {
+            $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $fee, 'succeeded', 'manual', $request->user()->id);
         } catch (ContributionInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }

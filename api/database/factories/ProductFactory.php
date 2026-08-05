@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
 use App\Models\Product;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -45,7 +45,7 @@ class ProductFactory extends Factory
         $item = fake()->randomElement(self::CATALOG['commerce']);
 
         return [
-            'user_id' => User::factory(),
+            'company_id' => Company::factory(),
             'name' => $item['name'],
             'sell_price' => $item['unit_price'],
             'cost_price' => round($item['unit_price'] * fake()->randomFloat(2, 0.5, 0.8), 2),

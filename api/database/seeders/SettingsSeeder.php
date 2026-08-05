@@ -29,5 +29,23 @@ class SettingsSeeder extends Seeder
             ['key' => 'contact'],
             ['value' => ['phone' => null, 'whatsapp' => null, 'address' => null, 'hours' => null]]
         );
+
+        // Yabeto's tracked real cost and Elikia Fund's own kept margin, stored as independent
+        // numbers rather than one total with a fixed split — either can change on its own (Yabeto
+        // renegotiating their rate, or Elikia adjusting margin) without touching the other. See
+        // FeeService for how these combine into fee_amount/provider_fee_amount/platform_fee_amount.
+        Setting::updateOrCreate(
+            ['key' => 'fees'],
+            ['value' => [
+                'contribution_yabeto_percent' => 3.5,
+                'contribution_elikia_percent' => 1,
+                'deposit_yabeto_percent' => 3.5,
+                'deposit_elikia_percent' => 0.5,
+                'deposit_yabeto_fixed' => 25,
+                'deposit_elikia_fixed' => 75,
+                'withdrawal_yabeto_percent' => 2,
+                'withdrawal_elikia_percent' => 0.5,
+            ]]
+        );
     }
 }

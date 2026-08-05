@@ -15,13 +15,13 @@ class TransactionController extends Controller
     public function __construct(private readonly ProductStockService $productStock) {}
 
     /**
-     * GET /transactions — the authenticated user's cash flow entries. Mobile reads from its
+     * GET /transactions — the active company's cash flow entries. Mobile reads from its
      * local SQLite copy day-to-day (offline-first); this endpoint exists for reinstall/multi-device
      * recovery and is what the sync engine reconciles against.
      */
     public function index(Request $request): JsonResponse
     {
-        return response()->json($request->user()->transactions()->latest('occurred_at')->get());
+        return response()->json($request->company()->transactions()->latest('occurred_at')->get());
     }
 
     /**
@@ -37,7 +37,7 @@ class TransactionController extends Controller
     {
         try {
             $transaction = DB::transaction(function () use ($request) {
-                $transaction = $request->user()->transactions()->create($request->validated());
+                $transaction = $request->company()->transactions()->create($request->validated());
                 $this->productStock->applyProductLink($transaction, enforceStockLimit: true);
 
                 return $transaction;

@@ -10,7 +10,7 @@ class TransactionController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(Transaction::with('user')->latest('occurred_at')->get());
+        return response()->json(Transaction::with('company.user')->latest('occurred_at')->get());
     }
 
     public function destroy(Transaction $transaction): JsonResponse

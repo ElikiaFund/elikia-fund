@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'name', 'icon', 'color'])]
+#[Fillable(['company_id', 'name', 'icon', 'color'])]
 class ProductCategory extends Model
 {
     /**
@@ -35,15 +35,15 @@ class ProductCategory extends Model
     {
         foreach (self::DEFAULT_CATALOG[$company->category] ?? [] as $item) {
             self::firstOrCreate(
-                ['user_id' => $company->user_id, 'name' => $item['name']],
+                ['company_id' => $company->id, 'name' => $item['name']],
                 ['icon' => $item['icon'], 'color' => $item['color']],
             );
         }
     }
 
-    public function user(): BelongsTo
+    public function company(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Company::class);
     }
 
     public function products(): HasMany
