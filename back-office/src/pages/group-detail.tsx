@@ -121,7 +121,7 @@ export function GroupDetailPage() {
       ) : (
         <Tabs defaultValue="informations">
           <TabsList>
-            <TabsTrigger value="informations">Informations</TabsTrigger>
+            <TabsTrigger value="informations">Informations </TabsTrigger>
             <TabsTrigger value="membres">Membres</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="analytique">Analytique</TabsTrigger>
