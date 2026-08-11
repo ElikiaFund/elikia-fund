@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { AirtelLogo } from '@/components/brand/airtel-logo';
@@ -10,7 +10,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { vaultService, type PaymentMethod } from '@/services/vaultService';
+import { depositFixed, depositPercent, feeService, FALLBACK_FEE_RATES, type FeeRates, withdrawalPercent } from '@/services/feeService';
+import { vaultService, type PaymentMethod, type VaultMovement } from '@/services/vaultService';
 
 type TransactionKind = 'deposit' | 'withdraw';
 type Step = 'amount' | 'method' | 'phone' | 'pin' | 'success';
@@ -33,11 +34,33 @@ export default function VaultTransactionScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultStatus, setResultStatus] = useState<string>('completed');
+  const [resultMovement, setResultMovement] = useState<VaultMovement | null>(null);
+  const [feeRates, setFeeRates] = useState<FeeRates>(FALLBACK_FEE_RATES);
+  // PinCodeInput has no disabled/editable prop, so a backspace + retype while the request is
+  // still in flight would otherwise re-enter this branch (text.length === 4 again) and fire a
+  // second deposit/withdraw — this ref is the only guard against that, isSubmitting state is
+  // display-only here.
+  const isSubmittingRef = useRef(false);
+
+  useEffect(() => {
+    feeService.get().then(setFeeRates);
+  }, []);
 
   const amountValue = Number(amount.replace(',', '.'));
   const title = kind === 'deposit' ? 'Déposer' : 'Retirer';
   const isPending = resultStatus === 'processing';
   const exceedsBalance = kind === 'withdraw' && availableBalance !== null && amountValue > availableBalance;
+
+  const estimatedFee =
+    amountValue > 0
+      ? kind === 'deposit'
+        ? Math.round((amountValue * depositPercent(feeRates)) / 100 + depositFixed(feeRates))
+        : Math.round((amountValue * withdrawalPercent(feeRates)) / 100)
+      : 0;
+  const estimatedNet = amountValue > 0 ? amountValue - estimatedFee : 0;
+
+  const finalFee = resultMovement ? Number(resultMovement.fee_amount) : estimatedFee;
+  const finalNet = resultMovement ? Number(resultMovement.net_amount) : estimatedNet;
 
   function handlePhoneChange(text: string) {
     // Keep the +242 country prefix locked in place — only track the local digits.
@@ -49,7 +72,8 @@ export default function VaultTransactionScreen() {
     setError(null);
     setHasError(false);
 
-    if (text.length === 4 && method) {
+    if (text.length === 4 && method && !isSubmittingRef.current) {
+      isSubmittingRef.current = true;
       setIsSubmitting(true);
 
       try {
@@ -58,12 +82,14 @@ export default function VaultTransactionScreen() {
             ? await vaultService.deposit(amountValue, text, method, phone)
             : await vaultService.withdraw(amountValue, text, method, phone);
         setResultStatus(result.movement.status);
+        setResultMovement(result.movement);
         setStep('success');
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
         setHasError(true);
         setPin('');
       } finally {
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
       }
     }
@@ -118,6 +144,14 @@ export default function VaultTransactionScreen() {
                   {exceedsBalance
                     ? `Solde insuffisant · disponible ${currency.format(availableBalance)}`
                     : `Solde disponible : ${currency.format(availableBalance)}`}
+                </ThemedText>
+              )}
+
+              {amountValue > 0 && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.balanceHint}>
+                  {kind === 'deposit'
+                    ? `Frais estimés : ${currency.format(estimatedFee)} · Net ajouté au coffre : ${currency.format(estimatedNet)}`
+                    : `Frais estimés : ${currency.format(estimatedFee)} · Vous recevrez : ${currency.format(estimatedNet)}`}
                 </ThemedText>
               )}
 
@@ -249,7 +283,9 @@ export default function VaultTransactionScreen() {
               <ThemedText themeColor="textSecondary" style={styles.subtitle}>
                 {isPending
                   ? `Une demande de confirmation a été envoyée au ${phone}. Le coffre se mettra à jour automatiquement une fois le paiement confirmé.`
-                  : `${currency.format(amountValue)} ${kind === 'deposit' ? 'ont été ajoutés à' : 'ont été retirés de'} votre coffre.`}
+                  : kind === 'deposit'
+                    ? `Vous avez déposé ${currency.format(amountValue)}. Après frais (${currency.format(finalFee)}), ${currency.format(finalNet)} ont été ajoutés à votre coffre.`
+                    : `${currency.format(amountValue)} ont été retirés de votre coffre. Vous recevrez ${currency.format(finalNet)} sur votre Mobile Money (frais : ${currency.format(finalFee)}).`}
               </ThemedText>
 
               <Pressable onPress={() => router.back()} style={[styles.primaryButton, { backgroundColor: theme.tint }]}>

@@ -1,17 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/form-field';
 import { SelectSheet } from '@/components/select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { CONGO_DEPARTMENTS, type CongoDepartment } from '@/constants/congo-locations';
+import { ARRONDISSEMENTS_BY_CITY, CONGO_DEPARTMENTS, type CongoDepartment } from '@/constants/congo-locations';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { useTheme } from '@/hooks/use-theme';
 import { COMPANY_CATEGORIES, companyService, type CompanyCategory } from '@/services/companyService';
-import { CATALOG_ENABLED_CATEGORIES, productService } from '@/services/productService';
+import { productService } from '@/services/productService';
 
 type DraftProduct = { name: string; sellPrice: string };
 
@@ -23,7 +25,13 @@ const CATALOG_HINTS: Partial<Record<CompanyCategory, string>> = {
 
 export default function OnboardingScreen() {
   const theme = useTheme();
-  const { refreshUser } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  // Default (first-run) path is guard-driven from _layout.tsx; `mode=create` is pushed from the
+  // company switcher to add a 2nd+ company to an already-onboarded account.
+  const isAddingCompany = params.mode === 'create';
+  const { user, refreshUser } = useAuth();
+  const { refreshCompanies, selectCompany } = useCompany();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CompanyCategory | null>(null);
   const [otherCategory, setOtherCategory] = useState('');
@@ -32,15 +40,45 @@ export default function OnboardingScreen() {
   const [useCapitalAsCity, setUseCapitalAsCity] = useState(true);
   const [customCity, setCustomCity] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
+  const [isArrondissementSheetOpen, setIsArrondissementSheetOpen] = useState(false);
   const [address, setAddress] = useState('');
   const [products, setProducts] = useState<DraftProduct[]>([]);
   const [draftName, setDraftName] = useState('');
   const [draftPrice, setDraftPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A synchronous guard, not just the isSubmitting state: two taps landing before React
+  // re-renders the button's disabled prop would otherwise both pass the isSubmitting check and
+  // create two companies — this is exactly what happened when the screen looked stuck and got
+  // tapped repeatedly.
+  const isSubmittingRef = useRef(false);
 
   const departmentEntry = CONGO_DEPARTMENTS.find((d) => d.value === department) ?? null;
   const city = useCapitalAsCity ? departmentEntry?.capital : customCity.trim();
+
+  // Only Brazzaville and Pointe-Noire are formally divided into arrondissements — every other
+  // city falls back to the free-text "Quartier" field below.
+  const arrondissements = city ? (ARRONDISSEMENTS_BY_CITY[city] ?? null) : null;
+
+  // Clears a stale quartier/arrondissement value whenever the arrondissement-preset
+  // availability changes (switching city, or between preset cities) — a previously-picked
+  // Brazzaville arrondissement shouldn't linger as free text once the city changes.
+  useEffect(() => {
+    setNeighborhood('');
+  }, [arrondissements]);
+
+  // The "onboarding" screen stays registered (guard: isAuthenticated alone, see _layout.tsx —
+  // it must also serve router.push('/onboarding?mode=create') from the company switcher after
+  // onboarding is already done) so its guard never flips false on first-run completion, and
+  // Stack.Protected's automatic "redirect when unauthorized" never fires. Navigate explicitly
+  // once refreshUser() has actually landed the updated user in context — a useEffect (rather
+  // than calling router.replace() right after the await) so this fires after _layout.tsx has
+  // re-rendered with needsOnboarding=false and (tabs) is actually registered in the navigator.
+  useEffect(() => {
+    if (!isAddingCompany && user?.onboarding_completed_at) {
+      router.replace('/');
+    }
+  }, [isAddingCompany, user?.onboarding_completed_at, router]);
 
   const canSubmit =
     name.trim().length > 0 &&
@@ -49,7 +87,7 @@ export default function OnboardingScreen() {
     department !== null &&
     !!city &&
     neighborhood.trim().length > 0;
-  const showCatalogStep = category !== null && (CATALOG_ENABLED_CATEGORIES as readonly string[]).includes(category);
+  const showCatalogStep = category !== null;
 
   function handleSelectDepartment(value: string) {
     setDepartment(value as CongoDepartment);
@@ -72,15 +110,16 @@ export default function OnboardingScreen() {
   }
 
   async function handleSubmit() {
-    if (!category || !department || !city) {
+    if (!category || !department || !city || isSubmittingRef.current) {
       return;
     }
 
+    isSubmittingRef.current = true;
     setError(null);
     setIsSubmitting(true);
 
     try {
-      await companyService.create({
+      const company = await companyService.create({
         name: name.trim(),
         category,
         otherCategory: category === 'autre' ? otherCategory.trim() : undefined,
@@ -89,6 +128,12 @@ export default function OnboardingScreen() {
         neighborhood: neighborhood.trim(),
         address: address.trim() || undefined,
       });
+
+      // The new company must become active (X-Company-Id) before any company-scoped call below —
+      // refreshCompanies() alone isn't enough when adding a 2nd+ company, since it would resolve
+      // back to whichever company was already selected.
+      await refreshCompanies();
+      await selectCompany(company.id);
 
       if (products.length > 0) {
         await Promise.all(
@@ -104,10 +149,15 @@ export default function OnboardingScreen() {
         });
       }
 
-      await refreshUser();
+      if (isAddingCompany) {
+        router.back();
+      } else {
+        await refreshUser();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   }
@@ -118,10 +168,12 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.content}>
             <ThemedText type="title" style={styles.title}>
-              Votre entreprise
+              {isAddingCompany ? 'Nouvelle entreprise' : 'Votre entreprise'}
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-              Configurons votre première entreprise pour personnaliser Elikia Fund.
+              {isAddingCompany
+                ? 'Ajoutez une nouvelle entreprise à votre compte.'
+                : 'Configurons votre première entreprise pour personnaliser Elikia Fund.'}
             </ThemedText>
 
             <View style={styles.form}>
@@ -181,7 +233,7 @@ export default function OnboardingScreen() {
                 onPress={() => setIsDepartmentSheetOpen(true)}
                 style={[styles.selectField, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
               >
-                <ThemedText themeColor={departmentEntry ? 'text' : 'textSecondary'}>{departmentEntry?.label ?? 'Département'}</ThemedText>
+                <ThemedText themeColor={departmentEntry ? 'text' : 'textSecondary'}>{departmentEntry?.capital ?? 'Ville'}</ThemedText>
                 <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
               </Pressable>
 
@@ -222,13 +274,23 @@ export default function OnboardingScreen() {
               {departmentEntry && (
                 <>
                   <View style={styles.otherField}>
-                    <FormField
-                      label="Quartier"
-                      placeholder="Ex. Moungali"
-                      autoCapitalize="words"
-                      value={neighborhood}
-                      onChangeText={setNeighborhood}
-                    />
+                    {arrondissements ? (
+                      <Pressable
+                        onPress={() => setIsArrondissementSheetOpen(true)}
+                        style={[styles.selectField, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+                      >
+                        <ThemedText themeColor={neighborhood ? 'text' : 'textSecondary'}>{neighborhood || 'Arrondissement'}</ThemedText>
+                        <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
+                      </Pressable>
+                    ) : (
+                      <FormField
+                        label="Quartier"
+                        placeholder="Ex. Centre-ville"
+                        autoCapitalize="words"
+                        value={neighborhood}
+                        onChangeText={setNeighborhood}
+                      />
+                    )}
                   </View>
                   <View style={styles.otherField}>
                     <FormField
@@ -339,12 +401,23 @@ export default function OnboardingScreen() {
 
       <SelectSheet
         visible={isDepartmentSheetOpen}
-        title="Département"
-        options={CONGO_DEPARTMENTS.map((d) => ({ label: d.label, value: d.value }))}
+        title="Ville"
+        options={CONGO_DEPARTMENTS.map((d) => ({ label: d.capital, value: d.value }))}
         selectedValue={department ?? ''}
         onSelect={handleSelectDepartment}
         onClose={() => setIsDepartmentSheetOpen(false)}
       />
+
+      {arrondissements && (
+        <SelectSheet
+          visible={isArrondissementSheetOpen}
+          title="Arrondissement"
+          options={arrondissements.map((a) => ({ label: a, value: a }))}
+          selectedValue={neighborhood}
+          onSelect={setNeighborhood}
+          onClose={() => setIsArrondissementSheetOpen(false)}
+        />
+      )}
     </ThemedView>
   );
 }

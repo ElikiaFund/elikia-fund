@@ -1,6 +1,7 @@
-import { useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -10,6 +11,7 @@ import { groupService } from '@/services/groupService';
 
 export default function GroupSettingsScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [autoPayoutEnabled, setAutoPayoutEnabled] = useState(true);
@@ -74,6 +76,28 @@ export default function GroupSettingsScreen() {
             </ThemedText>
           </View>
         )}
+
+        {!isLoading && (
+          <View style={styles.dangerZone}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.dangerZoneLabel}>
+              Zone dangereuse
+            </ThemedText>
+            <Pressable
+              onPress={() => router.push({ pathname: '/group-delete-request', params: { id } })}
+              style={[styles.dangerRow, { backgroundColor: theme.backgroundElement, borderColor: theme.danger }]}
+            >
+              <View style={styles.rowText}>
+                <ThemedText type="smallBold" style={{ color: theme.danger }}>
+                  Supprimer la tontine
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Nécessite l&apos;accord des autres membres — ils ont 48h pour approuver ou refuser.
+                </ThemedText>
+              </View>
+              <Ionicons name="trash-outline" size={20} color={theme.danger} />
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -113,5 +137,21 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
+  },
+  dangerZone: {
+    marginTop: Spacing.six,
+  },
+  dangerZoneLabel: {
+    marginLeft: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  dangerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: Spacing.three,
   },
 });

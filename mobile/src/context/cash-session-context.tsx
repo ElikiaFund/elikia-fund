@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AppState } from 'react-native';
 
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { getActiveCashSession, setActiveCashSession, clearActiveCashSession, type LocalActiveCashSession, type LocalCashSession } from '@/db/database';
 import { flushCashSessionSyncQueue } from '@/lib/cash-session-sync';
 import { loadCashSessions } from '@/lib/cash-sessions';
@@ -29,13 +30,14 @@ const CashSessionContext = createContext<CashSessionContextValue | null>(null);
  */
 export function CashSessionProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
+  const { activeCompany } = useCompany();
   const [lastClosedSession, setLastClosedSession] = useState<LocalCashSession | null>(null);
   const [activeSession, setActiveSession] = useState<LocalActiveCashSession | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const isRefreshingRef = useRef(false);
 
   const refreshSessions = useCallback(async () => {
-    if (isRefreshingRef.current || !user) {
+    if (isRefreshingRef.current || !user || !activeCompany) {
       return;
     }
 
@@ -44,10 +46,10 @@ export function CashSessionProvider({ children }: PropsWithChildren) {
 
     try {
       // Purely local, no network involved — safe to read even offline or mid-refresh-failure below.
-      setActiveSession(await getActiveCashSession(user.id));
+      setActiveSession(await getActiveCashSession(user.id, activeCompany.id));
 
-      await flushCashSessionSyncQueue(user.id).catch(() => {});
-      const sessions = await loadCashSessions(user.id);
+      await flushCashSessionSyncQueue(activeCompany.id).catch(() => {});
+      const sessions = await loadCashSessions(activeCompany.id, user.id);
       setLastClosedSession(sessions[0] ?? null);
     } catch {
       // Offline or the request failed — keep whatever was already in state.
@@ -55,7 +57,7 @@ export function CashSessionProvider({ children }: PropsWithChildren) {
       isRefreshingRef.current = false;
       setIsRefreshing(false);
     }
-  }, [user]);
+  }, [user, activeCompany]);
 
   const recordClosedSession = useCallback((session: LocalCashSession) => {
     setLastClosedSession((current) => (current && current.closed_at > session.closed_at ? current : session));
@@ -63,26 +65,26 @@ export function CashSessionProvider({ children }: PropsWithChildren) {
 
   const markSessionStarted = useCallback(
     (startedAt: string) => {
-      if (!user) {
+      if (!user || !activeCompany) {
         return;
       }
 
-      setActiveSession({ user_id: user.id, started_at: startedAt });
-      setActiveCashSession(user.id, startedAt).catch(() => {});
+      setActiveSession({ user_id: user.id, company_id: activeCompany.id, started_at: startedAt });
+      setActiveCashSession(user.id, activeCompany.id, startedAt).catch(() => {});
     },
-    [user],
+    [user, activeCompany],
   );
 
   const markSessionClosed = useCallback(() => {
     setActiveSession(null);
 
-    if (user) {
-      clearActiveCashSession(user.id).catch(() => {});
+    if (user && activeCompany) {
+      clearActiveCashSession(user.id, activeCompany.id).catch(() => {});
     }
-  }, [user]);
+  }, [user, activeCompany]);
 
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || !activeCompany) {
       setLastClosedSession(null);
       setActiveSession(null);
       return;
@@ -107,7 +109,7 @@ export function CashSessionProvider({ children }: PropsWithChildren) {
       unsubscribeNetInfo();
       appStateSubscription.remove();
     };
-  }, [isAuthenticated, user, refreshSessions]);
+  }, [isAuthenticated, user, activeCompany, refreshSessions]);
 
   return (
     <CashSessionContext.Provider

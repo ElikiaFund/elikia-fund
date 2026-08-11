@@ -4,7 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export function FormField({ label, ...inputProps }: { label: string } & TextInputProps) {
+export function FormField({ label, style, ...inputProps }: { label: string } & TextInputProps) {
   const theme = useTheme();
 
   return (
@@ -14,7 +14,7 @@ export function FormField({ label, ...inputProps }: { label: string } & TextInpu
       </ThemedText>
       <TextInput
         placeholderTextColor={theme.textSecondary}
-        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundElement }, style]}
         {...inputProps}
       />
     </View>

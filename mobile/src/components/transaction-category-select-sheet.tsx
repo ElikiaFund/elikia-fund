@@ -4,34 +4,41 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, Sc
 
 import { sheetStyles } from '@/components/select-sheet';
 import { ThemedText } from '@/components/themed-text';
-import { DEFAULT_PRODUCT_CATEGORY_COLOR, DEFAULT_PRODUCT_CATEGORY_ICON, PRODUCT_CATEGORY_COLORS, PRODUCT_CATEGORY_ICONS } from '@/constants/product-categories';
+import { DEFAULT_TRANSACTION_CATEGORY_ICON, TRANSACTION_CATEGORY_ICONS } from '@/constants/transaction-categories';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { productCategoryService, type ProductCategory } from '@/services/productCategoryService';
+import { transactionCategoryService, type TransactionCategory, type TransactionCategoryType } from '@/services/transactionCategoryService';
 
-type CategorySelectSheetProps = {
+type TransactionCategorySelectSheetProps = {
   visible: boolean;
-  categories: ProductCategory[];
-  selectedId: number | null;
-  onSelect: (id: number | null) => void;
-  onCategoriesChange: (categories: ProductCategory[]) => void;
+  type: TransactionCategoryType;
+  categories: TransactionCategory[];
+  selectedName: string | null;
+  onSelect: (name: string) => void;
+  onCategoriesChange: (categories: TransactionCategory[]) => void;
   onClose: () => void;
 };
 
-export function CategorySelectSheet({ visible, categories, selectedId, onSelect, onCategoriesChange, onClose }: CategorySelectSheetProps) {
+export function TransactionCategorySelectSheet({
+  visible,
+  type,
+  categories,
+  selectedName,
+  onSelect,
+  onCategoriesChange,
+  onClose,
+}: TransactionCategorySelectSheetProps) {
   const theme = useTheme();
   const [isCreating, setIsCreating] = useState(false);
   const [draftName, setDraftName] = useState('');
-  const [draftIcon, setDraftIcon] = useState(DEFAULT_PRODUCT_CATEGORY_ICON);
-  const [draftColor, setDraftColor] = useState(DEFAULT_PRODUCT_CATEGORY_COLOR);
+  const [draftIcon, setDraftIcon] = useState(DEFAULT_TRANSACTION_CATEGORY_ICON);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
     setIsCreating(false);
     setDraftName('');
-    setDraftIcon(DEFAULT_PRODUCT_CATEGORY_ICON);
-    setDraftColor(DEFAULT_PRODUCT_CATEGORY_COLOR);
+    setDraftIcon(DEFAULT_TRANSACTION_CATEGORY_ICON);
     setError(null);
   }
 
@@ -49,9 +56,9 @@ export function CategorySelectSheet({ visible, categories, selectedId, onSelect,
     setError(null);
 
     try {
-      const category = await productCategoryService.create({ name: draftName.trim(), icon: draftIcon, color: draftColor });
+      const category = await transactionCategoryService.create(type, { name: draftName.trim(), icon: draftIcon });
       onCategoriesChange([...categories, category]);
-      onSelect(category.id);
+      onSelect(category.name);
       handleClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
@@ -83,7 +90,7 @@ export function CategorySelectSheet({ visible, categories, selectedId, onSelect,
                 />
 
                 <View style={styles.presetRow}>
-                  {PRODUCT_CATEGORY_ICONS.map((icon) => (
+                  {TRANSACTION_CATEGORY_ICONS.map((icon) => (
                     <Pressable
                       key={icon}
                       onPress={() => setDraftIcon(icon)}
@@ -94,20 +101,6 @@ export function CategorySelectSheet({ visible, categories, selectedId, onSelect,
                     >
                       <Ionicons name={icon} size={18} color={draftIcon === icon ? theme.tint : theme.textSecondary} />
                     </Pressable>
-                  ))}
-                </View>
-
-                <View style={styles.presetRow}>
-                  {PRODUCT_CATEGORY_COLORS.map((color) => (
-                    <Pressable
-                      key={color}
-                      onPress={() => setDraftColor(color)}
-                      style={[
-                        styles.colorSwatch,
-                        { backgroundColor: color },
-                        draftColor === color && { borderWidth: 2, borderColor: theme.text },
-                      ]}
-                    />
                   ))}
                 </View>
 
@@ -145,34 +138,25 @@ export function CategorySelectSheet({ visible, categories, selectedId, onSelect,
             ) : (
               <>
                 <ScrollView style={styles.optionsList} keyboardShouldPersistTaps="handled">
-                  <Pressable
-                    onPress={() => {
-                      onSelect(null);
-                      handleClose();
-                    }}
-                    style={({ pressed }) => [styles.option, pressed && { backgroundColor: theme.backgroundElement }]}
-                  >
-                    <View style={styles.optionLabel}>
-                      <Ionicons name="pricetag-outline" size={18} color={theme.textSecondary} />
-                      <ThemedText themeColor={selectedId === null ? 'text' : 'textSecondary'}>Aucune catégorie</ThemedText>
-                    </View>
-                    {selectedId === null && <Ionicons name="checkmark" size={20} color={theme.tint} />}
-                  </Pressable>
+                  {categories.length === 0 && (
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.emptyHint}>
+                      Aucune catégorie pour le moment — créez-en une ci-dessous.
+                    </ThemedText>
+                  )}
 
                   {categories.map((category) => {
-                    const selected = category.id === selectedId;
+                    const selected = category.name === selectedName;
 
                     return (
                       <Pressable
                         key={category.id}
                         onPress={() => {
-                          onSelect(category.id);
+                          onSelect(category.name);
                           handleClose();
                         }}
                         style={({ pressed }) => [styles.option, pressed && { backgroundColor: theme.backgroundElement }]}
                       >
                         <View style={styles.optionLabel}>
-                          {category.color && <View style={[styles.colorDot, { backgroundColor: category.color }]} />}
                           <Ionicons
                             name={(category.icon as keyof typeof Ionicons.glyphMap) ?? 'pricetag-outline'}
                             size={18}
@@ -212,6 +196,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.one,
     maxHeight: 320,
   },
+  emptyHint: {
+    paddingVertical: Spacing.three,
+  },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,11 +209,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  colorDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
   },
   createRow: {
     flexDirection: 'row',
@@ -259,11 +241,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  colorSwatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
   },
   formActions: {
     flexDirection: 'row',

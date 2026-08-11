@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { type LocalCashSession } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
 import { loadCashSessions } from '@/lib/cash-sessions';
@@ -23,19 +24,20 @@ const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
 export default function CashSessionHistoryScreen() {
   const theme = useTheme();
   const { user } = useAuth();
+  const { activeCompany } = useCompany();
   const [sessions, setSessions] = useState<LocalCashSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) {
+      if (!user || !activeCompany) {
         return;
       }
 
       let cancelled = false;
       setIsLoading(true);
 
-      loadCashSessions(user.id)
+      loadCashSessions(activeCompany.id, user.id)
         .then((result) => {
           if (!cancelled) {
             setSessions(result);
@@ -50,7 +52,7 @@ export default function CashSessionHistoryScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user]),
+    }, [user, activeCompany]),
   );
 
   if (isLoading) {

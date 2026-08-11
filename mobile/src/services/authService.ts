@@ -20,7 +20,6 @@ export type AuthUser = {
   is_admin: boolean;
   onboarding_completed_at: string | null;
   created_at: string;
-  company: Company | null;
   cash_session_frequency: 'daily' | 'weekly';
   cash_session_day: number | null;
   cash_session_reminder_time: string | null;

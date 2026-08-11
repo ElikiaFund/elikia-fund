@@ -11,8 +11,14 @@ export type VaultMovement = {
   id: number;
   type: 'deposit' | 'withdraw' | 'tontine_payout';
   amount: string;
+  fee_amount: string;
+  provider_fee_amount: string;
+  platform_fee_amount: string;
+  net_amount: string;
   note: string | null;
+  provider: string | null;
   status: string;
+  yabeto_reference: string | null;
   group_id: number | null;
   cycle_period: string | null;
   created_at: string;

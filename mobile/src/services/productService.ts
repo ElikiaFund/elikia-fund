@@ -3,7 +3,7 @@ import type { ProductCategory } from '@/services/productCategoryService';
 
 export type Product = {
   id: number;
-  user_id: number;
+  company_id: number;
   name: string;
   category_id: number | null;
   category?: ProductCategory | null;
@@ -19,7 +19,6 @@ export type Product = {
 export type StockMovement = {
   id: number;
   product_id: number;
-  user_id: number;
   type: 'restock' | 'sale' | 'adjustment';
   quantity_change: number;
   unit_cost: string | null;
@@ -48,9 +47,6 @@ export type AdjustStockPayload = {
   quantity_change: number;
   note?: string | null;
 };
-
-/** Company categories that get a product/service catalog step during onboarding and a manager screen. */
-export const CATALOG_ENABLED_CATEGORIES = ['commerce', 'restauration', 'services'] as const;
 
 export const productService = {
   list() {

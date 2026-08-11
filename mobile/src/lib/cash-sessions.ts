@@ -10,7 +10,7 @@ import { cashSessionService } from '@/services/cashSessionService';
  * this is only called on a slower cadence (mount/reconnect/foreground — see CashSessionProvider),
  * never on every screen focus.
  */
-export async function loadCashSessions(userId: number): Promise<LocalCashSession[]> {
+export async function loadCashSessions(companyId: number, userId: number): Promise<LocalCashSession[]> {
   const netState = await NetInfo.fetch();
 
   if (netState.isConnected) {
@@ -19,6 +19,7 @@ export async function loadCashSessions(userId: number): Promise<LocalCashSession
       const remoteAsLocal: LocalCashSession[] = remote.map((s) => ({
         uuid: s.uuid,
         user_id: userId,
+        company_id: companyId,
         period_start: s.period_start,
         closed_at: s.closed_at,
         expected_balance: Number(s.expected_balance),
@@ -30,7 +31,7 @@ export async function loadCashSessions(userId: number): Promise<LocalCashSession
 
       await cacheSyncedCashSessions(remoteAsLocal);
 
-      const pending = await listUnsyncedCashSessions(userId);
+      const pending = await listUnsyncedCashSessions(companyId);
       const remoteUuids = new Set(remoteAsLocal.map((s) => s.uuid));
       const merged = [...remoteAsLocal, ...pending.filter((s) => !remoteUuids.has(s.uuid))];
 
@@ -40,5 +41,5 @@ export async function loadCashSessions(userId: number): Promise<LocalCashSession
     }
   }
 
-  return listCashSessions(userId);
+  return listCashSessions(companyId);
 }

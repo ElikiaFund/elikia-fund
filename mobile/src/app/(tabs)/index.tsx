@@ -3,12 +3,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { CompanySelectSheet } from '@/components/company-select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useCashSession } from '@/context/cash-session-context';
+import { useCompany } from '@/context/company-context';
 import { useSync } from '@/context/sync-context';
 import { type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
@@ -30,15 +32,18 @@ export default function CashflowScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const { activeCompany, companies, isLoading: isCompanyLoading } = useCompany();
   const { pendingCount, isSyncing, syncNow, refreshPendingCount } = useSync();
   const { lastClosedSession, activeSession } = useCashSession();
   const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [creditScore, setCreditScore] = useState<CreditScore | null>(null);
+  const [isCompanySheetOpen, setIsCompanySheetOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) {
+      if (!user || !activeCompany) {
+        setIsLoading(false);
         return;
       }
 
@@ -46,7 +51,7 @@ export default function CashflowScreen() {
       setIsLoading(true);
       refreshPendingCount();
 
-      loadTransactions(user.id)
+      loadTransactions(activeCompany.id, user.id)
         .then((result) => {
           if (!cancelled) {
             setTransactions(result);
@@ -61,17 +66,21 @@ export default function CashflowScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user, refreshPendingCount]),
+    }, [user, activeCompany, refreshPendingCount]),
   );
 
   useEffect(() => {
-    creditScoreService.get().then(setCreditScore).catch(() => {});
-  }, []);
+    if (!activeCompany) {
+      return;
+    }
 
-  const { incomeTotal, expenseTotal } = useMemo(() => {
+    creditScoreService.get(activeCompany.id).then(setCreditScore).catch(() => {});
+  }, [activeCompany]);
+
+  const { incomeTotal, expenseTotal, periodTransactionCount } = useMemo(() => {
     const periodTransactions = transactions.filter((t) => !lastClosedSession || t.occurred_at > lastClosedSession.closed_at);
 
-    return periodTransactions.reduce(
+    const totals = periodTransactions.reduce(
       (totals, transaction) => {
         if (transaction.type === 'income') {
           totals.incomeTotal += transaction.amount;
@@ -82,11 +91,55 @@ export default function CashflowScreen() {
       },
       { incomeTotal: 0, expenseTotal: 0 },
     );
+
+    return { ...totals, periodTransactionCount: periodTransactions.length };
   }, [transactions, lastClosedSession]);
 
   const balance = (lastClosedSession?.counted_balance ?? 0) + incomeTotal - expenseTotal;
   const recentTransactions = transactions.slice(0, 5);
-  const isOverdue = user ? isSessionOverdue(user, lastClosedSession, new Date()) : false;
+  // Nothing accumulated since the last close (or ever, if there's never been one) means there's
+  // nothing to reconcile yet — don't nag to "close" a session that has no activity in it, even if
+  // the reminder cadence has technically elapsed since account creation (isSessionOverdue's
+  // fallback baseline when lastClosedSession is null).
+  const isOverdue = user && periodTransactionCount > 0 ? isSessionOverdue(user, lastClosedSession, new Date()) : false;
+
+  if (isCompanyLoading) {
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <ActivityIndicator color={theme.tint} />
+      </ThemedView>
+    );
+  }
+
+  if (!activeCompany) {
+    const hasCompanies = companies.length > 0;
+
+    return (
+      <ThemedView style={[styles.container, styles.centered]}>
+        <View style={[styles.badge, { backgroundColor: theme.backgroundElement }]}>
+          <Ionicons name="business-outline" size={28} color={theme.tint} />
+        </View>
+        <ThemedText type="title" style={styles.title}>
+          Aucune entreprise sélectionnée
+        </ThemedText>
+        <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+          {hasCompanies
+            ? 'Choisissez une entreprise pour retrouver son tableau de bord.'
+            : 'Créez votre première entreprise pour commencer à suivre vos finances.'}
+        </ThemedText>
+        <Pressable
+          style={[styles.primaryButton, { backgroundColor: theme.tint }]}
+          onPress={() => (hasCompanies ? setIsCompanySheetOpen(true) : router.push('/onboarding?mode=create'))}
+        >
+          <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+            {hasCompanies ? 'Choisir une entreprise' : 'Créer une entreprise'}
+          </ThemedText>
+        </Pressable>
+
+        <CompanySelectSheet visible={isCompanySheetOpen} onClose={() => setIsCompanySheetOpen(false)} />
+      </ThemedView>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -291,6 +344,31 @@ const styles = StyleSheet.create({
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Spacing.four,
+  },
+  badge: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.four,
+  },
+  title: {
+    textAlign: 'center',
+    fontSize: 26,
+    lineHeight: 32,
+  },
+  subtitle: {
+    textAlign: 'center',
+    marginTop: Spacing.two,
+    marginBottom: Spacing.five,
+    maxWidth: 300,
+  },
+  primaryButton: {
+    borderRadius: 14,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.five,
   },
   scrollContent: {
     padding: Spacing.four,

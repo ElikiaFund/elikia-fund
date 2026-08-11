@@ -11,7 +11,7 @@ import { transactionService } from '@/services/transactionService';
  * vanish from the list the moment the app comes back online but before the sync flush lands.
  * Falls back to the local cache whenever the network fetch itself fails.
  */
-export async function loadTransactions(userId: number): Promise<LocalTransaction[]> {
+export async function loadTransactions(companyId: number, userId: number): Promise<LocalTransaction[]> {
   const netState = await NetInfo.fetch();
 
   if (netState.isConnected) {
@@ -20,9 +20,11 @@ export async function loadTransactions(userId: number): Promise<LocalTransaction
       const remoteAsLocal: LocalTransaction[] = remote.map((t) => ({
         uuid: t.uuid,
         user_id: userId,
+        company_id: companyId,
         type: t.type,
         amount: Number(t.amount),
         category: t.category,
+        payment_method: t.payment_method,
         note: t.note,
         product_name: t.product_name,
         quantity: t.quantity,
@@ -34,7 +36,7 @@ export async function loadTransactions(userId: number): Promise<LocalTransaction
 
       await cacheSyncedTransactions(remoteAsLocal);
 
-      const pending = await listUnsyncedTransactions(userId);
+      const pending = await listUnsyncedTransactions(companyId);
       const remoteUuids = new Set(remoteAsLocal.map((t) => t.uuid));
       const merged = [...remoteAsLocal, ...pending.filter((t) => !remoteUuids.has(t.uuid))];
 
@@ -44,5 +46,5 @@ export async function loadTransactions(userId: number): Promise<LocalTransaction
     }
   }
 
-  return listTransactions(userId);
+  return listTransactions(companyId);
 }

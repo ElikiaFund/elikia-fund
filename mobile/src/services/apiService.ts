@@ -26,9 +26,20 @@ export function setApiAuthToken(token: string | null) {
   authToken = token;
 }
 
+let activeCompanyId: number | null = null;
+
+/** No fallback on purpose — an unset header on a company-scoped call should surface the API's
+ * loud 400 (see ResolveActiveCompany), not get silently masked by guessing a company. */
+export function setApiActiveCompanyId(id: number | null) {
+  activeCompanyId = id;
+}
+
 apiService.interceptors.request.use((config) => {
   if (authToken) {
     config.headers.Authorization = `Bearer ${authToken}`;
+  }
+  if (activeCompanyId !== null) {
+    config.headers['X-Company-Id'] = String(activeCompanyId);
   }
   return config;
 });

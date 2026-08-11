@@ -8,8 +8,8 @@ import { cashSessionService, type CloseCashSessionPayload } from '@/services/cas
  * (upsert by uuid — see CashSessionController::store()), so retrying a partially-flushed queue on
  * the next reconnect is always safe.
  */
-export async function flushCashSessionSyncQueue(userId: number): Promise<{ synced: number }> {
-  const queue = await getPendingCashSessionSyncQueue(userId);
+export async function flushCashSessionSyncQueue(companyId: number): Promise<{ synced: number }> {
+  const queue = await getPendingCashSessionSyncQueue(companyId);
 
   if (queue.length === 0) {
     return { synced: 0 };
@@ -18,7 +18,13 @@ export async function flushCashSessionSyncQueue(userId: number): Promise<{ synce
   let synced = 0;
 
   for (const entry of queue) {
-    const { synced: _synced, user_id: _userId, variance: _variance, ...payload } = JSON.parse(entry.payload) as LocalCashSession;
+    const {
+      synced: _synced,
+      user_id: _userId,
+      company_id: _companyId,
+      variance: _variance,
+      ...payload
+    } = JSON.parse(entry.payload) as LocalCashSession;
 
     try {
       await cashSessionService.close(payload satisfies CloseCashSessionPayload);

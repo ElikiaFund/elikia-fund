@@ -11,9 +11,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { useTheme } from '@/hooks/use-theme';
 import { profileService } from '@/services/profileService';
-import { CATALOG_ENABLED_CATEGORIES } from '@/services/productService';
 
 const TERMS_URL = 'https://www.elikiafund.com/conditions';
 
@@ -30,9 +30,10 @@ export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { user, logout, refreshUser } = useAuth();
+  const { activeCompany } = useCompany();
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSupportSheetOpen, setIsSupportSheetOpen] = useState(false);
-  const hasCatalog = user?.company ? (CATALOG_ENABLED_CATEGORIES as readonly string[]).includes(user.company.category) : false;
+  const hasCatalog = activeCompany !== null;
 
   function handleLogout() {
     Alert.alert('Se déconnecter', 'Voulez-vous vraiment vous déconnecter ?', [

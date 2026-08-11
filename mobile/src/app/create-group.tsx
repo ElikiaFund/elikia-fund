@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { FormField } from '@/components/form-field';
@@ -9,7 +9,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { groupService, TONTINE_MANAGEMENT_FEE_RATE, type GroupFrequency, type RecipientMode } from '@/services/groupService';
+import { contributionPercent, feeService, FALLBACK_FEE_RATES, type FeeRates } from '@/services/feeService';
+import { groupService, type GroupFrequency, type RecipientMode } from '@/services/groupService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 
@@ -53,7 +54,13 @@ export default function CreateGroupScreen() {
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feeRates, setFeeRates] = useState<FeeRates>(FALLBACK_FEE_RATES);
 
+  useEffect(() => {
+    feeService.get().then(setFeeRates);
+  }, []);
+
+  const feeRate = contributionPercent(feeRates) / 100;
   const amountValue = Number(amount.replace(',', '.'));
   const maxMembersValue = maxMembers.trim().length > 0 ? Number(maxMembers) : 1000;
   const canSubmit = name.trim().length > 0 && amountValue > 0 && maxMembersValue >= 2 && maxMembersValue <= 1000;
@@ -120,9 +127,8 @@ export default function CreateGroupScreen() {
               </View>
               {amountValue > 0 && (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.feeHint}>
-                  Dont {currency.format(amountValue * TONTINE_MANAGEMENT_FEE_RATE)} de frais de gestion (
-                  {TONTINE_MANAGEMENT_FEE_RATE * 100}%) — net versé à la tontine :{' '}
-                  {currency.format(amountValue * (1 - TONTINE_MANAGEMENT_FEE_RATE))}
+                  Dont {currency.format(amountValue * feeRate)} de frais de gestion ({(feeRate * 100).toFixed(1)}%) — net versé à la
+                  tontine : {currency.format(amountValue * (1 - feeRate))}
                 </ThemedText>
               )}
             </View>
@@ -238,8 +244,8 @@ export default function CreateGroupScreen() {
 
           <View style={[styles.feeNotice, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             <ThemedText type="small" themeColor="textSecondary">
-              Des frais de gestion de {TONTINE_MANAGEMENT_FEE_RATE * 100}% seront automatiquement retirés de chaque
-              cotisation versée dans cette tontine.
+              Des frais de gestion de {(feeRate * 100).toFixed(1)}% seront automatiquement retirés de chaque cotisation
+              versée dans cette tontine.
             </ThemedText>
           </View>
 
