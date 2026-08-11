@@ -368,6 +368,8 @@ export type StatementMovement = {
   created_at: string;
   type: 'deposit' | 'withdraw' | 'tontine_payout';
   amount: number;
+  fee_amount: number;
+  net_amount: number;
   note: string | null;
 };
 
@@ -398,7 +400,9 @@ export function buildVaultStatementHtml(options: {
           return `
         <tr>
           <td>${dateFormatter.format(new Date(m.created_at))}</td>
-          <td>${MOVEMENT_LABELS[m.type]}${m.note ? `<div class="note">${escapeHtml(m.note)}</div>` : ''}</td>
+          <td>${MOVEMENT_LABELS[m.type]}${m.note ? `<div class="note">${escapeHtml(m.note)}</div>` : ''}${
+            m.fee_amount > 0 ? `<div class="note">Frais : ${currency.format(m.fee_amount)} · Net : ${currency.format(m.net_amount)}</div>` : ''
+          }</td>
           <td class="amount ${isCredit ? 'income' : 'expense'}">${isCredit ? '+' : '−'} ${currency.format(m.amount)}</td>
         </tr>`;
         })

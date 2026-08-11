@@ -121,9 +121,6 @@ export type GroupPreview = Pick<
   'id' | 'name' | 'frequency' | 'contribution_amount' | 'max_members' | 'members_count' | 'owner' | 'membership_status' | 'schedule_label'
 >;
 
-/** Percentage withheld from every contribution as a tontine management fee — kept in sync with GroupController::MANAGEMENT_FEE_RATE. */
-export const TONTINE_MANAGEMENT_FEE_RATE = 0.03;
-
 export type GroupReport = {
   group_id: number;
   group_name: string;
@@ -155,6 +152,29 @@ export type GroupCycle = {
   is_current: boolean;
   paid_count: number;
   members_count: number;
+};
+
+export type DeletionVoteDecision = 'approved' | 'declined';
+export type DeletionRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export type DeletionVote = {
+  id: number;
+  user_id: number;
+  decision: DeletionVoteDecision;
+  decided_at: string;
+  user?: GroupMember;
+};
+
+export type GroupDeletionRequest = {
+  id: number;
+  group_id: number;
+  requested_by: number;
+  status: DeletionRequestStatus;
+  expires_at: string;
+  resolved_at: string | null;
+  created_at: string;
+  votes?: DeletionVote[];
+  requester?: GroupMember;
 };
 
 export const groupService = {
@@ -285,5 +305,30 @@ export const groupService = {
   /** Every cycle since the tontine was created, most recent first. */
   cycles(id: number) {
     return apiService.get<GroupCycle[]>(`/groups/${id}/cycles`).then((r) => r.data);
+  },
+
+  /** The tontine's current pending deletion vote, if any — null when there isn't one. */
+  getDeletionRequest(groupId: number) {
+    return apiService.get<GroupDeletionRequest | null>(`/groups/${groupId}/deletion-request`).then((r) => r.data);
+  },
+
+  /** Owner-only. Proposes deleting the tontine — members get 48h to approve/decline. */
+  requestDeletion(groupId: number) {
+    return apiService.post<GroupDeletionRequest>(`/groups/${groupId}/deletion-request`).then((r) => r.data);
+  },
+
+  /** Any approved member except the requester (who already implicitly approved). */
+  castDeletionVote(groupId: number, decision: DeletionVoteDecision) {
+    return apiService
+      .post<{ outcome: DeletionRequestStatus | null; deletion_request: GroupDeletionRequest | null }>(
+        `/groups/${groupId}/deletion-request/vote`,
+        { decision },
+      )
+      .then((r) => r.data);
+  },
+
+  /** Owner-only. Withdraws a pending deletion request before it resolves. */
+  cancelDeletionRequest(groupId: number) {
+    return apiService.delete(`/groups/${groupId}/deletion-request`).then((r) => r.data);
   },
 };

@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      backoffice: ${{ steps.filter.outputs.backoffice }}
+      website: ${{ steps.filter.outputs.website }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'api/**'
+            backoffice:
+              - 'back-office/**'
+            website:
+              - 'website/**'
+            mobile:
+              - 'mobile/**'
+
+  # ✅ Laravel (MAIN CI)
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+
+      - run: |
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - run: php artisan test
+
+  # Back-office (LIGHT CHECK ONLY)
+  backoffice:
+    needs: changes
+    if: needs.changes.outputs.backoffice == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: back-office
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: npm run lint --if-present
+      - run: npm run typecheck --if-present
+
+  # Website (LIGHT CHECK ONLY)
+  website:
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: website
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: npm run lint --if-present
+      - run: npm run typecheck --if-present
+
+  # Mobile (VERY LIGHT)
+  mobile:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: npm run lint --if-present

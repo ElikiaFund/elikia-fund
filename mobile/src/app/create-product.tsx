@@ -7,7 +7,7 @@ import { CategorySelectSheet } from '@/components/category-select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { useTheme } from '@/hooks/use-theme';
 import { productCategoryService, type ProductCategory } from '@/services/productCategoryService';
 import { productService } from '@/services/productService';
@@ -15,7 +15,7 @@ import { productService } from '@/services/productService';
 export default function CreateProductScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
+  const { activeCompany } = useCompany();
   const [name, setName] = useState('');
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [categoryId, setCategoryId] = useState<number | null>(null);
@@ -23,7 +23,7 @@ export default function CreateProductScreen() {
   const [sellPrice, setSellPrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   // Pre-checked by company sector as a UX default only — always overridable.
-  const [tracksStock, setTracksStock] = useState(user?.company?.category !== 'services');
+  const [tracksStock, setTracksStock] = useState(activeCompany?.category !== 'services');
   const [stockQuantity, setStockQuantity] = useState('');
   const [lowStockThreshold, setLowStockThreshold] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

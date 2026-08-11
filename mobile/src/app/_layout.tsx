@@ -6,6 +6,7 @@ import { useColorScheme } from 'react-native';
 
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { CashSessionProvider } from '@/context/cash-session-context';
+import { CompanyProvider } from '@/context/company-context';
 import { SyncProvider } from '@/context/sync-context';
 import { VaultProvider } from '@/context/vault-context';
 import { initDatabase } from '@/db/database';
@@ -32,13 +33,15 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       <AuthProvider>
-        <SyncProvider>
-          <CashSessionProvider>
-            <VaultProvider>
-              <RootNavigator />
-            </VaultProvider>
-          </CashSessionProvider>
-        </SyncProvider>
+        <CompanyProvider>
+          <SyncProvider>
+            <CashSessionProvider>
+              <VaultProvider>
+                <RootNavigator />
+              </VaultProvider>
+            </CashSessionProvider>
+          </SyncProvider>
+        </CompanyProvider>
       </AuthProvider>
     </ThemeProvider>
   );
@@ -79,8 +82,22 @@ function RootNavigator() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
       </Stack.Protected>
 
-      <Stack.Protected guard={needsOnboarding}>
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      {/* Guarded on `isAuthenticated` alone (not `needsOnboarding`) — a screen name must be
+          unique across the whole Stack, guard or no guard, so this single registration has to
+          cover both the first-run flow (the only reachable screen while needsOnboarding is
+          true, since the block below is hidden) and router.push('/onboarding?mode=create') from
+          the company switcher once already onboarded. */}
+      <Stack.Protected guard={isAuthenticated}>
+        <Stack.Screen
+          name="onboarding"
+          options={({ route }) => ({
+            headerShown: false,
+            // Modal presentation only for the switcher's "add a company" push
+            // (?mode=create) — the first-run visit is the sole screen on the stack, so it
+            // renders full-screen like every other guard-driven landing screen.
+            presentation: (route.params as { mode?: string } | undefined)?.mode === 'create' ? 'modal' : 'card',
+          })}
+        />
       </Stack.Protected>
 
       <Stack.Protected guard={isAuthenticated && !needsOnboarding}>
@@ -104,9 +121,11 @@ function RootNavigator() {
         <Stack.Screen name="group-report" options={{ title: 'Rapport de tontine' }} />
         <Stack.Screen name="group-payout" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="group-settings" options={{ title: 'Paramètres de la tontine' }} />
+        <Stack.Screen name="group-delete-request" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="close-cash-session" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="cash-session-settings" options={{ title: 'Session de caisse' }} />
         <Stack.Screen name="cash-session-history" options={{ title: 'Historique des clôtures' }} />
+        <Stack.Screen name="delete-company" options={{ presentation: 'modal', headerShown: false }} />
       </Stack.Protected>
     </Stack>
   );

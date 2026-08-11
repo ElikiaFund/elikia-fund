@@ -18,6 +18,8 @@ readonly class YabetoConfig
         public ?string $accountId,
         public ?string $webhookSecret,
         public bool $isEnabled,
+        public ?string $relayUrl,
+        public ?string $relaySecret,
     ) {}
 
     public static function resolve(): self
@@ -30,7 +32,19 @@ readonly class YabetoConfig
             accountId: $setting->account_id ?: config('services.yabeto.account_id'),
             webhookSecret: $setting->webhook_secret ?: config('services.yabeto.webhook_secret'),
             isEnabled: $setting->is_enabled,
+            relayUrl: config('services.yabeto.relay_url'),
+            relaySecret: config('services.yabeto.relay_secret'),
         );
+    }
+
+    /**
+     * The Cloudflare Worker relay (cloudflare-relay/) only ever proxies to the live API — sandbox
+     * calls happen from local dev/CI, which aren't behind the blocked LWS network path, so they
+     * never need it. A relay URL configured while in sandbox mode is ignored, not misrouted.
+     */
+    public function usesRelay(): bool
+    {
+        return ! $this->isSandbox() && ! empty($this->relayUrl);
     }
 
     public function isSandbox(): bool

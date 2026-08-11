@@ -18,7 +18,7 @@ export type CreditScore = {
 };
 
 export const creditScoreService = {
-  get() {
-    return apiService.get<CreditScore>('/me/credit-score').then((r) => r.data);
+  get(companyId: number) {
+    return apiService.get<CreditScore>(`/companies/${companyId}/credit-score`).then((r) => r.data);
   },
 };

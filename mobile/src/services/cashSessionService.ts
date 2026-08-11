@@ -3,7 +3,7 @@ import { apiService } from '@/services/apiService';
 export type RemoteCashSession = {
   id: number;
   uuid: string;
-  user_id: number;
+  company_id: number;
   period_start: string | null;
   closed_at: string;
   expected_balance: string;

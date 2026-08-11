@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useCashSession } from '@/context/cash-session-context';
+import { useCompany } from '@/context/company-context';
 import { cacheSyncedCashSession, insertCashSession, type LocalCashSession } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
 import { computeJournalStats } from '@/lib/journal-stats';
@@ -30,6 +31,7 @@ export default function CloseCashSessionScreen() {
   // last checkpoint's counted_balance) — this screen only changes copy/emphasis between the two.
   const isStart = params.mode === 'start';
   const { user } = useAuth();
+  const { activeCompany } = useCompany();
   const { lastClosedSession, recordClosedSession, markSessionStarted, markSessionClosed } = useCashSession();
   const [isLoading, setIsLoading] = useState(true);
   const [expectedBalance, setExpectedBalance] = useState(0);
@@ -42,15 +44,16 @@ export default function CloseCashSessionScreen() {
   const periodStart = lastClosedSession?.closed_at ?? null;
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !activeCompany) {
       return;
     }
 
     const currentUser = user;
+    const currentCompany = activeCompany;
     let cancelled = false;
 
     async function load() {
-      const [transactions, netState] = await Promise.all([loadTransactions(currentUser.id), NetInfo.fetch()]);
+      const [transactions, netState] = await Promise.all([loadTransactions(currentCompany.id, currentUser.id), NetInfo.fetch()]);
 
       if (cancelled) {
         return;
@@ -86,7 +89,7 @@ export default function CloseCashSessionScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user, lastClosedSession, periodStart]);
+  }, [user, activeCompany, lastClosedSession, periodStart]);
 
   const countedValue = Number(countedBalance.replace(',', '.'));
   const hasCountedValue = countedBalance.trim().length > 0 && !Number.isNaN(countedValue);
@@ -118,7 +121,7 @@ export default function CloseCashSessionScreen() {
   }
 
   async function handleConfirm() {
-    if (!user || !hasCountedValue) {
+    if (!user || !activeCompany || !hasCountedValue) {
       return;
     }
 
@@ -144,6 +147,7 @@ export default function CloseCashSessionScreen() {
           const local: LocalCashSession = {
             uuid: remote.uuid,
             user_id: user.id,
+            company_id: activeCompany.id,
             period_start: remote.period_start,
             closed_at: remote.closed_at,
             expected_balance: Number(remote.expected_balance),
@@ -161,7 +165,13 @@ export default function CloseCashSessionScreen() {
         }
       }
 
-      const local: LocalCashSession = { ...payload, user_id: user.id, variance: countedValue - expectedBalance, synced: 0 };
+      const local: LocalCashSession = {
+        ...payload,
+        user_id: user.id,
+        company_id: activeCompany.id,
+        variance: countedValue - expectedBalance,
+        synced: 0,
+      };
       await insertCashSession(local);
       applySessionState(local);
       router.back();

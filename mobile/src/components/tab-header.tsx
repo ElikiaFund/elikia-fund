@@ -1,12 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CompanySelectSheet } from '@/components/company-select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Wordmark } from '@/components/wordmark';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { useTheme } from '@/hooks/use-theme';
 
 function initials(name: string) {
@@ -24,12 +28,25 @@ export function TabHeader() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { activeCompany } = useCompany();
   const router = useRouter();
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
 
   return (
     <View style={{ backgroundColor: theme.background, paddingTop: insets.top }}>
       <View style={styles.row}>
         <Wordmark size={16} />
+
+        <Pressable
+          onPress={() => setIsSwitcherOpen(true)}
+          hitSlop={8}
+          style={[styles.companyChip, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+        >
+          <ThemedText type="small" numberOfLines={1} style={styles.companyChipLabel}>
+            {activeCompany?.name ?? 'Aucune entreprise'}
+          </ThemedText>
+          <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
+        </Pressable>
 
         <Pressable onPress={() => router.push('/profile')} hitSlop={8}>
           {user?.avatar_url ? (
@@ -43,6 +60,8 @@ export function TabHeader() {
           )}
         </Pressable>
       </View>
+
+      <CompanySelectSheet visible={isSwitcherOpen} onClose={() => setIsSwitcherOpen(false)} />
     </View>
   );
 }
@@ -54,6 +73,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
+  },
+  companyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    flexShrink: 1,
+    marginHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+  },
+  companyChipLabel: {
+    flexShrink: 1,
   },
   avatar: {
     width: 34,

@@ -2,7 +2,7 @@ import { apiService } from '@/services/apiService';
 
 export type ProductCategory = {
   id: number;
-  user_id: number;
+  company_id: number;
   name: string;
   icon: string | null;
   color: string | null;

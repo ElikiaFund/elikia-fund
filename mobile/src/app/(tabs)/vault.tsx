@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { sheetStyles } from '@/components/select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -14,12 +15,31 @@ import { vaultService, type Vault, type VaultMovement } from '@/services/vaultSe
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
+const fullDateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
 const RECENT_COUNT = 5;
 
 const MOVEMENT_META: Record<VaultMovement['type'], { label: string; icon: keyof typeof Ionicons.glyphMap; isCredit: boolean }> = {
   deposit: { label: 'Dépôt', icon: 'arrow-up-circle-outline', isCredit: true },
   withdraw: { label: 'Retrait', icon: 'arrow-down-circle-outline', isCredit: false },
   tontine_payout: { label: 'Versement tontine', icon: 'gift-outline', isCredit: true },
+};
+
+// Only non-terminal/non-success statuses get a callout — 'succeeded'/'completed' movements stay
+// visually quiet, matching how the list already treats them as the unremarkable default case.
+const STATUS_META: Record<string, { label: string; color: 'danger' | 'tint' }> = {
+  processing: { label: 'En cours', color: 'tint' },
+  failed: { label: 'Échoué', color: 'danger' },
+  expired: { label: 'Expiré', color: 'danger' },
+  canceled: { label: 'Annulé', color: 'danger' },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  succeeded: 'Réussi',
+  completed: 'Terminé',
+  processing: 'En cours',
+  failed: 'Échoué',
+  expired: 'Expiré',
+  canceled: 'Annulé',
 };
 
 export default function VaultScreen() {
@@ -33,6 +53,8 @@ export default function VaultScreen() {
   const [isExporting, setIsExporting] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [selectedMovement, setSelectedMovement] = useState<VaultMovement | null>(null);
+  const [isCheckingMovementStatus, setIsCheckingMovementStatus] = useState(false);
 
   // Refetch vault status every time this tab gains focus, and re-lock every time it loses
   // focus — the PIN protects each visit, not just the first. On a failed refetch (offline),
@@ -70,6 +92,27 @@ export default function VaultScreen() {
     }, [lock]),
   );
 
+  // Derived straight from the already-fetched movements list (server data, not transient local
+  // state) — so a deposit/withdrawal stuck `processing` from a past session (app restart, closed
+  // mid-flow, etc.) still surfaces a "Vérifier" affordance, not just one created moments ago.
+  async function handleCheckMovementStatus(movementId: number) {
+    setIsCheckingMovementStatus(true);
+
+    try {
+      const updated = await vaultService.refreshMovementStatus(movementId);
+      setMovements((current) => current.map((m) => (m.id === updated.id ? updated : m)));
+
+      if (updated.status !== 'processing') {
+        // A deposit crediting or a withdrawal refunding both change the balance.
+        vaultService.getVault().then(setVault).catch(() => {});
+      }
+    } catch (e) {
+      Alert.alert('Erreur', e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+    } finally {
+      setIsCheckingMovementStatus(false);
+    }
+  }
+
   async function handleExportStatement() {
     if (!vault) {
       return;
@@ -86,6 +129,8 @@ export default function VaultScreen() {
           created_at: m.created_at,
           type: m.type,
           amount: Number(m.amount),
+          fee_amount: Number(m.fee_amount),
+          net_amount: Number(m.net_amount),
           note: m.note,
         })),
       });
@@ -165,6 +210,7 @@ export default function VaultScreen() {
   }
 
   const recentMovements = movements.slice(0, RECENT_COUNT);
+  const stuckMovement = movements.find((m) => m.status === 'processing') ?? null;
 
   return (
     <ThemedView style={styles.container}>
@@ -175,6 +221,24 @@ export default function VaultScreen() {
             <ThemedText type="small" themeColor="textSecondary" style={styles.offlineBannerText}>
               Hors ligne, dernières données connues affichées. Les dépôts et retraits nécessitent une connexion.
             </ThemedText>
+          </View>
+        )}
+
+        {stuckMovement && (
+          <View style={[styles.pendingBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.tint }]}>
+            <Ionicons name="time-outline" size={16} color={theme.tint} />
+            <ThemedText type="small" themeColor="textSecondary" style={styles.pendingBannerText}>
+              {MOVEMENT_META[stuckMovement.type].label} en attente de confirmation.
+            </ThemedText>
+            <Pressable onPress={() => handleCheckMovementStatus(stuckMovement.id)} disabled={isCheckingMovementStatus} hitSlop={8}>
+              {isCheckingMovementStatus ? (
+                <ActivityIndicator size="small" color={theme.tint} />
+              ) : (
+                <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                  Vérifier
+                </ThemedText>
+              )}
+            </Pressable>
           </View>
         )}
 
@@ -228,13 +292,17 @@ export default function VaultScreen() {
           <View style={[styles.movementsCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             {recentMovements.map((movement, index) => {
               const meta = MOVEMENT_META[movement.type];
+              const statusMeta = STATUS_META[movement.status];
 
               return (
-                <View
+                <Pressable
                   key={movement.id}
-                  style={[
+                  onLongPress={() => setSelectedMovement(movement)}
+                  delayLongPress={350}
+                  style={({ pressed }) => [
                     styles.movementRow,
                     index < recentMovements.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+                    pressed && { backgroundColor: theme.backgroundSelected },
                   ]}
                 >
                   <Ionicons name={meta.icon} size={20} color={meta.isCredit ? theme.income : theme.danger} />
@@ -242,12 +310,14 @@ export default function VaultScreen() {
                     <ThemedText type="small">{meta.label}</ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
                       {dateFormatter.format(new Date(movement.created_at))}
+                      {statusMeta ? ' · ' : ''}
+                      {statusMeta && <ThemedText type="small" style={{ color: theme[statusMeta.color] }}>{statusMeta.label}</ThemedText>}
                     </ThemedText>
                   </View>
                   <ThemedText type="smallBold" style={{ color: meta.isCredit ? theme.income : theme.danger }}>
                     {meta.isCredit ? '+' : '−'} {currency.format(Number(movement.amount))}
                   </ThemedText>
-                </View>
+                </Pressable>
               );
             })}
           </View>
@@ -260,7 +330,70 @@ export default function VaultScreen() {
           </ThemedText>
         </Pressable>
       </ScrollView>
+
+      <MovementDetailSheet movement={selectedMovement} onClose={() => setSelectedMovement(null)} />
     </ThemedView>
+  );
+}
+
+function MovementDetailSheet({ movement, onClose }: { movement: VaultMovement | null; onClose: () => void }) {
+  const theme = useTheme();
+
+  if (!movement) {
+    return null;
+  }
+
+  const meta = MOVEMENT_META[movement.type];
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={sheetStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[sheetStyles.sheet, { backgroundColor: theme.background }]}>
+          <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
+
+          <View style={detailStyles.header}>
+            <View style={[detailStyles.iconBadge, { backgroundColor: theme.backgroundElement }]}>
+              <Ionicons name={meta.icon} size={22} color={meta.isCredit ? theme.income : theme.danger} />
+            </View>
+            <ThemedText type="title" style={detailStyles.amount}>
+              {meta.isCredit ? '+' : '−'} {currency.format(Number(movement.amount))}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {meta.label}
+            </ThemedText>
+          </View>
+
+          <View style={detailStyles.rows}>
+            <DetailRow label="Statut" value={STATUS_LABELS[movement.status] ?? movement.status} color={STATUS_META[movement.status]?.color} />
+            <DetailRow label="Date" value={fullDateFormatter.format(new Date(movement.created_at))} />
+            {Number(movement.fee_amount) > 0 && (
+              <>
+                <DetailRow label="Frais" value={currency.format(Number(movement.fee_amount))} />
+                <DetailRow label="Montant net" value={currency.format(Number(movement.net_amount))} />
+              </>
+            )}
+            {movement.note && <DetailRow label="Détails" value={movement.note} />}
+            {movement.yabeto_reference && <DetailRow label="Référence" value={movement.yabeto_reference} mono />}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DetailRow({ label, value, color, mono }: { label: string; value: string; color?: 'danger' | 'tint'; mono?: boolean }) {
+  const theme = useTheme();
+
+  return (
+    <View style={detailStyles.row}>
+      <ThemedText type="small" themeColor="textSecondary" style={detailStyles.rowLabel}>
+        {label}
+      </ThemedText>
+      <ThemedText type="smallBold" style={[detailStyles.rowValue, mono && detailStyles.mono, color && { color: theme[color] }]}>
+        {value}
+      </ThemedText>
+    </View>
   );
 }
 
@@ -365,6 +498,19 @@ const styles = StyleSheet.create({
   offlineBannerText: {
     flex: 1,
   },
+  pendingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.four,
+  },
+  pendingBannerText: {
+    flex: 1,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -404,5 +550,43 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.four,
+  },
+});
+
+const detailStyles = StyleSheet.create({
+  header: {
+    alignItems: 'center',
+    marginBottom: Spacing.five,
+  },
+  iconBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.three,
+  },
+  amount: {
+    fontSize: 28,
+    lineHeight: 34,
+  },
+  rows: {
+    gap: Spacing.three,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.three,
+  },
+  rowLabel: {
+    paddingTop: 2,
+  },
+  rowValue: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  mono: {
+    fontFamily: 'monospace',
   },
 });

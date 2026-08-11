@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
@@ -13,11 +13,25 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCycleLabel } from '@/lib/cycle-format';
-import { groupService, TONTINE_MANAGEMENT_FEE_RATE, type Group, type GroupCycle, type GroupMember, type PaymentMethod } from '@/services/groupService';
+import { contributionPercent, feeService, FALLBACK_FEE_RATES, type FeeRates } from '@/services/feeService';
+import {
+  groupService,
+  type Group,
+  type GroupCycle,
+  type GroupDeletionRequest,
+  type GroupMember,
+  type PaymentMethod,
+} from '@/services/groupService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const FREQUENCY_LABELS: Record<Group['frequency'], string> = { weekly: 'hebdomadaire', monthly: 'mensuelle' };
 const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const CONTRIBUTION_STATUS_LABELS: Record<string, string> = {
+  succeeded: 'Réussie',
+  processing: 'En attente',
+  failed: 'Échouée',
+  voided: 'Annulée',
+};
 
 function initials(name: string) {
   return name
@@ -49,12 +63,24 @@ export default function GroupDetailScreen() {
   const [isRecipientPickerOpen, setIsRecipientPickerOpen] = useState(false);
   const [isDesignatingRecipient, setIsDesignatingRecipient] = useState(false);
   const [cycles, setCycles] = useState<GroupCycle[]>([]);
+  const [deletionRequest, setDeletionRequest] = useState<GroupDeletionRequest | null>(null);
   const [isRenewing, setIsRenewing] = useState(false);
   const [processingMemberId, setProcessingMemberId] = useState<number | null>(null);
+  const [feeRates, setFeeRates] = useState<FeeRates>(FALLBACK_FEE_RATES);
+  // Synchronous guard against a double-tap landing before React re-renders the button's
+  // disabled prop — isContributing state alone doesn't catch two taps within the same tick.
+  const isContributingRef = useRef(false);
+
+  useEffect(() => {
+    feeService.get().then(setFeeRates);
+  }, []);
+
+  const feeRate = contributionPercent(feeRates) / 100;
 
   const load = useCallback(() => {
     setIsLoading(true);
     groupService.cycles(Number(id)).then(setCycles).catch(() => {});
+    groupService.getDeletionRequest(Number(id)).then(setDeletionRequest).catch(() => {});
     groupService
       .show(Number(id))
       .then((result) => {
@@ -71,12 +97,41 @@ export default function GroupDetailScreen() {
     }, [load]),
   );
 
+  // Own contributions only (never another member's) — matches vault.tsx's "your history, not
+  // everyone else's" convention. Most recent first.
+  const myContributions = (group?.contributions ?? [])
+    .filter((c) => c.user_id === user?.id)
+    .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime());
+
+  // Re-derives the pending-confirmation banner from server data on every load, not just right
+  // after a fresh submit — otherwise a contribution stuck `processing` from a past session (app
+  // restart, closed the form, etc.) would have no visible "Vérifier" affordance at all until the
+  // user tried (and got blocked) submitting again.
+  useEffect(() => {
+    if (!group || pendingContributionId) {
+      return;
+    }
+
+    const stuck = myContributions.find((c) => c.status === 'processing' && c.cycle_period === group.current_cycle_period);
+
+    if (stuck) {
+      setPendingContributionId(stuck.id);
+      setPendingNotice('Une cotisation est en attente de confirmation.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group]);
+
   function handleContributionPhoneChange(text: string) {
     // Keep the +242 country prefix locked in place — only track the local digits.
     setContributionPhone(text.startsWith('+242 ') ? text : `+242 ${text.replace(/^\+?242\s?/, '')}`);
   }
 
   async function handleContribute() {
+    if (isContributingRef.current) {
+      return;
+    }
+
+    isContributingRef.current = true;
     setError(null);
     setPendingNotice(null);
     setIsContributing(true);
@@ -97,26 +152,31 @@ export default function GroupDetailScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
+      isContributingRef.current = false;
       setIsContributing(false);
     }
   }
 
-  async function handleCheckStatus() {
-    if (!pendingContributionId) {
+  async function handleCheckStatus(contributionId?: number) {
+    const targetId = contributionId ?? pendingContributionId;
+
+    if (!targetId) {
       return;
     }
 
     setIsCheckingStatus(true);
 
     try {
-      const contribution = await groupService.refreshContributionStatus(Number(id), pendingContributionId);
+      const contribution = await groupService.refreshContributionStatus(Number(id), targetId);
 
       if (contribution.status !== 'processing') {
-        setPendingNotice(null);
-        setPendingContributionId(null);
-        setIsContributeFormOpen(false);
-        setContributionMethod(null);
-        setContributionPhone('');
+        if (targetId === pendingContributionId) {
+          setPendingNotice(null);
+          setPendingContributionId(null);
+          setIsContributeFormOpen(false);
+          setContributionMethod(null);
+          setContributionPhone('');
+        }
         load();
       }
     } catch (e) {
@@ -338,6 +398,19 @@ export default function GroupDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {deletionRequest?.status === 'pending' && (
+          <Pressable
+            onPress={() => router.push({ pathname: '/group-delete-request', params: { id: String(group.id) } })}
+            style={[styles.deletionBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.danger }]}
+          >
+            <Ionicons name="warning-outline" size={18} color={theme.danger} />
+            <ThemedText type="small" style={styles.deletionBannerText}>
+              Un vote est en cours pour supprimer cette tontine.
+            </ThemedText>
+            <Ionicons name="chevron-forward" size={16} color={theme.danger} />
+          </Pressable>
+        )}
+
         <View style={styles.summaryCard}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.roundLabel}>
             Tour n°{group.round_number}
@@ -349,9 +422,9 @@ export default function GroupDetailScreen() {
             {currency.format(Number(group.contribution_amount))}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.feeHint}>
-            Dont {currency.format(Number(group.contribution_amount) * TONTINE_MANAGEMENT_FEE_RATE)} de frais de
-            gestion ({TONTINE_MANAGEMENT_FEE_RATE * 100}%) net versé à la tontine :{' '}
-            {currency.format(Number(group.contribution_amount) * (1 - TONTINE_MANAGEMENT_FEE_RATE))}
+            Dont {currency.format(Number(group.contribution_amount) * feeRate)} de frais de
+            gestion ({(feeRate * 100).toFixed(1)}%) net versé à la tontine :{' '}
+            {currency.format(Number(group.contribution_amount) * (1 - feeRate))}
           </ThemedText>
         </View>
 
@@ -503,7 +576,7 @@ export default function GroupDetailScreen() {
                   contributionMethod === 'mtn_momo' && { backgroundColor: theme.backgroundSelected },
                 ]}
               >
-                <ThemedText type="small">MTN Mobile Money</ThemedText>
+                <ThemedText type="small">MTN MoMo</ThemedText>
               </Pressable>
               <Pressable
                 onPress={() => setContributionMethod('airtel_money')}
@@ -570,7 +643,7 @@ export default function GroupDetailScreen() {
             <ThemedText type="small" themeColor="textSecondary" style={styles.pendingBannerText}>
               {pendingNotice}
             </ThemedText>
-            <Pressable onPress={handleCheckStatus} disabled={isCheckingStatus} hitSlop={8}>
+            <Pressable onPress={() => handleCheckStatus()} disabled={isCheckingStatus} hitSlop={8}>
               {isCheckingStatus ? (
                 <ActivityIndicator size="small" color={theme.tint} />
               ) : (
@@ -674,6 +747,63 @@ export default function GroupDetailScreen() {
                   <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
                 </Pressable>
               ))}
+            </View>
+          </>
+        )}
+
+        {myContributions.length > 0 && (
+          <>
+            <ThemedText type="smallBold" style={styles.sectionTitle}>
+              Mes cotisations
+            </ThemedText>
+            <View style={[styles.membersCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+              {myContributions.slice(0, 10).map((contribution, index, arr) => {
+                const isStuck = contribution.status === 'processing';
+
+                return (
+                  <View
+                    key={contribution.id}
+                    style={[
+                      styles.cycleRowItem,
+                      index < arr.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+                    ]}
+                  >
+                    <View style={styles.cycleRowContent}>
+                      <ThemedText type="small">{contribution.cycle_period}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {dateTimeFormatter.format(new Date(contribution.paid_at))}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.contributionAmountCol}>
+                      <ThemedText type="smallBold">{currency.format(Number(contribution.amount))}</ThemedText>
+                      <ThemedText
+                        type="small"
+                        style={{
+                          color:
+                            contribution.status === 'succeeded'
+                              ? theme.income
+                              : contribution.status === 'processing'
+                                ? theme.tint
+                                : theme.danger,
+                        }}
+                      >
+                        {CONTRIBUTION_STATUS_LABELS[contribution.status] ?? contribution.status}
+                      </ThemedText>
+                    </View>
+                    {isStuck && (
+                      <Pressable onPress={() => handleCheckStatus(contribution.id)} disabled={isCheckingStatus} hitSlop={8}>
+                        {isCheckingStatus ? (
+                          <ActivityIndicator size="small" color={theme.tint} />
+                        ) : (
+                          <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                            Vérifier
+                          </ThemedText>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           </>
         )}
@@ -907,6 +1037,19 @@ const styles = StyleSheet.create({
   pendingBannerText: {
     flex: 1,
   },
+  deletionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.four,
+  },
+  deletionBannerText: {
+    flex: 1,
+  },
   error: {
     textAlign: 'center',
     marginTop: -Spacing.three,
@@ -924,6 +1067,10 @@ const styles = StyleSheet.create({
   },
   cycleRowContent: {
     flex: 1,
+    gap: 2,
+  },
+  contributionAmountCol: {
+    alignItems: 'flex-end',
     gap: 2,
   },
   membersCard: {

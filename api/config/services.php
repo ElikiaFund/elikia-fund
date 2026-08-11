@@ -58,6 +58,11 @@ return [
         'secret_key' => env('YABETO_SECRET_KEY'),
         'account_id' => env('YABETO_ACCOUNT_ID'),
         'webhook_secret' => env('YABETO_WEBHOOK_SECRET'),
+        // Optional Cloudflare Worker relay, live mode only — see cloudflare-relay/. A network
+        // workaround, not a business setting, so deliberately env-only (not in yabeto_settings /
+        // the back-office UI) unlike everything else in this block.
+        'relay_url' => env('YABETO_RELAY_URL'),
+        'relay_secret' => env('YABETO_RELAY_SECRET'),
     ],
 
 ];

@@ -3,11 +3,9 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { AccessToken, LoginManager } from 'react-native-fbsdk-next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppleLogo } from '@/components/brand/apple-logo';
-import { FacebookLogo } from '@/components/brand/facebook-logo';
 import { GoogleLogo } from '@/components/brand/google-logo';
 import { FormField } from '@/components/form-field';
 import { SelectSheet } from '@/components/select-sheet';
@@ -25,11 +23,11 @@ GoogleSignin.configure({
 });
 
 type Mode = 'login' | 'signup';
-type LoadingAction = 'phone' | 'google' | 'apple' | 'facebook';
+type LoadingAction = 'phone' | 'google' | 'apple';
 
 export default function LoginScreen() {
   const theme = useTheme();
-  const { register, login, loginWithGoogle, loginWithApple, loginWithFacebook } = useAuth();
+  const { register, login, loginWithGoogle, loginWithApple } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
@@ -101,24 +99,6 @@ export default function LoginScreen() {
       const fullName = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(' ') || undefined;
 
       await loginWithApple(credential.identityToken, fullName);
-    });
-  }
-
-  async function handleFacebook() {
-    await handle('facebook', async () => {
-      const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
-
-      if (result.isCancelled) {
-        throw new Error('Connexion Facebook annulée.');
-      }
-
-      const accessToken = await AccessToken.getCurrentAccessToken();
-
-      if (!accessToken) {
-        throw new Error("Impossible de récupérer le jeton d'accès Facebook.");
-      }
-
-      await loginWithFacebook(accessToken.accessToken);
     });
   }
 
@@ -248,13 +228,6 @@ export default function LoginScreen() {
                     loading={loadingAction === 'apple'}
                   />
                 )}
-                <AuthButton
-                  label="Continuer avec Facebook"
-                  icon={<FacebookLogo size={20} />}
-                  onPress={handleFacebook}
-                  disabled={isSubmitting}
-                  loading={loadingAction === 'facebook'}
-                />
               </View>
 
               <View style={styles.feedback}>

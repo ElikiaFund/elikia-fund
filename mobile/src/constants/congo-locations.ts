@@ -40,3 +40,19 @@ export const CONGO_DEPARTMENTS: { value: CongoDepartment; label: string; capital
   { value: 'pool', label: 'Pool', capital: 'Kinkala' },
   { value: 'sangha', label: 'Sangha', capital: 'Ouesso' },
 ];
+
+/**
+ * Brazzaville and Pointe-Noire are the only two cities in the Republic of Congo formally
+ * subdivided into arrondissements — every other department is subdivided into communes/districts
+ * instead, none of which have a settled, sourceable list the way these two do. Keyed by the exact
+ * `capital` string above so onboarding.tsx can look this up directly off the selected city; any
+ * other city falls back to a free-text "Quartier" field instead of this preset picker.
+ *
+ * Brazzaville's 9 arrondissements: official numbered order (Makélékélé is n°1 through Djiri n°9).
+ * Pointe-Noire's 6 arrondissements: official numbered order (Lumumba is n°1 through Ngoyo n°6),
+ * Pointe-Noire became its own department (no longer part of Kouilou) with this same six-way split.
+ */
+export const ARRONDISSEMENTS_BY_CITY: Record<string, string[]> = {
+  Brazzaville: ['Makélékélé', 'Bacongo', 'Poto-Poto', 'Moungali', 'Ouenzé', 'Talangaï', 'Mfilou', 'Madibou', 'Djiri'],
+  'Pointe-Noire': ['Lumumba', 'Mvoumvou', 'Tié-Tié', 'Loandjili', 'Mongo-Mpoukou', 'Ngoyo'],
+};

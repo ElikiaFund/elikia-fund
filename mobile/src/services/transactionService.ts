@@ -5,10 +5,11 @@ export type TransactionType = 'income' | 'expense';
 export type RemoteTransaction = {
   id: number;
   uuid: string;
-  user_id: number;
+  company_id: number;
   type: TransactionType;
   amount: string;
   category: string;
+  payment_method: string | null;
   note: string | null;
   product_name: string | null;
   quantity: number | null;
@@ -25,6 +26,7 @@ export type CreateTransactionPayload = {
   type: TransactionType;
   amount: number;
   category: string;
+  payment_method: string;
   note: string | null;
   product_name: string | null;
   quantity: number | null;

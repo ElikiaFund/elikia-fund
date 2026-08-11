@@ -41,9 +41,15 @@ export type CreateCompanyPayload = {
 };
 
 export const companyService = {
+  /** Every company the authenticated user owns — feeds the mobile switcher. */
+  list() {
+    return apiService.get<Company[]>('/companies').then((r) => r.data);
+  },
+
+  /** Used both for first-time onboarding and for adding a 2nd+ company via the switcher. */
   create(payload: CreateCompanyPayload) {
     return apiService
-      .post<Company>('/onboarding/company', {
+      .post<Company>('/companies', {
         name: payload.name,
         category: payload.category,
         other_category: payload.otherCategory,
@@ -53,5 +59,11 @@ export const companyService = {
         address: payload.address || undefined,
       })
       .then((r) => r.data);
+  },
+
+  /** Cascades to the company's transactions/products/categories/cash sessions server-side —
+   * never touches the caller's vault, which is strictly 1:1 with the user, not the company. */
+  remove(id: number) {
+    return apiService.delete(`/companies/${id}`);
   },
 };

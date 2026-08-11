@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { categoryIcon, categoryLabel, EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/constants/cashflow-categories';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { type LocalTransaction } from '@/db/database';
 import { useTheme } from '@/hooks/use-theme';
 import { buildJournalCaisseHtml, printAndShareHtml } from '@/lib/pdf';
@@ -69,6 +70,7 @@ const PAGE_SIZE = 10;
 export default function TransactionsScreen() {
   const theme = useTheme();
   const { user } = useAuth();
+  const { activeCompany } = useCompany();
   const [transactions, setTransactions] = useState<LocalTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -85,14 +87,14 @@ export default function TransactionsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) {
+      if (!user || !activeCompany) {
         return;
       }
 
       let cancelled = false;
       setIsLoading(true);
 
-      loadTransactions(user.id)
+      loadTransactions(activeCompany.id, user.id)
         .then((result) => {
           if (!cancelled) {
             setTransactions(result);
@@ -107,7 +109,7 @@ export default function TransactionsScreen() {
       return () => {
         cancelled = true;
       };
-    }, [user]),
+    }, [user, activeCompany]),
   );
 
   const availableCategories = useMemo(() => {

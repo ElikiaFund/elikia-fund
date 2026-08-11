@@ -1,12 +1,16 @@
 import * as SecureStore from 'expo-secure-store';
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 
-import { backfillLegacyUserId, clearActiveCashSession } from '@/db/database';
+import { clearActiveCashSession } from '@/db/database';
 import { registerForPushNotifications } from '@/lib/push-notifications';
-import { setApiAuthToken } from '@/services/apiService';
+import { ApiError, setApiAuthToken } from '@/services/apiService';
 import { authService, type AuthResponse, type AuthUser } from '@/services/authService';
 
 const TOKEN_KEY = 'elikia_fund_token';
+// Last known-good profile, refreshed on every successful /me — lets restoreSession() keep the
+// user signed in when it can't reach the API at all (offline/timeout/5xx), instead of treating
+// "couldn't verify" the same as "the server said this token is invalid".
+const CACHED_USER_KEY = 'elikia_fund_cached_user';
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -40,23 +44,46 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         const restoredUser = await authService.me();
         setUser(restoredUser);
+        await cacheUser(restoredUser);
         registerForPushNotifications().catch(() => {});
-        backfillLegacyUserId(restoredUser.id).catch(() => {});
-      } catch {
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
-        setApiAuthToken(null);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 401) {
+          // The server explicitly rejected this token (expired/revoked) — a genuine logout.
+          await SecureStore.deleteItemAsync(TOKEN_KEY);
+          await SecureStore.deleteItemAsync(CACHED_USER_KEY);
+          setApiAuthToken(null);
+        } else {
+          // Couldn't reach the API at all (offline, timeout, 5xx) — nothing here proves the
+          // session is actually invalid, so don't sign the user out and lock them out of the
+          // app until they happen to reconnect. Fall back to the last known-good profile so
+          // isAuthenticated stays true; the token itself is left untouched and gets re-verified
+          // for real the next time any authenticated request actually reaches the server.
+          const cached = await SecureStore.getItemAsync(CACHED_USER_KEY);
+
+          if (cached) {
+            try {
+              setUser(JSON.parse(cached));
+            } catch {
+              // Corrupted cache — nothing to restore from, but the token is still kept.
+            }
+          }
+        }
       }
     }
 
     setIsLoading(false);
   }
 
+  async function cacheUser(userToCache: AuthUser) {
+    await SecureStore.setItemAsync(CACHED_USER_KEY, JSON.stringify(userToCache)).catch(() => {});
+  }
+
   async function applySession({ user, token }: AuthResponse) {
     await SecureStore.setItemAsync(TOKEN_KEY, token);
+    await cacheUser(user);
     setApiAuthToken(token);
     setUser(user);
     registerForPushNotifications().catch(() => {});
-    backfillLegacyUserId(user.id).catch(() => {});
   }
 
   async function register(name: string, phone: string, password: string) {
@@ -80,7 +107,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function refreshUser() {
-    setUser(await authService.me());
+    const refreshedUser = await authService.me();
+    setUser(refreshedUser);
+    await cacheUser(refreshedUser);
   }
 
   async function logout() {
@@ -97,6 +126,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(CACHED_USER_KEY);
     setApiAuthToken(null);
     setUser(null);
   }
