@@ -127,7 +127,7 @@
     </div>
 
     <div class="footer">
-        Document généré par ElikiaFund — Plateforme de simulation financière pour commerçants informels.<br />
+        Document généré par ElikiaFund, Plateforme de simulation financière pour commerçants informels.<br />
         Les montants présentés sont issus d'une simulation des comportements financiers et ne constituent pas une preuve d'avoirs réels.<br />
         Ce dossier vise à témoigner de la discipline financière, de la régularité et de la fiabilité démontrées sur la plateforme.
     </div>

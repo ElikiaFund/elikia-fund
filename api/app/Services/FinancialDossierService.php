@@ -96,7 +96,7 @@ class FinancialDossierService
         return match ($verdict) {
             'eligible' => 'Profil de référence. Excellente régularité, épargne disciplinée et participation active aux tontines. Éligible aux meilleures conditions de financement.',
             'review' => "Profil en développement. L'activité enregistrée montre des signes encourageants, mais gagnerait à être consolidée sur une période plus longue avant une évaluation définitive.",
-            default => "Profil encore limité. Peu d'historique disponible pour établir une évaluation fiable — une utilisation plus régulière du journal de caisse, du coffre et des tontines permettra d'affiner ce score.",
+            default => "Profil encore limité. Peu d'historique disponible pour établir une évaluation fiable une,utilisation plus régulière du journal de caisse, du coffre et des tontines permettra d'affiner ce score.",
         };
     }
 }
