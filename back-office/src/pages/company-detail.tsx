@@ -1,8 +1,9 @@
 import { format, subDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ArrowLeftIcon } from 'lucide-react'
+import { ArrowLeftIcon, FileTextIcon, Loader2Icon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
 import type { DateRange } from 'react-day-picker'
 
 import { DateRangeFilter } from '@/components/dashboard/date-range-filter'
@@ -37,6 +38,7 @@ export function CompanyDetailPage() {
   const { id } = useParams()
   const [company, setCompany] = useState<AdminCompanyDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDownloadingDossier, setIsDownloadingDossier] = useState(false)
   usePageTitle(company ? `${company.name} · Entreprises` : 'Entreprises')
   const [range, setRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 30), to: new Date() })
 
@@ -63,6 +65,28 @@ export function CompanyDetailPage() {
   )
 
   const filteredTransactions = useMemo(() => filterByRange(transactions, range), [transactions, range])
+
+  async function handleDownloadDossier() {
+    if (!company) {
+      return
+    }
+
+    setIsDownloadingDossier(true)
+
+    try {
+      const blob = await adminService.getCompanyFinancialDossier(company.id)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `dossier-financier-${company.name}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Impossible de générer le dossier financier. Veuillez réessayer.')
+    } finally {
+      setIsDownloadingDossier(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -121,6 +145,22 @@ export function CompanyDetailPage() {
                       <span className="text-sm text-muted-foreground">{company.user.email}</span>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Identité financière</CardTitle>
+                  <CardDescription>
+                    Dossier de crédibilité financière au format PDF — score de confiance, activité économique, épargne et
+                    participation aux tontines, dans le même design que le journal de caisse.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button onClick={handleDownloadDossier} disabled={isDownloadingDossier}>
+                    {isDownloadingDossier ? <Loader2Icon className="animate-spin" /> : <FileTextIcon />}
+                    Télécharger le dossier financier
+                  </Button>
                 </CardContent>
               </Card>
             </div>

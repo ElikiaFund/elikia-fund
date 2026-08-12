@@ -367,6 +367,12 @@ export const adminService = {
     return apiService.delete(`/admin/companies/${id}`)
   },
 
+  /** Server-rendered "Dossier de crédibilité financière" PDF — downloaded as a blob since the
+   * request needs the bearer token, which a plain <a href> can't attach. */
+  getCompanyFinancialDossier(id: number) {
+    return apiService.get(`/admin/companies/${id}/financial-dossier`, { responseType: 'blob' }).then((r) => r.data as Blob)
+  },
+
   listWaitlist() {
     return apiService.get<AdminWaitlistEntry[]>('/admin/waitlist').then((r) => r.data)
   },
