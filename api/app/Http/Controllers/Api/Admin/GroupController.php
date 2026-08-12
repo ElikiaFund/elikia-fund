@@ -13,7 +13,7 @@ class GroupController extends Controller
         // `contributions` is eager-loaded (not just summed) so the back-office dashboard can
         // aggregate/date-filter cotisations client-side without a dedicated endpoint.
         return response()->json(
-            Group::with('owner', 'contributions')
+            Group::with('owner', 'company', 'contributions')
                 ->withCount('members')
                 ->withSum('contributions', 'amount')
                 ->latest()
@@ -26,6 +26,7 @@ class GroupController extends Controller
         return response()->json(
             $group->load(
                 'owner',
+                'company',
                 'members',
                 'removedMembers',
                 'contributions.user',

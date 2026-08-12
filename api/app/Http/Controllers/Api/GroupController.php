@@ -28,6 +28,7 @@ use App\Services\GroupDeletionService;
 use App\Services\GroupMembershipNotificationService;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\TontineReportService;
@@ -84,6 +85,7 @@ class GroupController extends Controller
             'recipient_mode' => $request->validated('recipient_mode') ?? 'join_order',
             'invite_code' => $this->generateInviteCode(),
             'owner_id' => $user->id,
+            'company_id' => $request->validated('company_id'),
             // Both columns have a matching DB-level default, but Eloquent's create() never
             // re-queries the row afterward — leaving these null on the in-memory $group used
             // a few lines below (withCycleStatus() -> resolveFor(), which persists
@@ -386,7 +388,7 @@ class GroupController extends Controller
 
         $group->loadMissing('members');
 
-        $cycleRecipient = $this->cycleRecipients->resolveFor($group, $cyclePeriod)->load('user.vault');
+        $cycleRecipient = $this->cycleRecipients->resolveFor($group, $cyclePeriod)->load('user');
         $bounds = $group->cycleBoundsFor($cyclePeriod);
         $progress = $this->cycleProgress($group, $cyclePeriod);
 
@@ -396,7 +398,9 @@ class GroupController extends Controller
             ->sum('net_amount');
 
         $recipient = $cycleRecipient->user;
-        $vaultActivated = (bool) $recipient?->vault;
+        // The payout lands in the tontine's own company vault, not the recipient member's
+        // personal vault — see TontinePayoutService::disburse().
+        $vaultActivated = (bool) $group->company->vault;
         $alreadyPaidOut = $cycleRecipient->paid_out_at !== null;
 
         return response()->json([
@@ -641,7 +645,7 @@ class GroupController extends Controller
         abort_unless($contribution->group_id === $group->id, 404);
         abort_unless($contribution->user_id === $user->id, 403);
 
-        if (! $this->yabeto->isEnabled() || $contribution->status !== 'processing' || ! $contribution->yabeto_reference) {
+        if (! $this->yabeto->isEnabled() || YabetoStatus::isTerminal($contribution->status) || ! $contribution->yabeto_reference) {
             return response()->json($contribution->load('user'));
         }
 
@@ -693,7 +697,8 @@ class GroupController extends Controller
             return response()->json(['message' => 'Ce cycle a déjà été versé, impossible d\'y ajouter une cotisation.'], 409);
         }
 
-        $amount = (float) $group->contribution_amount;
+        $amount = (float) ($request->validated('amount') ?? $group->contribution_amount);
+        $paidAt = $request->validated('paid_at') ? Carbon::parse($request->validated('paid_at')) : null;
 
         try {
             $fee = $this->fees->contribution($amount);
@@ -702,7 +707,17 @@ class GroupController extends Controller
         }
 
         try {
-            $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $fee, 'succeeded', 'manual', $request->user()->id);
+            $contribution = $this->contributions->reserve(
+                $group,
+                $user,
+                $cyclePeriod,
+                $amount,
+                $fee,
+                'succeeded',
+                'manual',
+                $request->user()->id,
+                $paidAt,
+            );
         } catch (ContributionInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }

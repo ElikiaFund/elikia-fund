@@ -2,8 +2,8 @@ import { apiService, ApiError } from '@/services/apiService';
 
 export type Vault = {
   id: number;
+  company_id: number;
   balance: string;
-  pin_set_at: string | null;
   created_at: string;
 };
 

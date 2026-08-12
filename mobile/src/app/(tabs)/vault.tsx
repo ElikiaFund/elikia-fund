@@ -24,23 +24,33 @@ const MOVEMENT_META: Record<VaultMovement['type'], { label: string; icon: keyof 
   tontine_payout: { label: 'Versement tontine', icon: 'gift-outline', isCredit: true },
 };
 
-// Only non-terminal/non-success statuses get a callout — 'succeeded'/'completed' movements stay
-// visually quiet, matching how the list already treats them as the unremarkable default case.
-const STATUS_META: Record<string, { label: string; color: 'danger' | 'tint' }> = {
-  processing: { label: 'En cours', color: 'tint' },
-  failed: { label: 'Échoué', color: 'danger' },
-  expired: { label: 'Expiré', color: 'danger' },
-  canceled: { label: 'Annulé', color: 'danger' },
-};
+// Yabeto's documented "reliable" statuses are pending/processing/succeeded/failed, but
+// Stripe-derived extras (requires_confirmation) and undocumented ones (observed in production:
+// "incomplete") show up too. Rather than list every transient status we've seen so far
+// (guaranteed to miss the next one), terminality is defined by exclusion — matching the
+// backend's YabetoStatus — so any status this app doesn't specifically recognize still counts as
+// "not resolved yet" instead of silently looking finished.
+const TERMINAL_STATUSES = ['succeeded', 'completed', 'failed', 'expired', 'canceled'];
+const FAILURE_STATUSES = ['failed', 'expired', 'canceled'];
 
-const STATUS_LABELS: Record<string, string> = {
+const KNOWN_STATUS_LABELS: Record<string, string> = {
   succeeded: 'Réussi',
   completed: 'Terminé',
   processing: 'En cours',
+  requires_confirmation: 'Confirmation requise',
   failed: 'Échoué',
   expired: 'Expiré',
   canceled: 'Annulé',
 };
+
+/** null for a quiet terminal success — every other status (known or not) gets a callout. */
+function statusMetaFor(status: string): { label: string; color: 'danger' | 'tint' } | null {
+  if (status === 'succeeded' || status === 'completed') {
+    return null;
+  }
+
+  return { label: KNOWN_STATUS_LABELS[status] ?? status, color: FAILURE_STATUSES.includes(status) ? 'danger' : 'tint' };
+}
 
 export default function VaultScreen() {
   const theme = useTheme();
@@ -210,7 +220,7 @@ export default function VaultScreen() {
   }
 
   const recentMovements = movements.slice(0, RECENT_COUNT);
-  const stuckMovement = movements.find((m) => m.status === 'processing') ?? null;
+  const stuckMovement = movements.find((m) => !TERMINAL_STATUSES.includes(m.status)) ?? null;
 
   return (
     <ThemedView style={styles.container}>
@@ -292,7 +302,7 @@ export default function VaultScreen() {
           <View style={[styles.movementsCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
             {recentMovements.map((movement, index) => {
               const meta = MOVEMENT_META[movement.type];
-              const statusMeta = STATUS_META[movement.status];
+              const statusMeta = statusMetaFor(movement.status);
 
               return (
                 <Pressable
@@ -365,7 +375,7 @@ function MovementDetailSheet({ movement, onClose }: { movement: VaultMovement | 
           </View>
 
           <View style={detailStyles.rows}>
-            <DetailRow label="Statut" value={STATUS_LABELS[movement.status] ?? movement.status} color={STATUS_META[movement.status]?.color} />
+            <DetailRow label="Statut" value={KNOWN_STATUS_LABELS[movement.status] ?? movement.status} color={statusMetaFor(movement.status)?.color} />
             <DetailRow label="Date" value={fullDateFormatter.format(new Date(movement.created_at))} />
             {Number(movement.fee_amount) > 0 && (
               <>

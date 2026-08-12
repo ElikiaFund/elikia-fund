@@ -44,12 +44,14 @@ class CompanyController extends Controller
     /**
      * DELETE /companies/{company} — mobile-facing self-service deletion, gated by the company
      * switcher's confirmation screen. Cascades to transactions/products/product & transaction
-     * categories/cash sessions (all cascadeOnDelete FKs) — deliberately does NOT touch the
-     * caller's vault, which is strictly 1:1 with the user, not the company.
+     * categories/cash sessions/vault (all cascadeOnDelete FKs) — blocked outright while the
+     * vault still holds a positive balance, since cascading would otherwise silently destroy
+     * real money rather than require it be withdrawn first.
      */
     public function destroy(Request $request, Company $company): JsonResponse
     {
         abort_unless($company->user_id === $request->user()->id, 403);
+        abort_if((float) ($company->vault?->balance ?? 0) > 0, 409, 'Impossible de supprimer une entreprise dont le coffre a un solde positif.');
 
         $company->delete();
 

@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Vault;
 
+use App\Models\Company;
 use App\Models\User;
 use App\Models\Vault;
 use App\Models\YabetoSetting;
 use App\Services\FeeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -25,8 +27,7 @@ class FeeApplicationTest extends TestCase
 
     public function test_deposit_credits_the_vault_with_net_not_gross(): void
     {
-        $user = User::factory()->create();
-        $vault = Vault::factory()->for($user)->activated()->create(['balance' => 0]);
+        [$user, $company, $vault] = $this->activatedVault(['balance' => 0]);
         Sanctum::actingAs($user, ['*']);
 
         $amount = 10000;
@@ -36,7 +37,7 @@ class FeeApplicationTest extends TestCase
             'amount' => $amount,
             'pin' => '1234',
             'payment_method' => 'mtn_momo',
-        ]);
+        ], ['X-Company-Id' => (string) $company->id]);
 
         $response->assertCreated();
         $this->assertEqualsWithDelta($expected['fee_amount'], (float) $response->json('movement.fee_amount'), 0.01);
@@ -56,8 +57,7 @@ class FeeApplicationTest extends TestCase
             'pay.sandbox.yabetoopay.com/*' => Http::response(['id' => 'dis_test123', 'status' => 'processing']),
         ]);
 
-        $user = User::factory()->create();
-        $vault = Vault::factory()->for($user)->activated()->create(['balance' => 20000]);
+        [$user, $company, $vault] = $this->activatedVault(['balance' => 20000]);
         Sanctum::actingAs($user, ['*']);
 
         $amount = 10000;
@@ -68,7 +68,7 @@ class FeeApplicationTest extends TestCase
             'pin' => '1234',
             'payment_method' => 'mtn_momo',
             'phone' => '+242060000000',
-        ]);
+        ], ['X-Company-Id' => (string) $company->id]);
 
         $response->assertStatus(202);
         // The vault is debited the full gross amount the user asked to withdraw — the fee is the
@@ -98,8 +98,7 @@ class FeeApplicationTest extends TestCase
 
     public function test_a_deposit_below_the_fixed_fee_floor_is_rejected(): void
     {
-        $user = User::factory()->create();
-        $vault = Vault::factory()->for($user)->activated()->create(['balance' => 0]);
+        [$user, $company, $vault] = $this->activatedVault(['balance' => 0]);
         Sanctum::actingAs($user, ['*']);
 
         // 1 FCFA can never clear the 100 FCFA fixed deposit fee alone — net_amount would be
@@ -108,9 +107,26 @@ class FeeApplicationTest extends TestCase
             'amount' => 1,
             'pin' => '1234',
             'payment_method' => 'mtn_momo',
-        ]);
+        ], ['X-Company-Id' => (string) $company->id]);
 
         $response->assertStatus(422);
         $this->assertEqualsWithDelta(0.0, (float) $vault->fresh()->balance, 0.01);
+    }
+
+    /**
+     * Creates a user with a shared PIN of '1234', one company, and that company's activated
+     * vault (with the given attribute overrides).
+     *
+     * @param  array<string, mixed>  $vaultAttributes
+     * @return array{0: User, 1: Company, 2: Vault}
+     */
+    private function activatedVault(array $vaultAttributes = []): array
+    {
+        $user = User::factory()->create();
+        $user->forceFill(['pin_hash' => Hash::make('1234'), 'pin_set_at' => now()])->save();
+        $company = Company::factory()->for($user)->create();
+        $vault = Vault::factory()->for($company)->create($vaultAttributes);
+
+        return [$user, $company, $vault];
     }
 }

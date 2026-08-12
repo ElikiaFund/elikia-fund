@@ -18,6 +18,10 @@ export type AuthUser = {
   phone: string | null;
   avatar_url: string | null;
   is_admin: boolean;
+  /** Whether this person has ever set a vault PIN — one shared PIN across every company vault
+   * they can reach, not per-vault. Used by vault-activate.tsx to decide whether activating a
+   * 2nd/3rd company's vault should ask to *confirm* the existing PIN instead of choosing a new one. */
+  has_pin_set: boolean;
   onboarding_completed_at: string | null;
   created_at: string;
   cash_session_frequency: 'daily' | 'weekly';

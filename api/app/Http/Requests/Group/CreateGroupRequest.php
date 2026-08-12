@@ -25,6 +25,9 @@ class CreateGroupRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            // Which of the creator's own companies this tontine is attributed to — fixed for the
+            // tontine's lifetime (see Group::company(), TontinePayoutService::disburse()).
+            'company_id' => ['required', 'integer', Rule::exists('companies', 'id')->where('user_id', $this->user()->id)],
             'contribution_amount' => ['required', 'numeric', 'min:1'],
             'frequency' => ['required', 'string', Rule::in(['weekly', 'monthly'])],
             'max_members' => ['nullable', 'integer', 'min:2', 'max:1000'],

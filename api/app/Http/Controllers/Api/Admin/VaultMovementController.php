@@ -15,6 +15,6 @@ class VaultMovementController extends Controller
      */
     public function index(): JsonResponse
     {
-        return response()->json(VaultMovement::with('vault.user')->latest()->get());
+        return response()->json(VaultMovement::with('vault.company.user')->latest()->get());
     }
 }

@@ -94,6 +94,9 @@ export type Group = {
   recipient_order_updated_by?: number | null;
   invite_code: string;
   owner_id: number;
+  /** Which of the creator's companies this tontine's cotisations/versements are attributed to —
+   * fixed for the tontine's lifetime (see TontinePayoutService::disburse() on the backend). */
+  company_id: number;
   auto_payout_enabled: boolean;
   round_number: number;
   round_status: RoundStatus;
@@ -184,6 +187,7 @@ export const groupService = {
 
   create(
     name: string,
+    companyId: number,
     contributionAmount: number,
     frequency: GroupFrequency,
     maxMembers?: number,
@@ -193,6 +197,7 @@ export const groupService = {
     return apiService
       .post<Group>('/groups', {
         name,
+        company_id: companyId,
         contribution_amount: contributionAmount,
         frequency,
         max_members: maxMembers ?? null,
@@ -270,10 +275,16 @@ export const groupService = {
       .then((r) => r.data);
   },
 
-  /** Owner-only. Records a cash/manual contribution on a member's behalf — defaults to the current cycle. */
-  recordContribution(groupId: number, userId: number, cyclePeriod?: string) {
+  /** Owner-only. Records a cash/manual contribution on a member's behalf — cycle_period defaults
+   * to the current cycle, amount to the group's contribution_amount, paid_at to now(), all
+   * server-side, if omitted. */
+  recordContribution(groupId: number, userId: number, options?: { cyclePeriod?: string; amount?: number; paidAt?: string }) {
     return apiService
-      .post<Contribution>(`/groups/${groupId}/members/${userId}/contributions`, { cycle_period: cyclePeriod })
+      .post<Contribution>(`/groups/${groupId}/members/${userId}/contributions`, {
+        cycle_period: options?.cyclePeriod,
+        amount: options?.amount,
+        paid_at: options?.paidAt,
+      })
       .then((r) => r.data);
   },
 

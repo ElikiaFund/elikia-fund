@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['user_id', 'name', 'category', 'other_category', 'department', 'city', 'neighborhood', 'address'])]
 class Company extends Model
@@ -94,5 +95,20 @@ class Company extends Model
     public function cashSessions(): HasMany
     {
         return $this->hasMany(CashSession::class);
+    }
+
+    public function vault(): HasOne
+    {
+        return $this->hasOne(Vault::class);
+    }
+
+    public function groups(): HasMany
+    {
+        return $this->hasMany(Group::class);
+    }
+
+    public function contributions(): HasMany
+    {
+        return $this->hasMany(Contribution::class);
     }
 }

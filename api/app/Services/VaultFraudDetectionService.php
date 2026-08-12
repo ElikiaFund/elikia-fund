@@ -54,7 +54,7 @@ class VaultFraudDetectionService
 
             VaultSecurityEvent::create([
                 'vault_id' => $movement->vault_id,
-                'user_id' => $movement->vault->user_id,
+                'user_id' => $movement->vault->company->user_id,
                 'type' => 'flagged_transaction',
                 'vault_movement_id' => $movement->id,
                 'metadata' => ['reasons' => $reasons],

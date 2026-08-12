@@ -8,6 +8,8 @@ use App\Models\Group;
 use App\Models\User;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\Payment\YabetoStatus;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 
@@ -26,8 +28,8 @@ class ContributionService
      * @param  array{fee_amount: float, provider_fee_amount: float, platform_fee_amount: float, net_amount: float}  $fee
      *                                                                                                                    FeeService::contribution()'s return shape
      *
-     * @throws ContributionInProgressException if a succeeded/processing contribution already
-     *                                         exists for this (group, user, cycle_period) — a prior failed attempt never blocks a retry
+     * @throws ContributionInProgressException if a succeeded/still-pending contribution already
+     *                                         exists for this (group, user, cycle_period) — a terminal failure never blocks a retry
      */
     public function reserve(
         Group $group,
@@ -38,6 +40,7 @@ class ContributionService
         string $status,
         ?string $provider = null,
         ?int $recordedBy = null,
+        ?CarbonInterface $paidAt = null,
     ): Contribution {
         // Best-effort, outside any lock: if the member's last attempt for this cycle is stuck
         // `processing` (the webhook never arrived, or the original request hit a transport error
@@ -47,33 +50,38 @@ class ContributionService
         // payments:reconcile-pending sweep eventually catches it (up to 15 minutes later).
         $this->reconcileStuck($group, $user, $cyclePeriod);
 
-        return DB::transaction(function () use ($group, $user, $cyclePeriod, $amount, $fee, $status, $provider, $recordedBy) {
+        return DB::transaction(function () use ($group, $user, $cyclePeriod, $amount, $fee, $status, $provider, $recordedBy, $paidAt) {
             Group::whereKey($group->id)->lockForUpdate()->firstOrFail();
 
+            // 'succeeded' always blocks; any other non-terminal status (processing,
+            // requires_confirmation, or whatever else Yabeto returns — see YabetoStatus) blocks
+            // too, as still-in-progress. A terminal failure (failed/expired/canceled) never
+            // blocks a retry.
             $existing = Contribution::where('group_id', $group->id)
                 ->where('user_id', $user->id)
                 ->where('cycle_period', $cyclePeriod)
-                ->whereIn('status', ['succeeded', 'processing'])
+                ->where(fn ($query) => $query->where('status', 'succeeded')->orWhereNotIn('status', YabetoStatus::TERMINAL))
                 ->first();
 
             if ($existing?->status === 'succeeded') {
                 throw new ContributionInProgressException('Vous avez déjà cotisé pour ce cycle.');
             }
 
-            if ($existing?->status === 'processing') {
+            if ($existing) {
                 throw new ContributionInProgressException('Une cotisation est déjà en cours de confirmation pour ce cycle.');
             }
 
             return Contribution::create([
                 'group_id' => $group->id,
                 'user_id' => $user->id,
+                'company_id' => $group->company_id,
                 'amount' => $amount,
                 'fee_amount' => $fee['fee_amount'],
                 'provider_fee_amount' => $fee['provider_fee_amount'],
                 'platform_fee_amount' => $fee['platform_fee_amount'],
                 'net_amount' => $fee['net_amount'],
                 'cycle_period' => $cyclePeriod,
-                'paid_at' => now(),
+                'paid_at' => $paidAt ?? now(),
                 'provider' => $provider,
                 'status' => $status,
                 'recorded_by' => $recordedBy,
@@ -120,7 +128,7 @@ class ContributionService
         $stuck = Contribution::where('group_id', $group->id)
             ->where('user_id', $user->id)
             ->where('cycle_period', $cyclePeriod)
-            ->where('status', 'processing')
+            ->whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
             ->first();
 
@@ -134,8 +142,10 @@ class ContributionService
             return;
         }
 
-        if ($result->status !== 'processing') {
-            $this->resolveStatus($stuck->id, $result->status);
+        if (YabetoStatus::isPending($result->status)) {
+            return;
         }
+
+        $this->resolveStatus($stuck->id, $result->status);
     }
 }

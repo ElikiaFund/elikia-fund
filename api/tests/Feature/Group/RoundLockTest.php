@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Group;
 
+use App\Models\Company;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\GroupCycleRecipient;
@@ -27,9 +28,12 @@ class RoundLockTest extends TestCase
     public function test_completing_a_round_locks_it(): void
     {
         $owner = User::factory()->create();
-        $group = Group::factory()->for($owner, 'owner')->create(['frequency' => 'monthly']);
+        $company = Company::factory()->for($owner)->create();
+        $group = Group::factory()->for($owner, 'owner')->create(['frequency' => 'monthly', 'company_id' => $company->id]);
         $group->members()->attach($owner->id, ['status' => 'approved', 'joined_at' => now(), 'approved_at' => now()]);
-        Vault::factory()->for($owner)->create();
+        // The payout lands in the tontine's own company vault (see TontinePayoutService::disburse()),
+        // not the recipient member's personal vault.
+        Vault::factory()->for($company)->create();
 
         $cyclePeriod = $group->currentCyclePeriod();
 
@@ -37,6 +41,7 @@ class RoundLockTest extends TestCase
             'cycle_period' => $cyclePeriod,
             'status' => 'succeeded',
             'paid_at' => now(),
+            'company_id' => $company->id,
         ]);
 
         $result = app(TontinePayoutService::class)->disburse($group, $cyclePeriod);
@@ -49,9 +54,10 @@ class RoundLockTest extends TestCase
     public function test_a_passive_get_never_resolves_a_new_recipient_while_the_round_is_locked(): void
     {
         $owner = User::factory()->create();
-        $group = Group::factory()->for($owner, 'owner')->create(['frequency' => 'monthly']);
+        $company = Company::factory()->for($owner)->create();
+        $group = Group::factory()->for($owner, 'owner')->create(['frequency' => 'monthly', 'company_id' => $company->id]);
         $group->members()->attach($owner->id, ['status' => 'approved', 'joined_at' => now(), 'approved_at' => now()]);
-        Vault::factory()->for($owner)->create();
+        Vault::factory()->for($company)->create();
 
         $cyclePeriod = $group->currentCyclePeriod();
 
@@ -59,6 +65,7 @@ class RoundLockTest extends TestCase
             'cycle_period' => $cyclePeriod,
             'status' => 'succeeded',
             'paid_at' => now(),
+            'company_id' => $company->id,
         ]);
 
         app(TontinePayoutService::class)->disburse($group, $cyclePeriod);

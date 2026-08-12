@@ -6,6 +6,8 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Share, StyleSheet, Tex
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 
+import { AirtelLogo } from '@/components/brand/airtel-logo';
+import { MtnLogo } from '@/components/brand/mtn-logo';
 import { SelectSheet } from '@/components/select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -29,9 +31,15 @@ const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', mon
 const CONTRIBUTION_STATUS_LABELS: Record<string, string> = {
   succeeded: 'Réussie',
   processing: 'En attente',
+  requires_confirmation: 'Confirmation requise',
   failed: 'Échouée',
   voided: 'Annulée',
 };
+// Yabeto's documented "reliable" statuses are pending/processing/succeeded/failed, but extra
+// ones (requires_confirmation, or fully undocumented strings like "incomplete") show up too —
+// terminality is defined by exclusion (matching the backend's YabetoStatus) so a contribution
+// stuck on any unrecognized status still gets a "Vérifier" affordance instead of looking finished.
+const CONTRIBUTION_TERMINAL_STATUSES = ['succeeded', 'failed', 'voided'];
 
 function initials(name: string) {
   return name
@@ -112,7 +120,9 @@ export default function GroupDetailScreen() {
       return;
     }
 
-    const stuck = myContributions.find((c) => c.status === 'processing' && c.cycle_period === group.current_cycle_period);
+    const stuck = myContributions.find(
+      (c) => !CONTRIBUTION_TERMINAL_STATUSES.includes(c.status) && c.cycle_period === group.current_cycle_period,
+    );
 
     if (stuck) {
       setPendingContributionId(stuck.id);
@@ -139,7 +149,7 @@ export default function GroupDetailScreen() {
     try {
       const contribution = await groupService.contribute(Number(id), contributionMethod ?? undefined, contributionPhone || undefined);
 
-      if (contribution.status === 'processing') {
+      if (!CONTRIBUTION_TERMINAL_STATUSES.includes(contribution.status)) {
         setPendingNotice(`Une demande de confirmation a été envoyée au ${contributionPhone}.`);
         setPendingContributionId(contribution.id);
       } else {
@@ -169,7 +179,7 @@ export default function GroupDetailScreen() {
     try {
       const contribution = await groupService.refreshContributionStatus(Number(id), targetId);
 
-      if (contribution.status !== 'processing') {
+      if (CONTRIBUTION_TERMINAL_STATUSES.includes(contribution.status)) {
         if (targetId === pendingContributionId) {
           setPendingNotice(null);
           setPendingContributionId(null);
@@ -232,20 +242,6 @@ export default function GroupDetailScreen() {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
       setIsDesignatingRecipient(false);
-    }
-  }
-
-  async function handleRecordContribution(memberId: number) {
-    setError(null);
-    setProcessingMemberId(memberId);
-
-    try {
-      await groupService.recordContribution(Number(id), memberId);
-      load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
-    } finally {
-      setProcessingMemberId(null);
     }
   }
 
@@ -576,6 +572,7 @@ export default function GroupDetailScreen() {
                   contributionMethod === 'mtn_momo' && { backgroundColor: theme.backgroundSelected },
                 ]}
               >
+                <MtnLogo size={20} />
                 <ThemedText type="small">MTN MoMo</ThemedText>
               </Pressable>
               <Pressable
@@ -586,6 +583,7 @@ export default function GroupDetailScreen() {
                   contributionMethod === 'airtel_money' && { backgroundColor: theme.backgroundSelected },
                 ]}
               >
+                <AirtelLogo size={20} />
                 <ThemedText type="small">Airtel Money</ThemedText>
               </Pressable>
             </View>
@@ -698,7 +696,21 @@ export default function GroupDetailScreen() {
                 {isProcessingThisMember ? (
                   <ActivityIndicator size="small" color={theme.tint} />
                 ) : isOwnerViewer && !contribution && group.round_status === 'active' ? (
-                  <Pressable onPress={() => handleRecordContribution(member.id)} hitSlop={8}>
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/group-record-cash',
+                        params: {
+                          id: String(group.id),
+                          memberId: String(member.id),
+                          memberName: member.name,
+                          amount: group.contribution_amount,
+                          cyclePeriod: group.current_cycle_period ?? '',
+                        },
+                      })
+                    }
+                    hitSlop={8}
+                  >
                     <Ionicons name="cash-outline" size={18} color={theme.tint} />
                   </Pressable>
                 ) : isOwnerViewer && contribution?.recorded_by && !cycleAlreadyPaidOut ? (
@@ -758,7 +770,7 @@ export default function GroupDetailScreen() {
             </ThemedText>
             <View style={[styles.membersCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
               {myContributions.slice(0, 10).map((contribution, index, arr) => {
-                const isStuck = contribution.status === 'processing';
+                const isStuck = !CONTRIBUTION_TERMINAL_STATUSES.includes(contribution.status);
 
                 return (
                   <View
@@ -782,7 +794,7 @@ export default function GroupDetailScreen() {
                           color:
                             contribution.status === 'succeeded'
                               ? theme.income
-                              : contribution.status === 'processing'
+                              : !CONTRIBUTION_TERMINAL_STATUSES.includes(contribution.status)
                                 ? theme.tint
                                 : theme.danger,
                         }}
@@ -1001,6 +1013,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: Spacing.two,
     alignItems: 'center',
+    gap: Spacing.one,
   },
   phoneInput: {
     borderWidth: StyleSheet.hairlineWidth,
