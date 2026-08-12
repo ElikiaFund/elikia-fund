@@ -25,6 +25,13 @@ class RecordManualContributionRequest extends FormRequest
         return [
             // Defaults to the group's current cycle when omitted — see GroupController::recordContribution.
             'cycle_period' => ['nullable', 'string', 'max:20'],
+            // Defaults to the group's contribution_amount when omitted — the confirmation screen
+            // pre-fills it but lets the owner correct it (e.g. a member who paid a partial or
+            // adjusted cash amount).
+            'amount' => ['nullable', 'numeric', 'min:1'],
+            // Defaults to now() when omitted — lets the owner backdate a cash contribution to
+            // when it was actually handed over, not just when it was entered in the app.
+            'paid_at' => ['nullable', 'date', 'before_or_equal:now'],
         ];
     }
 }

@@ -15,6 +15,7 @@ use App\Models\VaultMovement;
 use App\Services\FeeService;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\VaultFraudDetectionService;
 use App\Services\VaultSecurityService;
@@ -314,7 +315,7 @@ class VaultController extends Controller
 
         abort_unless($vault && $movement->vault_id === $vault->id, 403);
 
-        if ($movement->provider !== 'yabeto' || $movement->status !== 'processing' || ! $movement->yabeto_reference) {
+        if ($movement->provider !== 'yabeto' || YabetoStatus::isTerminal($movement->status) || ! $movement->yabeto_reference) {
             return response()->json($movement);
         }
 

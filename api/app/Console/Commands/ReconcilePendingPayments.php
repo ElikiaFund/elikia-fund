@@ -9,6 +9,7 @@ use App\Services\Payment\DTOs\DisbursementResult;
 use App\Services\Payment\DTOs\PaymentIntentResult;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\VaultTransactionService;
@@ -60,7 +61,7 @@ class ReconcilePendingPayments extends Command
 
         $resolved = 0;
 
-        Contribution::where('status', 'processing')
+        Contribution::whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
             ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
             ->with('group', 'user')
@@ -90,7 +91,7 @@ class ReconcilePendingPayments extends Command
             });
 
         VaultMovement::whereIn('type', ['deposit', 'withdraw'])
-            ->where('status', 'processing')
+            ->whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
             ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
             ->with('vault.user')
@@ -147,7 +148,7 @@ class ReconcilePendingPayments extends Command
             return $this->abandonIfOldEnough($row);
         }
 
-        if ($result->status === 'processing') {
+        if (YabetoStatus::isPending($result->status)) {
             return $this->abandonIfOldEnough($row);
         }
 

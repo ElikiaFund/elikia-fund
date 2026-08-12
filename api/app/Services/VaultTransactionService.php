@@ -8,6 +8,7 @@ use App\Models\Vault;
 use App\Models\VaultMovement;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\Payment\YabetoStatus;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -52,7 +53,7 @@ class VaultTransactionService
         $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->movements()->where('type', 'deposit')->where('status', 'processing')->exists()) {
+            if ($locked->movements()->where('type', 'deposit')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
                 throw new VaultTransactionException('Un dépôt est déjà en cours de confirmation.');
             }
 
@@ -124,7 +125,7 @@ class VaultTransactionService
         $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->movements()->where('type', 'withdraw')->where('status', 'processing')->exists()) {
+            if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
                 throw new VaultTransactionException('Un retrait est déjà en cours de confirmation.');
             }
 
@@ -201,7 +202,7 @@ class VaultTransactionService
             /** @var VaultMovement|null $movement */
             $movement = VaultMovement::where('id', $movementId)->lockForUpdate()->first();
 
-            if (! $movement || $movement->status !== 'processing' || $movement->status === $newStatus) {
+            if (! $movement || YabetoStatus::isTerminal($movement->status) || $movement->status === $newStatus) {
                 return null;
             }
 
@@ -248,7 +249,7 @@ class VaultTransactionService
 
         $stuck = $vault->movements()
             ->where('type', $type)
-            ->where('status', 'processing')
+            ->whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
             ->first();
 
