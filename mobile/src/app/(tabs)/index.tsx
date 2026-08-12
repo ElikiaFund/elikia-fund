@@ -100,8 +100,9 @@ export default function CashflowScreen() {
   // Nothing accumulated since the last close (or ever, if there's never been one) means there's
   // nothing to reconcile yet — don't nag to "close" a session that has no activity in it, even if
   // the reminder cadence has technically elapsed since account creation (isSessionOverdue's
-  // fallback baseline when lastClosedSession is null).
-  const isOverdue = user && periodTransactionCount > 0 ? isSessionOverdue(user, lastClosedSession, new Date()) : false;
+  // fallback baseline when lastClosedSession is null). Also nothing to close if no session is open.
+  const isOverdue =
+    user && activeSession && periodTransactionCount > 0 ? isSessionOverdue(user, lastClosedSession, new Date()) : false;
 
   if (isCompanyLoading) {
     return (

@@ -32,6 +32,15 @@ function documentStyles(): string {
   return `
     @page { margin: 28px; }
     * { box-sizing: border-box; }
+    /* expo-print renders through the OS's native "print to PDF" pipeline (WKWebView/Chromium),
+       which — unlike dompdf — follows the browser convention of suppressing background colors on
+       printed output to save ink. Without this, every purple band below (table headers, stat
+       boxes, narrative box) renders faint or invisible instead of solid. */
+    html {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color-adjust: exact;
+    }
     body {
       font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
       color: ${INK};
@@ -39,6 +48,9 @@ function documentStyles(): string {
       margin: 0;
       padding: 0;
       font-size: 12px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      color-adjust: exact;
     }
     .header {
       display: flex;

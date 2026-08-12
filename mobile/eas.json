@@ -4,36 +4,26 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "base": {
+      "env": {
+        "RCT_USE_PREBUILT_RNCORE": "0"
+      }
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
         "simulator": false
-      },
-      "env": {
-        "RCT_USE_PREBUILT_RNCORE": "0",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "996451853177-n4kurgvt1mr1ha914mruh3oi5p462kv2.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "996451853177-mj1kqgvgpk80s2qmvustqu9b1il32ed0.apps.googleusercontent.com",
-        "FACEBOOK_APP_ID": "1553741169527311"
       }
     },
     "preview": {
-      "distribution": "internal",
-      "env": {
-        "RCT_USE_PREBUILT_RNCORE": "0",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "996451853177-n4kurgvt1mr1ha914mruh3oi5p462kv2.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "996451853177-mj1kqgvgpk80s2qmvustqu9b1il32ed0.apps.googleusercontent.com",
-        "FACEBOOK_APP_ID": "1553741169527311"
-      }
+      "extends": "base",
+      "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "env": {
-        "RCT_USE_PREBUILT_RNCORE": "0",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "996451853177-n4kurgvt1mr1ha914mruh3oi5p462kv2.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "996451853177-mj1kqgvgpk80s2qmvustqu9b1il32ed0.apps.googleusercontent.com",
-        "FACEBOOK_APP_ID": "1553741169527311"
-      }
+      "extends": "base",
+      "autoIncrement": true
     }
   },
   "submit": {

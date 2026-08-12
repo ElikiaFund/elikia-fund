@@ -11,7 +11,10 @@
 <style>
     @page { margin: 28px; }
     * { box-sizing: border-box; }
-    body { font-family: Helvetica, Arial, sans-serif; color: #1A1A17; font-size: 12px; margin: 0; padding: 0; }
+    {{-- DejaVu Sans is bundled/embedded by dompdf itself and covers full Unicode (accents, em-dashes,
+         curly quotes, guillemets) — the base-14 Helvetica/Arial fonts are non-embedded AFM fonts
+         restricted to the WinAnsi 256-glyph table and silently render anything outside it as garbage. --}}
+    body { font-family: 'DejaVu Sans', sans-serif; color: #1A1A17; font-size: 12px; margin: 0; padding: 0; }
 
     .header-table { width: 100%; border-bottom: 2px solid #A069DA; padding-bottom: 14px; margin-bottom: 18px; }
     .brand-name { font-size: 17px; font-weight: 700; color: #A069DA; }
