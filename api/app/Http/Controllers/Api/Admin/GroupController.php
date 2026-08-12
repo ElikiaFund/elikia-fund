@@ -23,17 +23,20 @@ class GroupController extends Controller
 
     public function show(Group $group): JsonResponse
     {
+        // Every relation must live in the one array passed to load() — mixing plain relation-name
+        // strings with a closure-constrained entry across separate positional arguments throws
+        // ("Method name must be a string") deep in Eloquent's eager-load resolution.
         return response()->json(
-            $group->load(
+            $group->load([
                 'owner',
                 'company',
                 'members',
                 'removedMembers',
                 'contributions.user',
-                ['cycleRecipients' => fn ($query) => $query->whereNotNull('paid_out_at')->with('user', 'vaultMovement')],
+                'cycleRecipients' => fn ($query) => $query->whereNotNull('paid_out_at')->with('user', 'vaultMovement'),
                 'pendingDeletionRequest.votes.user',
                 'pendingDeletionRequest.requester',
-            )->loadCount('members')->loadSum('contributions', 'amount')
+            ])->loadCount('members')->loadSum('contributions', 'amount')
         );
     }
 

@@ -2,9 +2,13 @@
 
 namespace App\Services;
 
+use Firebase\JWT\JWK;
+use Firebase\JWT\JWT;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Throwable;
 
 class SocialAuthService
 {
@@ -95,33 +99,73 @@ class SocialAuthService
     }
 
     /**
-     * Decode a Sign in with Apple identity token and return the user's profile.
-     *
-     * NOTE: this only decodes the JWT payload — it does NOT verify the signature.
-     * Before production, verify against Apple's published JWKS
-     * (https://appleid.apple.com/auth/keys), e.g. via firebase/php-jwt, and check
-     * that `aud` matches your Services ID and `iss` is https://appleid.apple.com.
+     * Verify a Sign in with Apple identity token against Apple's published JWKS
+     * (https://appleid.apple.com/auth/keys) and return the user's profile. JWT::decode() verifies
+     * the RS256 signature and standard exp/nbf/iat claims; iss/aud are checked explicitly below,
+     * mirroring verifyGoogleToken()'s aud check.
      */
     public function decodeAppleToken(string $identityToken): array
     {
-        $parts = explode('.', $identityToken);
+        try {
+            $payload = (array) JWT::decode($identityToken, JWK::parseKeySet($this->appleKeys()));
+        } catch (Throwable) {
+            // A cached key set can go stale if Apple rotates keys between our fetches — one retry
+            // against a freshly-fetched set covers that before giving up for real.
+            try {
+                $payload = (array) JWT::decode($identityToken, JWK::parseKeySet($this->appleKeys(fresh: true)));
+            } catch (Throwable $e) {
+                Log::warning('Apple Sign-In token verification failed', ['message' => $e->getMessage()]);
 
-        if (count($parts) !== 3) {
+                throw new RuntimeException('Jeton Apple invalide.');
+            }
+        }
+
+        if (($payload['iss'] ?? null) !== 'https://appleid.apple.com') {
             throw new RuntimeException('Jeton Apple invalide.');
         }
 
-        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+        $expectedClientId = config('services.apple.client_id');
 
-        if (! is_array($payload) || ! isset($payload['sub'])) {
+        if ($expectedClientId && ($payload['aud'] ?? null) !== $expectedClientId) {
+            throw new RuntimeException("Ce jeton Apple n'a pas été émis pour cette application.");
+        }
+
+        if (! isset($payload['sub'])) {
             throw new RuntimeException('Jeton Apple invalide.');
         }
 
         return [
             'provider_id' => $payload['sub'],
             'email' => $payload['email'] ?? null,
-            // Apple only sends the user's full name once, on the client, on first sign-in — not in the token.
+            // Apple only sends the user's full name once, on the client, on first sign-in — never
+            // inside the token itself — so this is always null here; AuthController fills it in
+            // from the request when the client provides it (see AppleLoginRequest, User::needsName()).
             'name' => null,
             'avatar_url' => null,
         ];
+    }
+
+    /**
+     * Apple's public signing keys — cached, since they rotate infrequently but not never (see the
+     * fresh-retry in decodeAppleToken() above for when the cached set no longer has the key a
+     * token was actually signed with).
+     *
+     * @return array{keys: array<int, array<string, string>>}
+     */
+    private function appleKeys(bool $fresh = false): array
+    {
+        if ($fresh) {
+            Cache::forget('apple_sign_in_jwks');
+        }
+
+        return Cache::remember('apple_sign_in_jwks', now()->addHours(6), function () {
+            $response = Http::get('https://appleid.apple.com/auth/keys');
+
+            if ($response->failed()) {
+                throw new RuntimeException('Impossible de vérifier le jeton Apple pour le moment.');
+            }
+
+            return $response->json();
+        });
     }
 }
