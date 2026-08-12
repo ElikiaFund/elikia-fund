@@ -50,6 +50,9 @@ export default function RootLayout() {
 function RootNavigator() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
+  // Only ever true right after Apple Sign-In withheld the real name (see User::needsName()) —
+  // gated ahead of onboarding, since "who are you" comes before "let's set up your business".
+  const needsName = isAuthenticated && !!user?.needs_name;
   const needsOnboarding = isAuthenticated && !user?.onboarding_completed_at;
 
   useEffect(() => {
@@ -82,12 +85,16 @@ function RootNavigator() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
       </Stack.Protected>
 
-      {/* Guarded on `isAuthenticated` alone (not `needsOnboarding`) — a screen name must be
-          unique across the whole Stack, guard or no guard, so this single registration has to
+      <Stack.Protected guard={isAuthenticated && needsName}>
+        <Stack.Screen name="complete-profile" options={{ headerShown: false }} />
+      </Stack.Protected>
+
+      {/* Guarded on `isAuthenticated && !needsName` (not `!needsOnboarding`) — a screen name must
+          be unique across the whole Stack, guard or no guard, so this single registration has to
           cover both the first-run flow (the only reachable screen while needsOnboarding is
           true, since the block below is hidden) and router.push('/onboarding?mode=create') from
           the company switcher once already onboarded. */}
-      <Stack.Protected guard={isAuthenticated}>
+      <Stack.Protected guard={isAuthenticated && !needsName}>
         <Stack.Screen
           name="onboarding"
           options={({ route }) => ({
@@ -100,7 +107,7 @@ function RootNavigator() {
         />
       </Stack.Protected>
 
-      <Stack.Protected guard={isAuthenticated && !needsOnboarding}>
+      <Stack.Protected guard={isAuthenticated && !needsName && !needsOnboarding}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="vault-activate" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="vault-unlock" options={{ presentation: 'modal', headerShown: false }} />

@@ -117,7 +117,7 @@ class AuthController extends Controller
         }
 
         return User::create([
-            'name' => $profile['name'] ?? 'Utilisateur Elikia',
+            'name' => $profile['name'] ?? User::DEFAULT_NAME,
             'email' => $profile['email'] ?? "{$profile['provider_id']}@{$providerColumn}.elikia-fund.placeholder",
             'avatar_url' => $profile['avatar_url'] ?? null,
             $providerColumn => $profile['provider_id'],

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class SocialAuthService
@@ -25,6 +26,15 @@ class SocialAuthService
         $expectedClientId = config('services.google.client_id');
 
         if ($expectedClientId && ($payload['aud'] ?? null) !== $expectedClientId) {
+            // Not sensitive — a Google OAuth client id is a public identifier, not a secret — but
+            // logs the exact mismatch so a "the .env looks right" report can be root-caused from
+            // the server's own logs instead of guessing (this env's GOOGLE_CLIENT_ID vs. the
+            // audience the mobile app's token was actually issued for).
+            Log::warning('Google Sign-In token audience mismatch', [
+                'expected_client_id' => $expectedClientId,
+                'actual_aud' => $payload['aud'] ?? null,
+            ]);
+
             throw new RuntimeException("Ce jeton Google n'a pas été émis pour cette application.");
         }
 
