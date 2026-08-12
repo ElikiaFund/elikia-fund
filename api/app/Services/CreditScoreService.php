@@ -41,6 +41,10 @@ class CreditScoreService
                 'points' => $points,
                 'weight' => $criterion->weight,
                 'weighted_points' => round($weightedPoints, 1),
+                // This criterion's share of the total 100-point scale, given its normalized
+                // weight — lets a consumer show "score obtenu / maximum" per component (see
+                // FinancialDossierService) whose rows sum exactly to the headline score/100.
+                'max' => round($normalizedWeight * 100, 1),
             ];
         }
 
