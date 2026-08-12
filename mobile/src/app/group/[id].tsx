@@ -439,7 +439,11 @@ export default function GroupDetailScreen() {
 
             {group.owner_id === user?.id ? (
               <Pressable
-                onPress={handleRenewRound}
+                onPress={() =>
+                  group.recipient_mode === 'creator'
+                    ? router.push({ pathname: '/group-renew-round', params: { id: String(group.id) } })
+                    : handleRenewRound()
+                }
                 disabled={isRenewing}
                 style={[styles.payoutButton, { backgroundColor: theme.tint }, isRenewing && styles.buttonDisabled]}
               >
@@ -469,6 +473,18 @@ export default function GroupDetailScreen() {
                 {group.cycle_ends_at ? ` · échéance le ${dateTimeFormatter.format(new Date(group.cycle_ends_at))}` : ''}
               </ThemedText>
             </View>
+            {group.recipient_mode === 'creator' && group.current_round_goal && (
+              <View style={styles.cycleRow}>
+                <Ionicons name="flag-outline" size={16} color={theme.textSecondary} />
+                <ThemedText type="small" themeColor="textSecondary" style={styles.cycleRowText}>
+                  Objectif : <ThemedText type="smallBold">{group.current_round_goal.goal_text}</ThemedText>
+                  {'\n'}
+                  {currency.format(group.goal_progress_amount ?? 0)} / {currency.format(Number(group.current_round_goal.target_amount))}{' '}
+                  collectés
+                </ThemedText>
+              </View>
+            )}
+
             <View style={styles.cycleRow}>
               <Ionicons name="gift-outline" size={16} color={theme.textSecondary} />
               {group.current_cycle_recipient?.user ? (

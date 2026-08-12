@@ -25,6 +25,11 @@ class UpdateGroupSettingsRequest extends FormRequest
      */
     public function rules(): array
     {
-        return $this->groupSettingsRules();
+        return array_merge($this->groupSettingsRules(), [
+            // Optional tweak to the *current* round's goal (recipient_mode = 'creator' only) — a
+            // no-op on any other group, see GroupController::updateSettings().
+            'goal_text' => ['sometimes', 'string', 'max:255'],
+            'target_amount' => ['sometimes', 'numeric', 'min:1'],
+        ]);
     }
 }

@@ -20,6 +20,7 @@ use App\Http\Requests\Group\UpdateRecipientOrderRequest;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\GroupCycleRecipient;
+use App\Models\GroupRoundGoal;
 use App\Models\User;
 use App\Services\ContributionService;
 use App\Services\FeeService;
@@ -97,6 +98,15 @@ class GroupController extends Controller
         ]);
 
         $group->members()->attach($user->id, ['status' => 'approved', 'joined_at' => now(), 'approved_at' => now()]);
+
+        if ($group->recipient_mode === 'creator') {
+            GroupRoundGoal::create([
+                'group_id' => $group->id,
+                'round_number' => 1,
+                'goal_text' => $request->validated('goal_text'),
+                'target_amount' => $request->validated('target_amount'),
+            ]);
+        }
 
         return response()->json($this->withCycleStatus($group->load('owner', 'members'), $user), 201);
     }
@@ -336,7 +346,21 @@ class GroupController extends Controller
     {
         abort_unless($group->owner_id === $request->user()->id, 403);
 
-        $group->update($request->validated());
+        // goal_text/target_amount aren't Group columns — they live on GroupRoundGoal, keyed by
+        // round_number, not mass-assigned here.
+        $settings = collect($request->validated())->except(['goal_text', 'target_amount'])->all();
+        $group->update($settings);
+
+        if ($group->recipient_mode === 'creator' && ($request->has('goal_text') || $request->has('target_amount'))) {
+            // A no-op if no goal row exists yet for this round — should never happen in practice
+            // (store()/renewRound() always create one for creator-mode groups) but never a crash.
+            GroupRoundGoal::where('group_id', $group->id)
+                ->where('round_number', $group->round_number)
+                ->update(array_filter([
+                    'goal_text' => $request->validated('goal_text'),
+                    'target_amount' => $request->validated('target_amount'),
+                ], fn ($value) => $value !== null));
+        }
 
         return response()->json($group->fresh());
     }
@@ -355,10 +379,23 @@ class GroupController extends Controller
             return response()->json(['message' => "Ce tour n'est pas encore terminé."], 409);
         }
 
-        $group->update(array_merge($request->validated(), [
-            'round_number' => $group->round_number + 1,
+        // goal_text/target_amount aren't Group columns — see updateSettings() for why.
+        $settings = collect($request->validated())->except(['goal_text', 'target_amount'])->all();
+        $newRoundNumber = $group->round_number + 1;
+
+        $group->update(array_merge($settings, [
+            'round_number' => $newRoundNumber,
             'round_status' => 'active',
         ]));
+
+        if ($group->recipient_mode === 'creator') {
+            GroupRoundGoal::create([
+                'group_id' => $group->id,
+                'round_number' => $newRoundNumber,
+                'goal_text' => $request->validated('goal_text'),
+                'target_amount' => $request->validated('target_amount'),
+            ]);
+        }
 
         return response()->json($group->fresh());
     }
@@ -381,6 +418,7 @@ class GroupController extends Controller
                 'group_name' => $group->name,
                 'round_status' => $group->round_status,
                 'round_number' => $group->round_number,
+                'recipient_mode' => $group->recipient_mode,
                 'blocked_reason' => 'Ce tour est terminé. Le créateur doit relancer un nouveau tour.',
                 'can_payout' => false,
             ]);
@@ -409,6 +447,10 @@ class GroupController extends Controller
             'cycle_period' => $cyclePeriod,
             'round_status' => $group->round_status,
             'round_number' => $group->round_number,
+            'recipient_mode' => $group->recipient_mode,
+            'goal' => $group->recipient_mode === 'creator'
+                ? GroupRoundGoal::where('group_id', $group->id)->where('round_number', $group->round_number)->first()
+                : null,
             'starts_at' => $bounds['start']->toDateString(),
             'ends_at' => $bounds['end']->toDateString(),
             'recipient' => $recipient ? [
@@ -861,6 +903,19 @@ class GroupController extends Controller
                 // whether it opens straight into an actionable payout or an honestly-partial one.
                 $group->current_cycle_all_paid = $this->cycleProgress($group, $group->current_cycle_period)['all_paid'];
             }
+        }
+
+        if ($group->recipient_mode === 'creator') {
+            $group->current_round_goal = GroupRoundGoal::where('group_id', $group->id)
+                ->where('round_number', $group->round_number)
+                ->first();
+            // Same "succeeded contributions for the current cycle" sum previewPayout() computes as
+            // `amount` — surfaced here too since every member (not just the owner) should see
+            // progress toward the goal, not just whoever can trigger the payout.
+            $group->goal_progress_amount = (float) $group->contributions()
+                ->where('cycle_period', $group->current_cycle_period)
+                ->where('status', 'succeeded')
+                ->sum('net_amount');
         }
 
         if ($group->owner_id === $user->id) {

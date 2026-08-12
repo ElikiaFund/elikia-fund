@@ -45,6 +45,9 @@ class GroupCycleRecipientService
             'predefined' => $this->predefined($group, $members),
             'random' => $this->random($group, $members),
             'admin' => null,
+            // Goal-based tontine — the pot always goes to the creator, never rotates. See
+            // TontinePayoutService::completeRoundIfDone() for the matching round-completion fork.
+            'creator' => $group->owner_id,
             default => $this->joinOrder($group, $members),
         };
 

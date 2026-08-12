@@ -34,7 +34,11 @@ class CreateGroupRequest extends FormRequest
             // Weekly: ISO day-of-week (1=Monday..7=Sunday). Monthly: day-of-month (1-31).
             'contribution_day' => ['nullable', 'integer', 'min:1', 'max:31'],
             'contribution_time' => ['nullable', 'date_format:H:i'],
-            'recipient_mode' => ['nullable', 'string', Rule::in(['predefined', 'join_order', 'random', 'admin'])],
+            'recipient_mode' => ['nullable', 'string', Rule::in(['predefined', 'join_order', 'random', 'admin', 'creator'])],
+            // Only meaningful (and required) for recipient_mode = 'creator' — a goal-based tontine
+            // has no rotating beneficiary, so it needs a stated objective instead. See Group::roundGoals().
+            'goal_text' => [Rule::requiredIf(fn () => $this->input('recipient_mode') === 'creator'), 'nullable', 'string', 'max:255'],
+            'target_amount' => [Rule::requiredIf(fn () => $this->input('recipient_mode') === 'creator'), 'nullable', 'numeric', 'min:1'],
         ];
     }
 }
