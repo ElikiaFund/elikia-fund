@@ -53,6 +53,9 @@ export default function CreateGroupScreen() {
   const [contributionDay, setContributionDay] = useState<string | null>(null);
   const [contributionTime, setContributionTime] = useState<string | null>(null);
   const [recipientMode, setRecipientMode] = useState<RecipientMode>('join_order');
+  const [tontineType, setTontineType] = useState<'classic' | 'objectif'>('classic');
+  const [goalText, setGoalText] = useState('');
+  const [goalAmount, setGoalAmount] = useState('');
   const [isDayPickerOpen, setIsDayPickerOpen] = useState(false);
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
   const [isCompanyPickerOpen, setIsCompanyPickerOpen] = useState(false);
@@ -67,8 +70,15 @@ export default function CreateGroupScreen() {
   const feeRate = contributionPercent(feeRates) / 100;
   const amountValue = Number(amount.replace(',', '.'));
   const maxMembersValue = maxMembers.trim().length > 0 ? Number(maxMembers) : 1000;
+  const goalAmountValue = Number(goalAmount.replace(',', '.'));
+  const isObjectif = tontineType === 'objectif';
   const canSubmit =
-    name.trim().length > 0 && companyId !== null && amountValue > 0 && maxMembersValue >= 2 && maxMembersValue <= 1000;
+    name.trim().length > 0 &&
+    companyId !== null &&
+    amountValue > 0 &&
+    maxMembersValue >= 2 &&
+    maxMembersValue <= 1000 &&
+    (!isObjectif || (goalText.trim().length > 0 && goalAmountValue > 0));
   const dayOptions = frequency === 'weekly' ? WEEKDAYS : MONTH_DAYS;
   const dayLabel = useMemo(
     () => dayOptions.find((option) => option.value === contributionDay)?.label ?? null,
@@ -98,7 +108,8 @@ export default function CreateGroupScreen() {
         frequency,
         maxMembersValue,
         { day: contributionDay ? Number(contributionDay) : null, time: contributionTime },
-        recipientMode,
+        isObjectif ? 'creator' : recipientMode,
+        isObjectif ? { text: goalText.trim(), targetAmount: goalAmountValue } : undefined,
       );
       router.replace({ pathname: '/group/[id]', params: { id: String(group.id) } });
     } catch (e) {
@@ -242,37 +253,93 @@ export default function CreateGroupScreen() {
 
             <View>
               <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
-                Comment désigner le bénéficiaire de chaque cycle ?
+                Type de tontine
               </ThemedText>
-              <View style={styles.recipientModes}>
-                {RECIPIENT_MODES.map((mode) => {
-                  const selected = recipientMode === mode.value;
-
-                  return (
-                    <Pressable
-                      key={mode.value}
-                      onPress={() => setRecipientMode(mode.value)}
-                      style={[
-                        styles.recipientCard,
-                        { backgroundColor: theme.backgroundElement, borderColor: selected ? theme.tint : theme.border },
-                      ]}
-                    >
-                      <View style={styles.recipientCardText}>
-                        <ThemedText type="smallBold">{mode.title}</ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary" style={styles.recipientCardDescription}>
-                          {mode.description}
-                        </ThemedText>
-                      </View>
-                      <Ionicons
-                        name={selected ? 'radio-button-on' : 'radio-button-off'}
-                        size={20}
-                        color={selected ? theme.tint : theme.textSecondary}
-                      />
-                    </Pressable>
-                  );
-                })}
+              <View style={[styles.segmented, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                <Pressable
+                  onPress={() => setTontineType('classic')}
+                  style={[styles.segment, tontineType === 'classic' && { backgroundColor: theme.backgroundSelected }]}
+                >
+                  <ThemedText type="smallBold" themeColor={tontineType === 'classic' ? 'text' : 'textSecondary'}>
+                    Classique
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setTontineType('objectif')}
+                  style={[styles.segment, tontineType === 'objectif' && { backgroundColor: theme.backgroundSelected }]}
+                >
+                  <ThemedText type="smallBold" themeColor={tontineType === 'objectif' ? 'text' : 'textSecondary'}>
+                    À objectif
+                  </ThemedText>
+                </Pressable>
               </View>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.scheduleHint}>
+                {isObjectif
+                  ? "Chaque cotisation part dans un pot commun versé à vous une fois que tout le monde a cotisé, pour financer un projet précis — plutôt que de tourner entre les membres."
+                  : "Chaque cycle, la cagnotte est versée à un membre différent selon la méthode choisie ci-dessous."}
+              </ThemedText>
             </View>
+
+            {isObjectif ? (
+              <>
+                <FormField
+                  label="Objectif de ce tour"
+                  placeholder="Ex. Construire un projet immobilier"
+                  value={goalText}
+                  onChangeText={setGoalText}
+                />
+                <View>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
+                    Montant cible
+                  </ThemedText>
+                  <View style={[styles.amountRow, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+                    <TextInput
+                      value={goalAmount}
+                      onChangeText={setGoalAmount}
+                      placeholder="0"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="decimal-pad"
+                      style={[styles.amountInput, { color: theme.text }]}
+                    />
+                    <ThemedText themeColor="textSecondary">FCFA</ThemedText>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
+                  Comment désigner le bénéficiaire de chaque cycle ?
+                </ThemedText>
+                <View style={styles.recipientModes}>
+                  {RECIPIENT_MODES.map((mode) => {
+                    const selected = recipientMode === mode.value;
+
+                    return (
+                      <Pressable
+                        key={mode.value}
+                        onPress={() => setRecipientMode(mode.value)}
+                        style={[
+                          styles.recipientCard,
+                          { backgroundColor: theme.backgroundElement, borderColor: selected ? theme.tint : theme.border },
+                        ]}
+                      >
+                        <View style={styles.recipientCardText}>
+                          <ThemedText type="smallBold">{mode.title}</ThemedText>
+                          <ThemedText type="small" themeColor="textSecondary" style={styles.recipientCardDescription}>
+                            {mode.description}
+                          </ThemedText>
+                        </View>
+                        <Ionicons
+                          name={selected ? 'radio-button-on' : 'radio-button-off'}
+                          size={20}
+                          color={selected ? theme.tint : theme.textSecondary}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </View>
 
           <View style={[styles.feeNotice, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>

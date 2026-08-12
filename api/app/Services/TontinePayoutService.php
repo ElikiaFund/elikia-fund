@@ -191,6 +191,24 @@ class TontinePayoutService
             return false;
         }
 
+        if ($group->recipient_mode === 'creator') {
+            // Goal-based tontine — the pot always goes to the creator, so there's no "everyone's
+            // had a turn" condition to wait for like the rotation modes below. The round is done
+            // as soon as that single payout lands.
+            $paid = GroupCycleRecipient::where('group_id', $group->id)
+                ->where('round_number', $group->round_number)
+                ->whereNotNull('paid_out_at')
+                ->exists();
+
+            if (! $paid) {
+                return false;
+            }
+
+            $group->update(['round_status' => 'completed']);
+
+            return true;
+        }
+
         $liveMemberCount = $group->members()->count();
 
         if ($liveMemberCount === 0) {

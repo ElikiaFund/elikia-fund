@@ -87,6 +87,15 @@ class Group extends Model
         return $this->hasMany(GroupCycleRecipient::class);
     }
 
+    /** One row per round for recipient_mode = 'creator' groups — see GroupRoundGoal. Fetch the
+     * *current* round's goal via a plain scoped query (GroupController::withCycleStatus()), not a
+     * dedicated relation — a per-instance `where('round_number', $this->round_number)` would break
+     * under eager-loading across groups with differing round numbers. */
+    public function roundGoals(): HasMany
+    {
+        return $this->hasMany(GroupRoundGoal::class);
+    }
+
     public function deletionRequests(): HasMany
     {
         return $this->hasMany(GroupDeletionRequest::class);

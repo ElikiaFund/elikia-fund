@@ -53,4 +53,12 @@ class GroupFactory extends Factory
             'round_status' => 'active',
         ];
     }
+
+    /** Goal-based tontine — the pot always goes to the creator. Pair with GroupRoundGoal::factory()
+     * for the round's goal row, which this state deliberately doesn't create itself (goal_text/
+     * target_amount are test-specific, not something a generic default makes sense for). */
+    public function objectiveBased(): static
+    {
+        return $this->state(fn () => ['recipient_mode' => 'creator']);
+    }
 }

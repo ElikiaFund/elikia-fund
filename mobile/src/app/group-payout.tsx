@@ -200,6 +200,17 @@ export default function GroupPayoutScreen() {
                 </ThemedText>
               </View>
 
+              {preview.goal && (
+                <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Cette cagnotte financera :
+                  </ThemedText>
+                  <ThemedText type="smallBold" style={styles.cycleLabel}>
+                    {preview.goal.goal_text}
+                  </ThemedText>
+                </View>
+              )}
+
               <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
                   Destinataire

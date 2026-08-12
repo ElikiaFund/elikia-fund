@@ -121,6 +121,7 @@ function RootNavigator() {
         <Stack.Screen name="group-report" options={{ title: 'Rapport de tontine' }} />
         <Stack.Screen name="group-payout" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="group-record-cash" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="group-renew-round" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="group-settings" options={{ title: 'Paramètres de la tontine' }} />
         <Stack.Screen name="group-delete-request" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="close-cash-session" options={{ presentation: 'modal', headerShown: false }} />

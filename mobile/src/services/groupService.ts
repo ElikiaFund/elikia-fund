@@ -3,7 +3,17 @@ import type { VaultMovement } from '@/services/vaultService';
 
 export type GroupFrequency = 'weekly' | 'monthly';
 export type MembershipStatus = 'pending' | 'approved';
-export type RecipientMode = 'predefined' | 'join_order' | 'random' | 'admin';
+export type RecipientMode = 'predefined' | 'join_order' | 'random' | 'admin' | 'creator';
+
+/** One per round for recipient_mode = 'creator' groups — the objective is meant to change every
+ * time the owner renews a round. */
+export type GroupRoundGoal = {
+  id: number;
+  group_id: number;
+  round_number: number;
+  goal_text: string;
+  target_amount: string;
+};
 
 export type GroupMember = {
   id: number;
@@ -55,6 +65,7 @@ export type PayoutPreviewLocked = {
   group_name: string;
   round_status: 'completed';
   round_number: number;
+  recipient_mode: RecipientMode;
   blocked_reason: string;
   can_payout: false;
 };
@@ -65,6 +76,9 @@ export type PayoutPreviewActive = {
   cycle_period: string;
   round_status: 'active';
   round_number: number;
+  recipient_mode: RecipientMode;
+  /** The current round's objective — only present for recipient_mode = 'creator'. */
+  goal: GroupRoundGoal | null;
   starts_at: string;
   ends_at: string;
   recipient: { id: number; name: string; avatar_url: string | null; vault_activated: boolean } | null;
@@ -109,6 +123,11 @@ export type Group = {
   cycle_ends_at?: string;
   schedule_label?: string | null;
   current_cycle_recipient?: CycleRecipient | null;
+  /** Only present for recipient_mode = 'creator' — the current round's objective. */
+  current_round_goal?: GroupRoundGoal | null;
+  /** Only present for recipient_mode = 'creator' — succeeded contributions so far this cycle,
+   * to show progress toward current_round_goal.target_amount. */
+  goal_progress_amount?: number;
   round_summary?: { members_paid: number; total_distributed: number };
   pending_requests_count?: number;
   membership_status?: MembershipStatus;
@@ -193,6 +212,7 @@ export const groupService = {
     maxMembers?: number,
     schedule?: { day: number | null; time: string | null },
     recipientMode?: RecipientMode,
+    goal?: { text: string; targetAmount: number },
   ) {
     return apiService
       .post<Group>('/groups', {
@@ -204,6 +224,8 @@ export const groupService = {
         contribution_day: schedule?.day ?? null,
         contribution_time: schedule?.time ?? null,
         recipient_mode: recipientMode ?? null,
+        goal_text: goal?.text,
+        target_amount: goal?.targetAmount,
       })
       .then((r) => r.data);
   },
@@ -242,14 +264,18 @@ export const groupService = {
     return apiService.put<CycleRecipient>(`/groups/${groupId}/cycle-recipient`, { user_id: userId }).then((r) => r.data);
   },
 
-  /** Owner-only partial update — currently only the auto-payout toggle is exposed in the mobile UI. */
-  updateSettings(groupId: number, settings: Partial<{ auto_payout_enabled: boolean }>) {
+  /** Owner-only partial update — auto-payout toggle, plus (recipient_mode = 'creator' groups only)
+   * a tweak to the current round's goal. */
+  updateSettings(groupId: number, settings: Partial<{ auto_payout_enabled: boolean; goal_text: string; target_amount: number }>) {
     return apiService.put<Group>(`/groups/${groupId}/settings`, settings).then((r) => r.data);
   },
 
-  /** Owner-only, only while the round is locked — starts the next round. */
-  renewRound(groupId: number) {
-    return apiService.post<Group>(`/groups/${groupId}/renew-round`, {}).then((r) => r.data);
+  /** Owner-only, only while the round is locked — starts the next round. `goal` is required when
+   * the group is (or is becoming) recipient_mode = 'creator' — see RenewRoundRequest. */
+  renewRound(groupId: number, goal?: { text: string; targetAmount: number }) {
+    return apiService
+      .post<Group>(`/groups/${groupId}/renew-round`, { goal_text: goal?.text, target_amount: goal?.targetAmount })
+      .then((r) => r.data);
   },
 
   /** Owner-only. Read-only preview for the payout screen — cycle info, live amount, recipient, and whether payout can happen right now. */
