@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { useVault } from '@/context/vault-context';
 import { useTheme } from '@/hooks/use-theme';
 import { buildVaultStatementHtml, printAndShareHtml } from '@/lib/pdf';
@@ -56,6 +57,7 @@ export default function VaultScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const { activeCompany } = useCompany();
   const { isUnlocked, lock } = useVault();
   const [vault, setVault] = useState<Vault | null>(null);
   const [movements, setMovements] = useState<VaultMovement[]>([]);
@@ -132,7 +134,7 @@ export default function VaultScreen() {
 
     try {
       const html = buildVaultStatementHtml({
-        userName: user?.name ?? 'Utilisateur Elikia',
+        userName: activeCompany?.name ?? user?.name ?? 'Utilisateur Elikia',
         periodLabel: 'Historique complet',
         balance: Number(vault.balance),
         movements: movements.map((m) => ({

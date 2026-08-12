@@ -180,7 +180,7 @@ export default function TransactionsScreen() {
   }, [periodPreset, customRange, periodBounds]);
 
   async function handleExportPdf() {
-    if (!user) {
+    if (!user || !activeCompany) {
       return;
     }
 
@@ -195,7 +195,7 @@ export default function TransactionsScreen() {
         .reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
 
       const html = buildJournalCaisseHtml({
-        userName: user.name,
+        userName: activeCompany.name,
         phone: user.phone,
         periodLabel,
         rangeStart: rangeStart.toISOString(),

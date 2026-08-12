@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AppState } from 'react-native';
 
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { getPendingSyncCount } from '@/db/database';
 import { flushSyncQueue } from '@/lib/sync';
 
@@ -17,23 +18,24 @@ const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
+  const { activeCompany } = useCompany();
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false);
 
   const refreshPendingCount = useCallback(() => {
-    if (!user) {
+    if (!user || !activeCompany) {
       setPendingCount(0);
       return;
     }
 
-    getPendingSyncCount(user.id)
+    getPendingSyncCount(activeCompany.id)
       .then(setPendingCount)
       .catch(() => {});
-  }, [user]);
+  }, [user, activeCompany]);
 
   const syncNow = useCallback(async () => {
-    if (isSyncingRef.current || !isAuthenticated || !user) {
+    if (isSyncingRef.current || !isAuthenticated || !user || !activeCompany) {
       return;
     }
 
@@ -47,7 +49,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
     setIsSyncing(true);
 
     try {
-      await flushSyncQueue(user.id);
+      await flushSyncQueue(activeCompany.id);
     } catch {
       // Offline mid-flush or the API rejected the batch — the queue is untouched, next trigger retries.
     } finally {
@@ -55,14 +57,14 @@ export function SyncProvider({ children }: PropsWithChildren) {
       setIsSyncing(false);
       refreshPendingCount();
     }
-  }, [isAuthenticated, user, refreshPendingCount]);
+  }, [isAuthenticated, user, activeCompany, refreshPendingCount]);
 
   useEffect(() => {
     refreshPendingCount();
   }, [refreshPendingCount]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !activeCompany) {
       return;
     }
 
@@ -84,7 +86,7 @@ export function SyncProvider({ children }: PropsWithChildren) {
       unsubscribeNetInfo();
       appStateSubscription.remove();
     };
-  }, [isAuthenticated, syncNow]);
+  }, [isAuthenticated, activeCompany, syncNow]);
 
   return (
     <SyncContext.Provider value={{ pendingCount, isSyncing, syncNow, refreshPendingCount }}>{children}</SyncContext.Provider>
