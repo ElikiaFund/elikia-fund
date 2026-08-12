@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -21,14 +20,17 @@ use Laravel\Sanctum\HasApiTokens;
     'name', 'email', 'phone', 'password', 'avatar_url', 'google_id', 'apple_id', 'facebook_id', 'role_id', 'push_token',
     'cash_session_frequency', 'cash_session_day', 'cash_session_reminder_time', 'cash_session_reminders_enabled',
 ])]
-#[Hidden(['password', 'remember_token', 'push_token'])]
+#[Hidden(['password', 'remember_token', 'push_token', 'pin_hash'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /** Not a real column — computed from role_id so existing `is_admin` JSON consumers (mobile, back-office) keep working. */
-    protected $appends = ['is_admin'];
+    /** Neither is a real column — is_admin is computed from role_id, has_pin_set from pin_hash
+     * (kept out of the hidden PIN internals, but the mobile vault-activate flow needs to know
+     * whether to render "choose a PIN" vs "confirm your existing PIN" before any company vault
+     * is even resolved). */
+    protected $appends = ['is_admin', 'has_pin_set'];
 
     /**
      * Get the attributes that should be cast.
@@ -42,6 +44,9 @@ class User extends Authenticatable
             'password' => 'hashed',
             'onboarding_completed_at' => 'datetime',
             'cash_session_reminders_enabled' => 'boolean',
+            'pin_set_at' => 'datetime',
+            'locked_until' => 'datetime',
+            'lockout_count_reset_at' => 'datetime',
         ];
     }
 
@@ -49,6 +54,13 @@ class User extends Authenticatable
     {
         return Attribute::make(
             get: fn () => $this->role_id !== null,
+        );
+    }
+
+    protected function hasPinSet(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => ! is_null($this->pin_hash),
         );
     }
 
@@ -65,11 +77,6 @@ class User extends Authenticatable
     public function companies(): HasMany
     {
         return $this->hasMany(Company::class);
-    }
-
-    public function vault(): HasOne
-    {
-        return $this->hasOne(Vault::class);
     }
 
     /** Every group this user has a membership row for — pending requests included, so the

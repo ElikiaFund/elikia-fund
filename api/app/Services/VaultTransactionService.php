@@ -84,7 +84,7 @@ class VaultTransactionService
                 $intent->clientSecret ?? '',
                 $phone,
                 YabetoService::OPERATOR_MAP[$paymentMethod],
-                $vault->user->name,
+                $vault->company->user->name,
                 '',
             );
         } catch (YabetoRequestException|ConnectionException $e) {
@@ -161,7 +161,7 @@ class VaultTransactionService
                 (int) round($fee['net_amount']),
                 $phone,
                 YabetoService::OPERATOR_MAP[$paymentMethod],
-                $vault->user->name,
+                $vault->company->user->name,
                 '',
             );
 

@@ -59,9 +59,20 @@ export function InformationsTab({ user }: InformationsTabProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardDescription>Solde du coffre</CardDescription>
-            <CardTitle className="text-2xl">{user.vault ? currency.format(Number(user.vault.balance)) : '—'}</CardTitle>
+            <CardDescription>Coffres par entreprise</CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {user.companies.length === 0 ? (
+              <span className="text-sm text-muted-foreground">Aucune entreprise</span>
+            ) : (
+              user.companies.map((company) => (
+                <div key={company.id} className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{company.name}</span>
+                  <span className="font-medium">{company.vault ? currency.format(Number(company.vault.balance)) : '—'}</span>
+                </div>
+              ))
+            )}
+          </CardContent>
         </Card>
         <Card>
           <CardHeader>

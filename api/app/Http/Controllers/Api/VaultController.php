@@ -49,25 +49,42 @@ class VaultController extends Controller
     ) {}
 
     /**
-     * POST /vault/activate — first-time vault activation: creates the vault and sets its 4-digit PIN.
+     * POST /vault/activate — first-time activation of the *active company's* vault. The PIN
+     * itself is a property of the person, not the vault (see VaultSecurityService) — a user
+     * activating their 2nd/3rd company's vault must confirm their existing shared PIN rather
+     * than silently overwrite it with a new one.
      */
     public function activate(SetVaultPinRequest $request): JsonResponse
     {
         $user = $request->user();
+        $company = $request->company();
 
-        if ($user->vault()->exists()) {
+        if ($company->vault()->exists()) {
             return response()->json(['message' => 'Le coffre est déjà activé.'], 409);
         }
 
-        $vault = new Vault(['user_id' => $user->id, 'balance' => 0]);
-        // pin_hash is deliberately kept out of $fillable — set directly, never via mass assignment.
-        $vault->pin_hash = Hash::make($request->validated('pin'));
-        $vault->pin_set_at = now();
-        $vault->save();
+        return DB::transaction(function () use ($request, $user, $company) {
+            $vault = $company->vault()->create(['balance' => 0]);
 
-        $this->vaultSecurity->logActivated($vault);
+            if ($user->has_pin_set) {
+                try {
+                    if (! $this->vaultSecurity->checkPin($user, $vault, $request->validated('pin'))) {
+                        return response()->json(['message' => 'Code PIN incorrect.'], 422);
+                    }
+                } catch (VaultLockedException $e) {
+                    return response()->json(['message' => $e->getMessage()], 423);
+                }
+            } else {
+                // pin_hash is deliberately kept out of $fillable — set directly, never via mass assignment.
+                $user->pin_hash = Hash::make($request->validated('pin'));
+                $user->pin_set_at = now();
+                $user->save();
+            }
 
-        return response()->json($vault, 201);
+            $this->vaultSecurity->logActivated($vault, $user);
+
+            return response()->json($vault, 201);
+        });
     }
 
     /**
@@ -75,14 +92,15 @@ class VaultController extends Controller
      */
     public function verifyPin(VerifyVaultPinRequest $request): JsonResponse
     {
-        $vault = $request->user()->vault;
+        $user = $request->user();
+        $vault = $request->company()->vault;
 
-        if (! $vault || ! $vault->hasPinSet()) {
+        if (! $vault || ! $user->has_pin_set) {
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
         try {
-            if (! $this->vaultSecurity->checkPin($vault, $request->validated('pin'))) {
+            if (! $this->vaultSecurity->checkPin($user, $vault, $request->validated('pin'))) {
                 return response()->json(['message' => 'Code PIN incorrect.'], 422);
             }
         } catch (VaultLockedException $e) {
@@ -93,39 +111,40 @@ class VaultController extends Controller
     }
 
     /**
-     * PUT /vault/pin — change the PIN, re-verifying the current one first. Powers the mobile
-     * "Sécurité et code PIN" screen.
+     * PUT /vault/pin — change the shared PIN (every company vault this user can reach), re-verifying
+     * the current one first. Powers the mobile "Sécurité et code PIN" screen.
      */
     public function updatePin(UpdateVaultPinRequest $request): JsonResponse
     {
-        $vault = $request->user()->vault;
+        $user = $request->user();
+        $vault = $request->company()->vault;
 
-        if (! $vault || ! $vault->hasPinSet()) {
+        if (! $vault || ! $user->has_pin_set) {
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
         try {
-            if (! $this->vaultSecurity->checkPin($vault, $request->validated('current_pin'))) {
+            if (! $this->vaultSecurity->checkPin($user, $vault, $request->validated('current_pin'))) {
                 return response()->json(['message' => 'Code PIN actuel incorrect.'], 422);
             }
         } catch (VaultLockedException $e) {
             return response()->json(['message' => $e->getMessage()], 423);
         }
 
-        $vault->pin_hash = Hash::make($request->validated('pin'));
-        $vault->pin_set_at = now();
-        $vault->save();
+        $user->pin_hash = Hash::make($request->validated('pin'));
+        $user->pin_set_at = now();
+        $user->save();
 
         return response()->json(['message' => 'Code PIN mis à jour.']);
     }
 
     /**
-     * GET /vault — lets the client know upfront whether a vault exists (and its balance),
-     * so it can route straight to activation or to PIN unlock without guessing.
+     * GET /vault — lets the client know upfront whether the active company's vault exists (and
+     * its balance), so it can route straight to activation or to PIN unlock without guessing.
      */
     public function show(Request $request): JsonResponse
     {
-        $vault = $request->user()->vault;
+        $vault = $request->company()->vault;
 
         if (! $vault) {
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
@@ -135,12 +154,12 @@ class VaultController extends Controller
     }
 
     /**
-     * GET /vault/movements — full deposit/withdraw history, for the in-app history list and the
-     * PDF statement export. Most recent first.
+     * GET /vault/movements — full deposit/withdraw history for the active company's vault, for
+     * the in-app history list and the PDF statement export. Most recent first.
      */
     public function movements(Request $request): JsonResponse
     {
-        $vault = $request->user()->vault;
+        $vault = $request->company()->vault;
 
         if (! $vault) {
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
@@ -185,9 +204,9 @@ class VaultController extends Controller
         }
 
         if ($result['movement']->status === 'succeeded') {
-            $this->paymentNotifications->depositSucceeded($vault->user, $amount);
+            $this->paymentNotifications->depositSucceeded($vault->company->user, $amount);
         } elseif ($result['movement']->status === 'failed') {
-            $this->paymentNotifications->depositFailed($vault->user, $amount, $result['message'] ?? null);
+            $this->paymentNotifications->depositFailed($vault->company->user, $amount, $result['message'] ?? null);
         }
 
         return response()->json($result, $this->statusFor($result['movement']));
@@ -228,9 +247,9 @@ class VaultController extends Controller
         }
 
         if ($result['movement']->status === 'succeeded') {
-            $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
+            $this->paymentNotifications->withdrawSucceeded($vault->company->user, $amount);
         } elseif ($result['movement']->status === 'failed') {
-            $this->paymentNotifications->withdrawFailed($vault->user, $amount, $result['message'] ?? null);
+            $this->paymentNotifications->withdrawFailed($vault->company->user, $amount, $result['message'] ?? null);
         }
 
         return response()->json($result, $this->statusFor($result['movement']));
@@ -259,7 +278,7 @@ class VaultController extends Controller
             ]);
         });
 
-        $this->paymentNotifications->depositSucceeded($vault->user, $amount);
+        $this->paymentNotifications->depositSucceeded($vault->company->user, $amount);
         $this->fraudDetection->evaluate($movement);
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
@@ -298,7 +317,7 @@ class VaultController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $this->paymentNotifications->withdrawSucceeded($vault->user, $amount);
+        $this->paymentNotifications->withdrawSucceeded($vault->company->user, $amount);
         $this->fraudDetection->evaluate($movement);
 
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
@@ -306,12 +325,12 @@ class VaultController extends Controller
 
     /**
      * POST /vault/movements/{movement}/refresh-status — manual fallback for a deposit/withdrawal
-     * stuck `processing` (e.g. the confirmation webhook never arrived — mirrors
+     * stuck unresolved (e.g. the confirmation webhook never arrived — mirrors
      * GroupController::refreshContributionStatus, contributions' own equivalent).
      */
     public function refreshMovementStatus(Request $request, VaultMovement $movement): JsonResponse
     {
-        $vault = $request->user()->vault;
+        $vault = $request->company()->vault;
 
         abort_unless($vault && $movement->vault_id === $vault->id, 403);
 
@@ -334,12 +353,12 @@ class VaultController extends Controller
         if ($resolved) {
             if ($result->succeeded()) {
                 $movement->type === 'deposit'
-                    ? $this->paymentNotifications->depositSucceeded($vault->user, (float) $movement->amount)
-                    : $this->paymentNotifications->withdrawSucceeded($vault->user, (float) $movement->amount);
+                    ? $this->paymentNotifications->depositSucceeded($vault->company->user, (float) $movement->amount)
+                    : $this->paymentNotifications->withdrawSucceeded($vault->company->user, (float) $movement->amount);
             } elseif ($result->failed()) {
                 $movement->type === 'deposit'
-                    ? $this->paymentNotifications->depositFailed($vault->user, (float) $movement->amount, $result->failureMessage)
-                    : $this->paymentNotifications->withdrawFailed($vault->user, (float) $movement->amount, $result->failureMessage);
+                    ? $this->paymentNotifications->depositFailed($vault->company->user, (float) $movement->amount, $result->failureMessage)
+                    : $this->paymentNotifications->withdrawFailed($vault->company->user, (float) $movement->amount, $result->failureMessage);
             }
         }
 
@@ -351,26 +370,26 @@ class VaultController extends Controller
     {
         return match ($movement->status) {
             'succeeded', 'completed' => 201,
-            'processing' => 202,
-            'failed' => 422,
-            default => 200,
+            'failed', 'expired', 'canceled' => 422,
+            default => 202,
         };
     }
 
     /**
-     * Shared PIN re-verification for deposit/withdraw. Returns the vault on success, or a
-     * ready-to-return error JsonResponse on failure.
+     * Shared PIN re-verification for deposit/withdraw. Returns the active company's vault on
+     * success, or a ready-to-return error JsonResponse on failure.
      */
     private function vaultForVerifiedPin(VaultTransactionRequest $request): Vault|JsonResponse
     {
-        $vault = $request->user()->vault;
+        $user = $request->user();
+        $vault = $request->company()->vault;
 
-        if (! $vault || ! $vault->hasPinSet()) {
+        if (! $vault || ! $user->has_pin_set) {
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
         try {
-            if (! $this->vaultSecurity->checkPin($vault, $request->validated('pin'))) {
+            if (! $this->vaultSecurity->checkPin($user, $vault, $request->validated('pin'))) {
                 return response()->json(['message' => 'Code PIN incorrect.'], 422);
             }
         } catch (VaultLockedException $e) {

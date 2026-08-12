@@ -55,6 +55,15 @@ class DatabaseSeeder extends Seeder
             ->count(30)
             ->create()
             ->each(function (User $user) {
+                // The PIN is a per-user property (shared across every company vault they can
+                // reach) — decided once per user, not once per vault. A user without a PIN has
+                // never gone through the activation flow, so none of their companies get a vault.
+                $hasPin = fake()->boolean(60);
+
+                if ($hasPin) {
+                    $user->forceFill(['pin_hash' => bcrypt('1234'), 'pin_set_at' => now()])->save();
+                }
+
                 if (fake()->boolean(70)) {
                     // Most qualifying users get exactly 1 company; a minority get 2-3, so the
                     // mobile switcher has real multi-company users to demo against.
@@ -91,24 +100,29 @@ class DatabaseSeeder extends Seeder
                         CashSession::factory()
                             ->count(fake()->numberBetween(0, 4))
                             ->create(['company_id' => $company->id]);
+
+                        // One vault per company, only for companies whose owner has actually
+                        // "activated" (has a shared PIN) — matches the real activate() flow.
+                        if ($hasPin) {
+                            Vault::factory()->create(['company_id' => $company->id]);
+                        }
                     }
 
                     $user->forceFill(['onboarding_completed_at' => now()])->save();
                 }
-
-                $vault = Vault::factory()->make(['user_id' => $user->id]);
-
-                if (fake()->boolean(60)) {
-                    $vault->pin_hash = bcrypt('1234');
-                    $vault->pin_set_at = now();
-                }
-
-                $vault->save();
             });
+
+        // A tontine's company must belong to its own owner — only users who actually have a
+        // company can own one, since a company-less user has nothing to attribute a tontine to.
+        $usersWithCompanies = $users->filter(fn (User $u) => $u->companies()->exists());
 
         $groups = Group::factory()
             ->count(5)
-            ->sequence(fn () => ['owner_id' => $users->random()->id])
+            ->sequence(function () use ($usersWithCompanies) {
+                $owner = $usersWithCompanies->random();
+
+                return ['owner_id' => $owner->id, 'company_id' => $owner->companies()->inRandomOrder()->value('id')];
+            })
             ->create();
 
         foreach ($groups as $group) {
@@ -131,6 +145,7 @@ class DatabaseSeeder extends Seeder
                         ->each(fn ($date) => Contribution::factory()->create([
                             'group_id' => $group->id,
                             'user_id' => $member->id,
+                            'company_id' => $group->company_id,
                             'cycle_period' => $date->format('Y-m'),
                             'paid_at' => $date,
                         ]));

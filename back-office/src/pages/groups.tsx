@@ -67,6 +67,12 @@ const columns: ColumnDef<AdminGroup>[] = [
     meta: { label: 'Propriétaire' },
   },
   {
+    id: 'company',
+    accessorFn: (row) => row.company.name,
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Entreprise" />,
+    meta: { label: 'Entreprise' },
+  },
+  {
     accessorKey: 'created_at',
     header: ({ column }) => <DataTableColumnHeader column={column} title="Créée le" />,
     cell: ({ row }) => format(new Date(row.original.created_at), 'd MMM y', { locale: fr }),

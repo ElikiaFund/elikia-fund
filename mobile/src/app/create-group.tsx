@@ -8,6 +8,7 @@ import { SelectSheet, type SelectOption } from '@/components/select-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useCompany } from '@/context/company-context';
 import { useTheme } from '@/hooks/use-theme';
 import { contributionPercent, feeService, FALLBACK_FEE_RATES, type FeeRates } from '@/services/feeService';
 import { groupService, type GroupFrequency, type RecipientMode } from '@/services/groupService';
@@ -43,7 +44,9 @@ const RECIPIENT_MODES: { value: RecipientMode; title: string; description: strin
 export default function CreateGroupScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { companies, activeCompany } = useCompany();
   const [name, setName] = useState('');
+  const [companyId, setCompanyId] = useState<number | null>(activeCompany?.id ?? null);
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<GroupFrequency>('monthly');
   const [maxMembers, setMaxMembers] = useState('');
@@ -52,6 +55,7 @@ export default function CreateGroupScreen() {
   const [recipientMode, setRecipientMode] = useState<RecipientMode>('join_order');
   const [isDayPickerOpen, setIsDayPickerOpen] = useState(false);
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
+  const [isCompanyPickerOpen, setIsCompanyPickerOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feeRates, setFeeRates] = useState<FeeRates>(FALLBACK_FEE_RATES);
@@ -63,12 +67,15 @@ export default function CreateGroupScreen() {
   const feeRate = contributionPercent(feeRates) / 100;
   const amountValue = Number(amount.replace(',', '.'));
   const maxMembersValue = maxMembers.trim().length > 0 ? Number(maxMembers) : 1000;
-  const canSubmit = name.trim().length > 0 && amountValue > 0 && maxMembersValue >= 2 && maxMembersValue <= 1000;
+  const canSubmit =
+    name.trim().length > 0 && companyId !== null && amountValue > 0 && maxMembersValue >= 2 && maxMembersValue <= 1000;
   const dayOptions = frequency === 'weekly' ? WEEKDAYS : MONTH_DAYS;
   const dayLabel = useMemo(
     () => dayOptions.find((option) => option.value === contributionDay)?.label ?? null,
     [dayOptions, contributionDay],
   );
+  const companyOptions: SelectOption[] = useMemo(() => companies.map((c) => ({ label: c.name, value: String(c.id) })), [companies]);
+  const companyLabel = companies.find((c) => c.id === companyId)?.name ?? null;
 
   function handleFrequencyChange(next: GroupFrequency) {
     setFrequency(next);
@@ -76,12 +83,17 @@ export default function CreateGroupScreen() {
   }
 
   async function handleSubmit() {
+    if (companyId === null) {
+      return;
+    }
+
     setError(null);
     setIsSubmitting(true);
 
     try {
       const group = await groupService.create(
         name.trim(),
+        companyId,
         amountValue,
         frequency,
         maxMembersValue,
@@ -109,6 +121,27 @@ export default function CreateGroupScreen() {
 
           <View style={styles.form}>
             <FormField label="Nom de la tontine" placeholder="Ex. Tontine des Commerçantes" value={name} onChangeText={setName} />
+
+            {companies.length > 1 && (
+              <View>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
+                  Entreprise
+                </ThemedText>
+                <Pressable
+                  onPress={() => setIsCompanyPickerOpen(true)}
+                  style={[styles.scheduleField, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}
+                >
+                  <ThemedText themeColor={companyLabel ? 'text' : 'textSecondary'}>
+                    {companyLabel ?? 'Choisir une entreprise'}
+                  </ThemedText>
+                  <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
+                </Pressable>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.scheduleHint}>
+                  Les cotisations et versements de cette tontine seront comptabilisés sur le coffre et le score de cette
+                  entreprise.
+                </ThemedText>
+              </View>
+            )}
 
             <View>
               <ThemedText type="small" themeColor="textSecondary" style={styles.fieldLabel}>
@@ -273,6 +306,14 @@ export default function CreateGroupScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <SelectSheet
+        visible={isCompanyPickerOpen}
+        title="Entreprise"
+        options={companyOptions}
+        selectedValue={companyId !== null ? String(companyId) : ''}
+        onSelect={(value) => setCompanyId(Number(value))}
+        onClose={() => setIsCompanyPickerOpen(false)}
+      />
       <SelectSheet
         visible={isDayPickerOpen}
         title={frequency === 'weekly' ? 'Jour de la semaine' : 'Jour du mois'}

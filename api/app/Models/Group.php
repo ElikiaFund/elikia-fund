@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'uuid', 'name', 'contribution_amount', 'frequency', 'max_members', 'invite_code', 'owner_id',
+    'uuid', 'name', 'contribution_amount', 'frequency', 'max_members', 'invite_code', 'owner_id', 'company_id',
     'contribution_day', 'contribution_time', 'recipient_mode', 'recipient_order',
     'auto_payout_enabled', 'round_number', 'round_status',
     'recipient_order_updated_at', 'recipient_order_updated_by',
@@ -42,6 +42,15 @@ class Group extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /** The business this tontine is attributed to — chosen by the creator, fixed for the
+     * tontine's lifetime. Membership stays person-based (see members()); this only decides
+     * where cotisations/versements are counted (vault credit destination, credit-score
+     * tontine_participation) — see TontinePayoutService::disburse(). */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     /** Approved members only — pending join requests can't contribute or count toward max_members. */

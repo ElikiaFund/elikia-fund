@@ -38,6 +38,9 @@ export type AdminUser = {
   is_admin: boolean
   avatar_url: string | null
   onboarding_completed_at: string | null
+  /** Whether this person has ever set a vault PIN — shared across every company vault they can
+   * reach, not per-vault (see AdminUserDetail.vaults). */
+  pin_set_at: string | null
   created_at: string
   updated_at: string
   companies_count: number
@@ -96,6 +99,8 @@ export type AdminGroupBase = {
   max_members: number | null
   invite_code: string
   owner_id: number
+  /** Which of the owner's companies this tontine's cotisations/versements are attributed to. */
+  company_id: number
   auto_payout_enabled: boolean
   round_number: number
   round_status: 'active' | 'completed'
@@ -108,6 +113,7 @@ export type AdminGroup = AdminGroupBase & {
   contributions_sum_amount: string | null
   contributions: AdminContribution[]
   owner: AdminUser
+  company: AdminCompany
 }
 
 export type AdminDeletionVote = {
@@ -134,6 +140,7 @@ export type AdminGroupDetail = AdminGroupBase & {
   members_count: number
   contributions_sum_amount: string | null
   owner: AdminUser
+  company: AdminCompany
   members: (AdminUser & { pivot: { joined_at: string } })[]
   removed_members: (AdminUser & { pivot: { joined_at: string; removed_at: string } })[]
   contributions: AdminContributionWithUser[]
@@ -189,8 +196,9 @@ export type AdminCashSession = {
 }
 
 export type AdminUserDetail = AdminUser & {
-  companies: AdminCompany[]
-  vault: { id: number; balance: string; pin_set_at: string | null } | null
+  /** Each of this user's companies, with its own vault (if activated) eager-loaded — the vault
+   * is per-company now, so there's no single top-level "vault" for the user anymore. */
+  companies: (AdminCompany & { vault: { id: number; balance: string } | null })[]
   groups: AdminGroupBase[]
 }
 
@@ -245,7 +253,7 @@ export type AdminVaultMovement = {
   net_amount: string
   status: string
   created_at: string
-  vault: { id: number; user: { id: number; name: string } }
+  vault: { id: number; company_id: number; company: { id: number; name: string; user: { id: number; name: string } } }
 }
 
 export type VaultSecurityEventType = 'pin_failed' | 'pin_locked' | 'activated' | 'flagged_transaction'

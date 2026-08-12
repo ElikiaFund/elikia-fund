@@ -31,6 +31,8 @@ class CompanyController extends Controller
 
     public function destroy(Company $company): JsonResponse
     {
+        abort_if((float) ($company->vault?->balance ?? 0) > 0, 409, 'Impossible de supprimer une entreprise dont le coffre a un solde positif.');
+
         $company->delete();
 
         return response()->json(['message' => 'Entreprise supprimée.']);

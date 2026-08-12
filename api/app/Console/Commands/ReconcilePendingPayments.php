@@ -94,7 +94,7 @@ class ReconcilePendingPayments extends Command
             ->whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
             ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
-            ->with('vault.user')
+            ->with('vault.company.user')
             ->chunkById(50, function ($pending) use (&$resolved, $yabeto, $vaultTransactions, $paymentNotifications) {
                 foreach ($pending as $movement) {
                     $status = $this->fetchStatus(
@@ -115,7 +115,7 @@ class ReconcilePendingPayments extends Command
                     }
 
                     $resolved++;
-                    $user = $movement->vault->user;
+                    $user = $movement->vault->company->user;
 
                     if ($status['succeeded']) {
                         $movement->type === 'deposit'

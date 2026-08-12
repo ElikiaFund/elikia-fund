@@ -13,8 +13,8 @@ class CreditScoreService
      * scoring criteria. Weights are normalized across active criteria, so admins don't need
      * to keep raw weights summing to exactly 100. Scored per-company, not per-user: a merchant
      * running two distinct businesses gets two distinct financial identities, not one blended
-     * one — transaction/product-derived metrics come from the company itself, while
-     * savings/tontine metrics come from its owner (see metricFor()).
+     * one — every metric now reads directly off the company itself (its own vault, its own
+     * tontines), not its owner (see metricFor()).
      *
      * @return array{score: int, verdict: string, breakdown: array<int, array<string, mixed>>}
      */
@@ -73,9 +73,9 @@ class CreditScoreService
             // has no track record yet, which is the point of scoring per-company.
             'account_age' => (float) $company->created_at->diffInMonths(now()),
             'transaction_regularity' => (float) $company->transactions()->where('occurred_at', '>=', now()->subDays(90))->count(),
-            'savings_behavior' => (float) ($company->user->vault?->balance ?? 0),
+            'savings_behavior' => (float) ($company->vault?->balance ?? 0),
             'income_expense_ratio' => $this->incomeExpenseRatio($company),
-            'tontine_participation' => (float) $company->user->contributions()->where('status', 'succeeded')->count(),
+            'tontine_participation' => (float) $company->contributions()->where('status', 'succeeded')->count(),
             // Vacuous now that calculate() always receives an existing company (used to be a
             // presence check: "does this user have a company at all?"). Left computing a
             // constant 1.0 rather than repurposed into a new metric — see ScoringCriteriaSeeder,

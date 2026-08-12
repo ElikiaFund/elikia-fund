@@ -93,9 +93,9 @@ class YabetoWebhookController extends Controller
             }
 
             if ($status === 'succeeded') {
-                $this->paymentNotifications->depositSucceeded($resolved->vault->user, (float) $resolved->amount);
+                $this->paymentNotifications->depositSucceeded($resolved->vault->company->user, (float) $resolved->amount);
             } elseif ($status === 'failed') {
-                $this->paymentNotifications->depositFailed($resolved->vault->user, (float) $resolved->amount);
+                $this->paymentNotifications->depositFailed($resolved->vault->company->user, (float) $resolved->amount);
             }
 
             return;
@@ -138,9 +138,9 @@ class YabetoWebhookController extends Controller
         }
 
         if ($status === 'succeeded') {
-            $this->paymentNotifications->withdrawSucceeded($resolved->vault->user, (float) $resolved->amount);
+            $this->paymentNotifications->withdrawSucceeded($resolved->vault->company->user, (float) $resolved->amount);
         } elseif ($status === 'failed') {
-            $this->paymentNotifications->withdrawFailed($resolved->vault->user, (float) $resolved->amount);
+            $this->paymentNotifications->withdrawFailed($resolved->vault->company->user, (float) $resolved->amount);
         }
     }
 }

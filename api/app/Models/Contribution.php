@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['group_id', 'user_id', 'amount', 'fee_amount', 'provider_fee_amount', 'platform_fee_amount', 'net_amount', 'cycle_period', 'paid_at', 'provider', 'status', 'yabeto_reference', 'recorded_by'])]
+#[Fillable(['group_id', 'user_id', 'company_id', 'amount', 'fee_amount', 'provider_fee_amount', 'platform_fee_amount', 'net_amount', 'cycle_period', 'paid_at', 'provider', 'status', 'yabeto_reference', 'recorded_by'])]
 class Contribution extends Model
 {
     /** @use HasFactory<ContributionFactory> */
@@ -34,6 +34,11 @@ class Contribution extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     /** Only set on a manually-recorded (cash) contribution — traces it back to the staff/owner who entered it. */

@@ -4,14 +4,12 @@ namespace App\Models;
 
 use Database\Factories\VaultFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'balance'])]
-#[Hidden(['pin_hash'])]
+#[Fillable(['company_id', 'balance'])]
 class Vault extends Model
 {
     /** @use HasFactory<VaultFactory> */
@@ -21,15 +19,12 @@ class Vault extends Model
     {
         return [
             'balance' => 'decimal:2',
-            'pin_set_at' => 'datetime',
-            'locked_until' => 'datetime',
-            'lockout_count_reset_at' => 'datetime',
         ];
     }
 
-    public function user(): BelongsTo
+    public function company(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Company::class);
     }
 
     public function movements(): HasMany
@@ -40,10 +35,5 @@ class Vault extends Model
     public function securityEvents(): HasMany
     {
         return $this->hasMany(VaultSecurityEvent::class);
-    }
-
-    public function hasPinSet(): bool
-    {
-        return ! is_null($this->pin_hash);
     }
 }

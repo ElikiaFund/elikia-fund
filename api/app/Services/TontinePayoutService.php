@@ -141,12 +141,16 @@ class TontinePayoutService
                 throw new TontinePayoutException('Aucune cotisation à verser pour ce cycle.');
             }
 
-            $vault = $recipient->vault;
+            // The payout lands in the tontine's own company's vault, not the recipient member's
+            // personal vault — recipient *selection* (who's up next in rotation) is unaffected,
+            // but the money is attributed to the business the tontine itself belongs to.
+            $vault = $group->company->vault;
 
             if (! $vault) {
                 throw new TontinePayoutRecipientVaultNotActivatedException(
+                    $group,
                     $recipient,
-                    "{$recipient->name} n'a pas encore activé son coffre. Le versement sera possible dès que ce sera fait.",
+                    "L'entreprise « {$group->company->name} » n'a pas encore activé son coffre. Le versement sera possible dès que ce sera fait.",
                 );
             }
 

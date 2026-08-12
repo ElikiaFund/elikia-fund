@@ -110,7 +110,7 @@
     <table class="data">
         <thead><tr><th>Indicateur</th><th class="amount">Valeur</th></tr></thead>
         <tbody>
-            <tr><td>Tontines rejointes</td><td class="amount">{{ $tontine['groups_joined'] }}</td></tr>
+            <tr><td>Tontines de l&rsquo;entreprise</td><td class="amount">{{ $tontine['groups_joined'] }}</td></tr>
             <tr><td>Nombre total de cotisations</td><td class="amount">{{ $tontine['contributions_count'] }}</td></tr>
             <tr><td>Total cotisé</td><td class="amount">{{ $tontine['total_contributed'] }}</td></tr>
             <tr><td>Total reçu en distribution</td><td class="amount">{{ $tontine['total_received'] }}</td></tr>
@@ -124,7 +124,7 @@
     </div>
 
     <div class="footer">
-        Document généré par ElikiaFund — Plateforme de simulation financière pour commerçants informels.<br />
+        Document généré par ElikiaFund, Plateforme de simulation financière pour commerçants informels.<br />
         Les montants présentés sont issus d'une simulation des comportements financiers et ne constituent pas une preuve d'avoirs réels.<br />
         Ce dossier vise à témoigner de la discipline financière, de la régularité et de la fiabilité démontrées sur la plateforme.
     </div>

@@ -8,7 +8,9 @@ use App\Models\Company;
  * Aggregates everything the "Dossier de crédibilité financière" PDF needs — the credit score
  * breakdown (CreditScoreService) plus the narrative activity/vault/tontine stats sections shown
  * around it. Kept separate from CreditScoreService since this is presentation-layer aggregation
- * for one specific document, not part of the scoring model itself.
+ * for one specific document, not part of the scoring model itself. Reads the company's own
+ * vault/contributions directly (Vault and Group/Contribution are both company-owned) — nothing
+ * here goes through the owning user, unlike the pre-company-isolation version of this file.
  */
 class FinancialDossierService
 {
@@ -26,7 +28,6 @@ class FinancialDossierService
      */
     public function build(Company $company): array
     {
-        $user = $company->user;
         $tenureDays = max(1, (int) $company->created_at->diffInDays(now()));
 
         $score = $this->creditScore->calculate($company);
@@ -34,16 +35,16 @@ class FinancialDossierService
         $totalIncome = (float) $company->transactions()->where('type', 'income')->sum('amount');
         $totalExpense = (float) $company->transactions()->where('type', 'expense')->sum('amount');
 
-        $vault = $user->vault;
+        $vault = $company->vault;
         // Vault movements use 'completed' for the simulated/no-Yabeto path, 'succeeded' for real
         // Yabeto — both count as real money moved (see finance.tsx's identical filter).
         $settledMovements = $vault ? $vault->movements()->whereIn('status', ['succeeded', 'completed']) : null;
 
-        $succeededContributions = $user->contributions()->where('status', 'succeeded');
+        $succeededContributions = $company->contributions()->where('status', 'succeeded');
 
         return [
             'company_name' => $company->name,
-            'phone' => $user->phone,
+            'phone' => $company->user->phone,
             'tenure_days' => $tenureDays,
             'score' => $score['score'],
             'verdict' => $score['verdict'],
@@ -71,9 +72,9 @@ class FinancialDossierService
                 'movements_count' => $settledMovements ? (clone $settledMovements)->whereIn('type', ['deposit', 'withdraw'])->count() : 0,
             ],
             'tontine' => [
-                'groups_joined' => (int) $user->groups()->count(),
+                'groups_joined' => (int) $company->groups()->count(),
                 'contributions_count' => (int) (clone $succeededContributions)->count(),
-                // Gross — what the member actually paid out of pocket, not the post-management-fee
+                // Gross — what was actually paid out of pocket, not the post-management-fee
                 // net that lands in the tontine pot.
                 'total_contributed' => (float) (clone $succeededContributions)->sum('amount'),
                 'total_received' => $settledMovements ? (float) (clone $settledMovements)->where('type', 'tontine_payout')->sum('amount') : 0,
@@ -95,7 +96,7 @@ class FinancialDossierService
         return match ($verdict) {
             'eligible' => 'Profil de référence. Excellente régularité, épargne disciplinée et participation active aux tontines. Éligible aux meilleures conditions de financement.',
             'review' => "Profil en développement. L'activité enregistrée montre des signes encourageants, mais gagnerait à être consolidée sur une période plus longue avant une évaluation définitive.",
-            default => "Profil encore limité. Peu d'historique disponible pour établir une évaluation fiable — une utilisation plus régulière du journal de caisse, du coffre et des tontines permettra d'affiner ce score.",
+            default => "Profil encore limité. Peu d'historique disponible pour établir une évaluation fiable une,utilisation plus régulière du journal de caisse, du coffre et des tontines permettra d'affiner ce score.",
         };
     }
 }

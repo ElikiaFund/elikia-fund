@@ -15,7 +15,7 @@ class UserController extends Controller
 
     public function show(User $user): JsonResponse
     {
-        return response()->json($user->load(['companies', 'role', 'vault', 'groups']));
+        return response()->json($user->load(['companies.vault', 'role', 'groups']));
     }
 
     public function destroy(User $user): JsonResponse

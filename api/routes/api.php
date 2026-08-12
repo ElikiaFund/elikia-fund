@@ -121,16 +121,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/transaction-categories/{transactionCategory}', [TransactionCategoryController::class, 'destroy']);
 
         Route::get('/companies/{company}/credit-score', CompanyCreditScoreController::class);
-    });
 
-    Route::post('/vault/activate', [VaultController::class, 'activate']);
-    Route::post('/vault/pin/verify', [VaultController::class, 'verifyPin'])->middleware('throttle:5,1');
-    Route::put('/vault/pin', [VaultController::class, 'updatePin'])->middleware('throttle:5,1');
-    Route::get('/vault', [VaultController::class, 'show']);
-    Route::get('/vault/movements', [VaultController::class, 'movements']);
-    Route::post('/vault/deposit', [VaultController::class, 'deposit'])->middleware('throttle:10,1');
-    Route::post('/vault/withdraw', [VaultController::class, 'withdraw'])->middleware('throttle:10,1');
-    Route::post('/vault/movements/{movement}/refresh-status', [VaultController::class, 'refreshMovementStatus']);
+        // The vault is 1:1 with the active company (not the user) — every route below needs
+        // X-Company-Id to know which company's vault it's acting on. The PIN itself lives on the
+        // user, not any one vault (see VaultSecurityService), but a security event still logs
+        // against a specific vault, so even PIN-only routes (verify/update) need a resolved
+        // company/vault to log against.
+        Route::post('/vault/activate', [VaultController::class, 'activate']);
+        Route::post('/vault/pin/verify', [VaultController::class, 'verifyPin'])->middleware('throttle:5,1');
+        Route::put('/vault/pin', [VaultController::class, 'updatePin'])->middleware('throttle:5,1');
+        Route::get('/vault', [VaultController::class, 'show']);
+        Route::get('/vault/movements', [VaultController::class, 'movements']);
+        Route::post('/vault/deposit', [VaultController::class, 'deposit'])->middleware('throttle:10,1');
+        Route::post('/vault/withdraw', [VaultController::class, 'withdraw'])->middleware('throttle:10,1');
+        Route::post('/vault/movements/{movement}/refresh-status', [VaultController::class, 'refreshMovementStatus']);
+    });
 
     Route::get('/settings/fees', [FeeSettingController::class, 'show']);
 

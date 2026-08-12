@@ -28,8 +28,8 @@ class ContributionService
      * @param  array{fee_amount: float, provider_fee_amount: float, platform_fee_amount: float, net_amount: float}  $fee
      *                                                                                                                    FeeService::contribution()'s return shape
      *
-     * @throws ContributionInProgressException if a succeeded/processing contribution already
-     *                                         exists for this (group, user, cycle_period) — a prior failed attempt never blocks a retry
+     * @throws ContributionInProgressException if a succeeded/still-pending contribution already
+     *                                         exists for this (group, user, cycle_period) — a terminal failure never blocks a retry
      */
     public function reserve(
         Group $group,
@@ -74,6 +74,7 @@ class ContributionService
             return Contribution::create([
                 'group_id' => $group->id,
                 'user_id' => $user->id,
+                'company_id' => $group->company_id,
                 'amount' => $amount,
                 'fee_amount' => $fee['fee_amount'],
                 'provider_fee_amount' => $fee['provider_fee_amount'],
@@ -141,8 +142,10 @@ class ContributionService
             return;
         }
 
-        if ($result->status !== 'processing') {
-            $this->resolveStatus($stuck->id, $result->status);
+        if (YabetoStatus::isPending($result->status)) {
+            return;
         }
+
+        $this->resolveStatus($stuck->id, $result->status);
     }
 }

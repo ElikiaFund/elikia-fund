@@ -132,6 +132,9 @@ export function GroupDetailPage() {
               <CardHeader>
                 <CardTitle>{group.name}</CardTitle>
                 <CardDescription className="flex flex-wrap gap-2 pt-1">
+                  <Badge variant="outline" asChild>
+                    <Link to={`/entreprises/${group.company.id}`}>{group.company.name}</Link>
+                  </Badge>
                   <Badge variant="outline">{FREQUENCY_LABELS[group.frequency] ?? group.frequency}</Badge>
                   <Badge variant="outline">Cotisation {currency.format(Number(group.contribution_amount))}</Badge>
                   <Badge variant="outline">Code {group.invite_code}</Badge>

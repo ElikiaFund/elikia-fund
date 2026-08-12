@@ -65,7 +65,10 @@ export function FinancePage() {
           .map((m) => ({
             id: `vault-${m.id}`,
             source: m.type === 'deposit' ? ('vault_deposit' as const) : ('vault_withdraw' as const),
-            userId: m.vault.user.id,
+            // The vault itself is per-company now, but "active users" here means distinct
+            // *people* (consistent with contribution events' c.user_id above) — so this still
+            // resolves to the vault's owning person, not the company.
+            userId: m.vault.company.user.id,
             grossAmount: Number(m.amount),
             feeAmount: Number(m.fee_amount),
             providerFeeAmount: Number(m.provider_fee_amount),
