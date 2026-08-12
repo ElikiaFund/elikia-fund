@@ -26,11 +26,18 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /** Neither is a real column — is_admin is computed from role_id, has_pin_set from pin_hash
-     * (kept out of the hidden PIN internals, but the mobile vault-activate flow needs to know
-     * whether to render "choose a PIN" vs "confirm your existing PIN" before any company vault
-     * is even resolved). */
-    protected $appends = ['is_admin', 'has_pin_set'];
+    /** Fallback name for a social sign-up that came back with no name at all — Apple only ever
+     * shares the user's full name on the very first authorization for a given Apple id + app, so
+     * a repeat sign-in (or a declined name share) lands here. See needsName() below and
+     * AuthController::findOrCreateUser(). */
+    public const DEFAULT_NAME = 'Utilisateur Elikia';
+
+    /** None are real columns — is_admin is computed from role_id, has_pin_set from pin_hash (kept
+     * out of the hidden PIN internals, but the mobile vault-activate flow needs to know whether to
+     * render "choose a PIN" vs "confirm your existing PIN" before any company vault is even
+     * resolved), needs_name from comparing against DEFAULT_NAME (mobile prompts once to collect a
+     * real name instead of hardcoding/duplicating the placeholder string client-side). */
+    protected $appends = ['is_admin', 'has_pin_set', 'needs_name'];
 
     /**
      * Get the attributes that should be cast.
@@ -61,6 +68,13 @@ class User extends Authenticatable
     {
         return Attribute::make(
             get: fn () => ! is_null($this->pin_hash),
+        );
+    }
+
+    protected function needsName(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->name === self::DEFAULT_NAME,
         );
     }
 
