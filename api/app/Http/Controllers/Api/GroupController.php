@@ -28,6 +28,7 @@ use App\Services\GroupDeletionService;
 use App\Services\GroupMembershipNotificationService;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
+use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\TontineReportService;
@@ -641,7 +642,7 @@ class GroupController extends Controller
         abort_unless($contribution->group_id === $group->id, 404);
         abort_unless($contribution->user_id === $user->id, 403);
 
-        if (! $this->yabeto->isEnabled() || $contribution->status !== 'processing' || ! $contribution->yabeto_reference) {
+        if (! $this->yabeto->isEnabled() || YabetoStatus::isTerminal($contribution->status) || ! $contribution->yabeto_reference) {
             return response()->json($contribution->load('user'));
         }
 
@@ -693,7 +694,8 @@ class GroupController extends Controller
             return response()->json(['message' => 'Ce cycle a déjà été versé, impossible d\'y ajouter une cotisation.'], 409);
         }
 
-        $amount = (float) $group->contribution_amount;
+        $amount = (float) ($request->validated('amount') ?? $group->contribution_amount);
+        $paidAt = $request->validated('paid_at') ? Carbon::parse($request->validated('paid_at')) : null;
 
         try {
             $fee = $this->fees->contribution($amount);
@@ -702,7 +704,17 @@ class GroupController extends Controller
         }
 
         try {
-            $contribution = $this->contributions->reserve($group, $user, $cyclePeriod, $amount, $fee, 'succeeded', 'manual', $request->user()->id);
+            $contribution = $this->contributions->reserve(
+                $group,
+                $user,
+                $cyclePeriod,
+                $amount,
+                $fee,
+                'succeeded',
+                'manual',
+                $request->user()->id,
+                $paidAt,
+            );
         } catch (ContributionInProgressException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         }

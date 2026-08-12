@@ -181,6 +181,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/companies', [AdminCompanyController::class, 'index']);
         Route::get('/companies/{company}', [AdminCompanyController::class, 'show']);
         Route::get('/companies/{company}/credit-score', CreditScoreController::class);
+        Route::get('/companies/{company}/financial-dossier', [AdminCompanyController::class, 'financialDossier']);
         Route::delete('/companies/{company}', [AdminCompanyController::class, 'destroy'])->middleware('permission:companies.delete');
 
         Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
