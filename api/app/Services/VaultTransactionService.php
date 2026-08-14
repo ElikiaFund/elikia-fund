@@ -50,7 +50,7 @@ class VaultTransactionService
 
         $fee = $this->fees->deposit($amount);
 
-        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
+        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel, $phone) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->movements()->where('type', 'deposit')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
@@ -67,6 +67,7 @@ class VaultTransactionService
                 'note' => "Dépôt via {$methodLabel}.",
                 'provider' => 'yabeto',
                 'status' => 'processing',
+                'phone' => $phone,
             ]);
         });
 
@@ -122,7 +123,7 @@ class VaultTransactionService
 
         $fee = $this->fees->withdrawal($amount);
 
-        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
+        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel, $phone) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
@@ -151,6 +152,7 @@ class VaultTransactionService
                 'note' => "Retrait via {$methodLabel}.",
                 'provider' => 'yabeto',
                 'status' => 'processing',
+                'phone' => $phone,
             ]);
         });
 

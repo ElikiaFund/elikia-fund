@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['vault_id', 'type', 'amount', 'fee_amount', 'provider_fee_amount', 'platform_fee_amount', 'net_amount', 'note', 'provider', 'status', 'yabeto_reference', 'group_id', 'cycle_period'])]
+#[Fillable(['vault_id', 'type', 'amount', 'fee_amount', 'provider_fee_amount', 'platform_fee_amount', 'net_amount', 'note', 'provider', 'status', 'yabeto_reference', 'phone', 'group_id', 'cycle_period'])]
 class VaultMovement extends Model
 {
     /** @use HasFactory<VaultMovementFactory> */

@@ -66,7 +66,7 @@ class YabetoService
                 'type' => 'momo',
                 'momo' => [
                     'country' => self::COUNTRY,
-                    'msisdn' => $msisdn,
+                    'msisdn' => self::normalizeMsisdn($msisdn),
                     'operator_name' => $operator,
                 ],
             ],
@@ -95,7 +95,7 @@ class YabetoService
             'payment_method_data' => [
                 'type' => 'momo',
                 'momo' => [
-                    'msisdn' => $msisdn,
+                    'msisdn' => self::normalizeMsisdn($msisdn),
                     'country' => strtoupper(self::COUNTRY),
                     'operator_name' => $operator,
                 ],
@@ -170,5 +170,18 @@ class YabetoService
         if ($response->failed()) {
             throw new YabetoRequestException($response);
         }
+    }
+
+    /**
+     * Yabetoo documents exactly two valid `msisdn` shapes — `+242066594470` or `242066594470`,
+     * neither with a space (yabeto.md §4). Mobile's phone inputs keep a literal `+242 ` prefix
+     * (with the space) for display, and that raw string flows straight through to here otherwise
+     * — so a real request could reach Yabeto malformed even though every layer along the way
+     * "looks" correct. Stripping to digits-only always lands on the safe, digits-only documented
+     * form, regardless of what any caller (deposit, withdraw, tontine contribution) sends.
+     */
+    private static function normalizeMsisdn(string $msisdn): string
+    {
+        return preg_replace('/\D+/', '', $msisdn) ?? $msisdn;
     }
 }
