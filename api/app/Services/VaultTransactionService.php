@@ -257,11 +257,22 @@ class VaultTransactionService
             return;
         }
 
+        // Deliberately catches everything, not just the two expected transport exceptions — this
+        // is a best-effort pre-check ahead of a brand new deposit/withdraw attempt, and any
+        // failure here (a malformed Yabeto response, an unexpected exception type) must never
+        // crash that new attempt before it even reaches its own DB::transaction(). A prior stuck
+        // movement silently blocking every future one this way would look exactly like "nothing
+        // gets stored" from the outside, since the request never gets far enough to create a row.
         try {
             $result = $type === 'deposit'
                 ? $this->yabeto->getPaymentIntent($stuck->yabeto_reference)
                 : $this->yabeto->getDisbursement($stuck->yabeto_reference);
-        } catch (YabetoRequestException|ConnectionException) {
+        } catch (\Throwable $e) {
+            Log::warning('Vault reconcileStuck() pre-check failed, proceeding without it', [
+                'message' => $e->getMessage(),
+                'movement_id' => $stuck->id,
+            ]);
+
             return;
         }
 

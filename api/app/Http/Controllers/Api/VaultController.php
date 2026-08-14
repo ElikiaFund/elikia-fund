@@ -13,14 +13,12 @@ use App\Http\Requests\Vault\VerifyVaultPinRequest;
 use App\Models\Vault;
 use App\Models\VaultMovement;
 use App\Services\FeeService;
-use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\VaultFraudDetectionService;
 use App\Services\VaultSecurityService;
 use App\Services\VaultTransactionService;
-use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -342,7 +340,12 @@ class VaultController extends Controller
             $result = $movement->type === 'deposit'
                 ? $this->yabeto->getPaymentIntent($movement->yabeto_reference)
                 : $this->yabeto->getDisbursement($movement->yabeto_reference);
-        } catch (YabetoRequestException|ConnectionException $e) {
+        } catch (\Throwable $e) {
+            // Broader than just YabetoRequestException/ConnectionException on purpose — this is
+            // the "Vérifier" button's request; any failure here (including an unexpected exception
+            // type from a malformed response) must return the still-pending movement gracefully,
+            // not 500. A user tapping "Vérifier" and getting a crash is indistinguishable from the
+            // status never resolving at all.
             Log::warning('Yabeto movement status refresh failed', ['message' => $e->getMessage(), 'movement_id' => $movement->id]);
 
             return response()->json($movement);
