@@ -648,7 +648,6 @@ class GroupController extends Controller
                 $phone,
                 YabetoService::OPERATOR_MAP[$paymentMethod],
                 $user->name,
-                '',
             );
         } catch (YabetoRequestException|ConnectionException $e) {
             Log::warning('Yabeto contribution request failed', ['message' => $e->getMessage(), 'contribution_id' => $contribution->id]);

@@ -86,7 +86,6 @@ class VaultTransactionService
                 $phone,
                 YabetoService::OPERATOR_MAP[$paymentMethod],
                 $vault->company->user->name,
-                '',
             );
         } catch (YabetoRequestException|ConnectionException $e) {
             Log::warning('Yabeto deposit request failed', ['message' => $e->getMessage(), 'movement_id' => $movement->id]);
@@ -164,7 +163,6 @@ class VaultTransactionService
                 $phone,
                 YabetoService::OPERATOR_MAP[$paymentMethod],
                 $vault->company->user->name,
-                '',
             );
 
             $movement->update(['yabeto_reference' => $result->id]);
