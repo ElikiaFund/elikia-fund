@@ -1,83 +1,82 @@
 <div align="center">
-  <img src="website/public/logo.svg" alt="Elikia Fund" width="72" />
+  <img src="mobile/assets/images/icon.png" alt="Elikia Fund" width="220" />
 
   # Elikia Fund
 
-  <em>A financial identity for businesses no bank has ever seen.</em>
+  <em>Une identité financière pour les commerces qu'aucune banque n'a jamais vus.</em>
 </div>
 
 <br />
 
-*Elikia* means hope, in Lingala.
+*Elikia* signifie espoir, en lingala.
 
-Across Congo-Brazzaville — and much of the informal economy across Africa — small business owners run real businesses on cash, memory, and trust. A shopkeeper tracks her sales in a notebook, if she tracks them at all. She saves by handing cash to a tontine, a rotating savings circle held together by nothing but her neighbors' word. When she needs credit to grow, there's no bank statement to show, no bureau that's ever heard of her — nothing but a reputation that never travels beyond her own street.
+À travers le Congo-Brazzaville — et une grande partie de l'économie informelle africaine — des commerçants font tourner de vraies entreprises avec du cash, de la mémoire et de la confiance. Une commerçante note ses ventes dans un cahier, quand elle prend le temps de les noter. Elle épargne en confiant du cash à une tontine, un cercle d'épargne rotatif qui ne tient que sur la parole de ses voisins. Le jour où elle a besoin d'un crédit pour se développer, il n'existe aucun relevé bancaire à montrer, aucun bureau de crédit qui la connaît — rien qu'une réputation qui ne dépasse jamais sa propre rue.
 
-Elikia Fund exists to change what that reputation can do. It takes the discipline these merchants already practice — showing up, paying in, keeping the books — and turns it into something they can actually point to.
+Elikia Fund existe pour changer ce que cette réputation peut faire. L'application transforme la discipline que ces commerçants pratiquent déjà — être présents, cotiser, tenir leurs comptes — en quelque chose qu'ils peuvent enfin montrer.
 
 <p align="center">
-  <a href="#what-it-does">What it does</a> ·
-  <a href="#the-apps">The apps</a> ·
-  <a href="#for-developers">For developers</a> ·
-  <a href="#documentation-map">Documentation</a>
+  <a href="#ce-que-fait-elikia-fund">Ce que fait Elikia Fund</a> ·
+  <a href="#les-applications">Les applications</a> ·
+  <a href="#pour-les-développeurs">Pour les développeurs</a> ·
+  <a href="#documentation">Documentation</a>
 </p>
 
 ---
 
-## What it does
+## Ce que fait Elikia Fund
 
-**A cash flow journal, kept simply.** Daily sales and expenses, a product catalog with real cost and margin math, a cash session to open and close the till — all of it works offline first, because a shop's connectivity shouldn't decide whether its owner gets to keep her books.
+**Un journal de caisse, tenu simplement.** Ventes et dépenses au quotidien, un catalogue produits avec un vrai calcul de coût et de marge, une session de caisse pour ouvrir et fermer la journée — tout fonctionne d'abord hors ligne, parce que la connexion d'une boutique ne devrait jamais décider si sa gérante peut tenir ses comptes.
 
-**A savings vault, protected by a PIN.** Real money, moved through MTN Mobile Money and Airtel Money — every deposit and withdrawal logged the way a bank statement would be, not scribbled in a notebook and forgotten.
+**Un coffre d'épargne, protégé par un code PIN.** De l'argent réel, déplacé via MTN Mobile Money et Airtel Money — chaque dépôt et chaque retrait enregistrés comme le ferait un relevé bancaire, pas griffonnés dans un cahier puis oubliés.
 
-**Tontines, digitized.** The same rotating-savings-circle practice millions already trust, minus the paper: automatic reminders, a transparent contribution history everyone in the group can see, four different ways to decide who receives the pot each round — plus a goal-based mode for a group saving toward one shared thing instead of taking turns.
+**Des tontines, numérisées.** La même pratique d'épargne rotative que des millions de personnes connaissent déjà, sans le papier : rappels automatiques, historique des cotisations visible par tout le groupe, quatre façons différentes de désigner qui reçoit la cagnotte à chaque tour — plus un mode à objectif, pour un groupe qui épargne vers un même but plutôt que de tourner entre ses membres.
 
-**A credit score built from real behavior.** Every business earns its own score, computed from how consistently it saves, how it manages its cash flow, how reliably it shows up for its tontine — not from a bureau that was never built to see it in the first place. It feeds a real, exportable *dossier de crédibilité financière* a merchant could put in front of an actual lender.
+**Un score de crédit construit sur des comportements réels.** Chaque entreprise obtient son propre score, calculé à partir de sa régularité d'épargne, de sa gestion de trésorerie, de son assiduité dans sa tontine — pas d'un bureau de crédit qui n'a jamais été conçu pour la voir. Ce score alimente un vrai dossier de crédibilité financière, exportable, qu'un commerçant peut présenter à un prêteur.
 
-One person can run more than one business, and each gets its own fully separate ledger, vault, tontines, and score — a shopkeeper's second business is its own financial story, not a footnote on the first.
+Une même personne peut gérer plusieurs entreprises, chacune avec ses propres comptes, son propre coffre, ses propres tontines et son propre score — la deuxième entreprise d'une commerçante est sa propre histoire financière, pas une note de bas de page de la première.
 
-## The apps
+## Les applications
 
-- **The app merchants use every day** — bookkeeping, the vault, tontines, entirely in French, built to keep working whether or not the connection does.
-- **The dashboard our own team uses** — everything staff need to support merchants, manage tontines, and review credit scores, with real role-based access so support staff and admins each see exactly what they should and nothing more.
-- **The website** — where people first hear the story.
+- **L'application que les commerçants utilisent au quotidien** — comptabilité, coffre, tontines, entièrement en français, conçue pour continuer à fonctionner que la connexion soit là ou non.
+- **Le tableau de bord que notre équipe utilise** — tout ce dont le personnel a besoin pour accompagner les commerçants, gérer les tontines et consulter les scores de crédit, avec de vrais rôles d'accès pour que chaque membre du support et chaque administrateur ne voie que ce qu'il doit voir.
+- **Le site web** — là où les gens découvrent l'histoire d'Elikia Fund pour la première fois.
 
 ---
 
-## For developers
+## Pour les développeurs
 
-A monorepo: one Laravel API, three clients that talk to it.
+Un monorepo : une API Laravel, trois clients qui s'y connectent.
 
 ### Stack
 
-| App | Stack | Docs |
+| Application | Stack | Documentation |
 |---|---|---|
 | [`api/`](api) | Laravel 13 + Sanctum + MySQL | [`api/README.md`](api/README.md) |
 | [`mobile/`](mobile) | Expo (React Native + TypeScript) | [`mobile/README.md`](mobile/README.md) |
 | [`back-office/`](back-office) | Vite + React + shadcn/ui | [`back-office/README.md`](back-office/README.md) |
 | [`website/`](website) | Next.js (App Router) | [`website/README.md`](website/README.md) |
 
-### Quick start
+### Démarrage rapide
 
-1. **API** — create a local MySQL database named `elikia_fund`, then follow [`api/README.md`](api/README.md). Serves at `http://localhost:8000/api`.
-2. **Mobile** — follow [`mobile/README.md`](mobile/README.md). Google/Facebook sign-in need a custom dev client, not plain Expo Go — Apple sign-in works in Expo Go.
-3. **Back office** — follow [`back-office/README.md`](back-office/README.md). Log in with a seeded staff account.
-4. **Website** — follow [`website/README.md`](website/README.md). Serves at `http://localhost:3000`.
+1. **API** — créez une base de données MySQL locale nommée `elikia_fund`, puis suivez [`api/README.md`](api/README.md). Servie sur `http://localhost:8000/api`.
+2. **Mobile** — suivez [`mobile/README.md`](mobile/README.md). La connexion Google/Facebook nécessite un dev client personnalisé, pas Expo Go — la connexion Apple fonctionne dans Expo Go.
+3. **Back-office** — suivez [`back-office/README.md`](back-office/README.md). Connectez-vous avec un compte membre du personnel déjà créé (seed).
+4. **Site web** — suivez [`website/README.md`](website/README.md). Servi sur `http://localhost:3000`.
 
-### Architecture highlights
+### Points forts de l'architecture
 
-- **Company-isolated everything.** Cash flow, vault, tontines, and credit score are all scoped to a company, not a person — a user with two businesses gets two completely separate financial identities. The one deliberate exception: the vault PIN belongs to the person, a foundation for letting several people share one company's vault later.
-- **Offline-first cash flow.** The mobile app reads live when connected and falls back to a local SQLite cache when it isn't, syncing back up once the connection returns — the only feature built this way, since it's the one that can't afford to wait on a signal.
-- **Real mobile money, not a simulation.** A full Yabeto Pay integration (MTN Mobile Money, Airtel Money) — see [`yabeto.md`](yabeto.md) for the complete payment-provider reference — with a simulated fallback so the rest of the app stays fully testable without live credentials.
-- **A configurable credit-scoring engine.** A weighted scorecard over a fixed set of factors (account age, transaction regularity, savings behavior, income/expense ratio, tontine participation, company profile), tunable from the back office without a redeploy.
-- **A real back office, not an afterthought.** Full role-based access control, a reusable data table across every admin list view, and step-up password confirmation before anything gets deleted.
+- **Tout est isolé par entreprise.** Le flux de trésorerie, le coffre, les tontines et le score de crédit sont tous rattachés à une entreprise, jamais directement à une personne — un utilisateur avec deux entreprises obtient deux identités financières totalement séparées. La seule exception délibérée : le code PIN du coffre appartient à la personne, une base pour permettre plus tard à plusieurs personnes de partager le coffre d'une même entreprise.
+- **Flux de trésorerie hors ligne d'abord.** L'application mobile lit en direct dès qu'elle est connectée et bascule sur un cache SQLite local sinon, puis resynchronise dès que la connexion revient — la seule fonctionnalité construite ainsi, car c'est la seule qui ne peut pas se permettre d'attendre un signal.
+- **De l'argent mobile réel, pas une simulation.** Une intégration complète avec Yabeto Pay (MTN Mobile Money, Airtel Money) — voir [`yabeto.md`](yabeto.md) pour la référence complète du fournisseur de paiement — avec un mode simulé de secours pour que le reste de l'application reste entièrement testable sans identifiants réels.
+- **Un moteur de score de crédit configurable.** Une grille de notation pondérée sur un ensemble fixe de facteurs (ancienneté du compte, régularité des transactions, comportement d'épargne, ratio revenus/dépenses, participation aux tontines, profil d'entreprise), ajustable depuis le back-office sans redéploiement.
+- **Un vrai back-office, pas une pensée après coup.** Une gestion complète des rôles et permissions, un tableau de données réutilisable sur chaque page d'administration, et une confirmation par mot de passe avant toute suppression.
 
-### Documentation map
+### Documentation
 
-- [`CLAUDE.md`](CLAUDE.md) — the deep architecture reference: how and why things are built the way they are. Written for AI coding agents, useful for any contributor.
-- [`fintech-mvp-one-week-plan.md`](fintech-mvp-one-week-plan.md) — the original sprint scope and day-by-day plan.
-- [`yabeto.md`](yabeto.md) — the full mobile-money payment provider reference.
-- Each app's own README for setup, structure, and day-to-day commands.
+- [`fintech-mvp-one-week-plan.md`](fintech-mvp-one-week-plan.md) — le périmètre initial du sprint et le plan jour par jour.
+- [`yabeto.md`](yabeto.md) — la référence complète du fournisseur de paiement mobile money.
+- Le README de chaque application pour son installation, sa structure et ses commandes courantes.
 
-## Language
+## Langue
 
-All mobile, back-office, and website copy is in French.
+Tout le contenu mobile, back-office et site web est en français.

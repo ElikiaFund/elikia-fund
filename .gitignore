@@ -8,3 +8,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Internal AI-agent architecture notes — not for distribution
+CLAUDE.md
