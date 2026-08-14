@@ -52,9 +52,10 @@ class YabetoService
         string $clientSecret,
         string $msisdn,
         string $operator,
-        string $firstName,
-        string $lastName,
+        string $fullName,
     ): PaymentIntentResult {
+        [$firstName, $lastName] = self::splitName($fullName);
+
         // Confirm can come back with a terminal `failed`/`expired` status inside a 200 — that's
         // a normal outcome (yabeto.md §5.2), so it's still treated as "successful" here at the
         // transport level; assertSuccessful only guards against the request itself being rejected.
@@ -85,8 +86,10 @@ class YabetoService
         return PaymentIntentResult::fromConfirmResponse($response->json());
     }
 
-    public function createDisbursement(int $amountXaf, string $msisdn, string $operator, string $firstName, string $lastName): DisbursementResult
+    public function createDisbursement(int $amountXaf, string $msisdn, string $operator, string $fullName): DisbursementResult
     {
+        [$firstName, $lastName] = self::splitName($fullName);
+
         $response = $this->client->post('/disbursements', [
             'amount' => $amountXaf,
             'currency' => 'XAF',
@@ -183,5 +186,22 @@ class YabetoService
     private static function normalizeMsisdn(string $msisdn): string
     {
         return preg_replace('/\D+/', '', $msisdn) ?? $msisdn;
+    }
+
+    /**
+     * Elikia Fund only ever stores one `name` field per user (no separate first/last columns),
+     * but Yabeto's Disbursement endpoint genuinely rejects a request with an empty `last_name`
+     * ("The last_name field must be defined" — confirmed against production, not just undocumented
+     * behavior). Every caller used to pass the full name as first_name with a hardcoded empty
+     * last_name, which is exactly what broke. Splits on the first space; a single-word name (no
+     * space) repeats itself in both fields rather than leaving last_name empty.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function splitName(string $fullName): array
+    {
+        $parts = preg_split('/\s+/', trim($fullName), 2);
+
+        return [$parts[0] ?? $fullName, $parts[1] ?? ($parts[0] ?? $fullName)];
     }
 }
