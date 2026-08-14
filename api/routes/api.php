@@ -135,11 +135,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/vault/deposit', [VaultController::class, 'deposit'])->middleware('throttle:10,1');
         Route::post('/vault/withdraw', [VaultController::class, 'withdraw'])->middleware('throttle:10,1');
         Route::post('/vault/movements/{movement}/refresh-status', [VaultController::class, 'refreshMovementStatus']);
+
+        // Listing is the one /groups route scoped to the active company — a member only sees the
+        // active company's own tontines, even though membership itself (see GroupController@join)
+        // and every other /groups/{group} route stays person-based, unaffected by which company
+        // is active (a group already carries its own company_id once created/joined).
+        Route::get('/groups', [GroupController::class, 'index']);
     });
 
     Route::get('/settings/fees', [FeeSettingController::class, 'show']);
 
-    Route::get('/groups', [GroupController::class, 'index']);
     Route::post('/groups', [GroupController::class, 'store']);
     Route::get('/groups/preview/{inviteCode}', [GroupController::class, 'preview']);
     Route::post('/groups/join', [GroupController::class, 'join']);

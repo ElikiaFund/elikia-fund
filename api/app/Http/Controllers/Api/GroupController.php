@@ -56,13 +56,21 @@ class GroupController extends Controller
     ) {}
 
     /**
-     * GET /groups — tontines the authenticated user belongs to.
+     * GET /groups — tontines the authenticated user belongs to, scoped to the active company
+     * (see the resolve-active-company group in routes/api.php) — a tontine's own company_id is
+     * fixed at creation, so switching companies changes which of a person's tontines show up
+     * here, without touching membership itself (still person-based everywhere else in this file).
      */
     public function index(Request $request): JsonResponse
     {
         // `members` is eager-loaded (not just the count) so the mobile list can render an
         // avatar-stack preview per tontine without a follow-up request per group.
-        $groups = $request->user()->groups()->with('members')->withCount('members')->latest()->get();
+        $groups = $request->user()->groups()
+            ->where('groups.company_id', $request->company()->id)
+            ->with('members')
+            ->withCount('members')
+            ->latest()
+            ->get();
 
         return response()->json($groups);
     }
