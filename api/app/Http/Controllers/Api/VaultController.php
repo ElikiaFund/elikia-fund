@@ -182,12 +182,11 @@ class VaultController extends Controller
         $amount = $request->validated('amount');
         $paymentMethod = $request->validated('payment_method');
         $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
+        $phone = $request->validated('phone');
 
         if (! $this->yabeto->isEnabled()) {
-            return $this->depositSimulated($vault, $amount, $methodLabel);
+            return $this->depositSimulated($vault, $amount, $methodLabel, $phone);
         }
-
-        $phone = $request->validated('phone');
 
         if (! $phone) {
             return response()->json(['message' => 'Numéro de téléphone Mobile Money requis.'], 422);
@@ -225,12 +224,11 @@ class VaultController extends Controller
         $amount = $request->validated('amount');
         $paymentMethod = $request->validated('payment_method');
         $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
+        $phone = $request->validated('phone');
 
         if (! $this->yabeto->isEnabled()) {
-            return $this->withdrawSimulated($vault, $amount, $methodLabel);
+            return $this->withdrawSimulated($vault, $amount, $methodLabel, $phone);
         }
-
-        $phone = $request->validated('phone');
 
         if (! $phone) {
             return response()->json(['message' => 'Numéro de téléphone Mobile Money requis.'], 422);
@@ -253,7 +251,7 @@ class VaultController extends Controller
         return response()->json($result, $this->statusFor($result['movement']));
     }
 
-    private function depositSimulated(Vault $vault, float $amount, string $methodLabel): JsonResponse
+    private function depositSimulated(Vault $vault, float $amount, string $methodLabel, ?string $phone): JsonResponse
     {
         try {
             $fee = $this->fees->deposit($amount);
@@ -261,7 +259,7 @@ class VaultController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
+        $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel, $phone) {
             $vault->increment('balance', $fee['net_amount']);
 
             return $vault->movements()->create([
@@ -273,6 +271,7 @@ class VaultController extends Controller
                 'net_amount' => $fee['net_amount'],
                 'note' => "Dépôt via {$methodLabel} (simulation).",
                 'status' => 'completed',
+                'phone' => $phone,
             ]);
         });
 
@@ -282,7 +281,7 @@ class VaultController extends Controller
         return response()->json(['vault' => $vault->fresh(), 'movement' => $movement], 201);
     }
 
-    private function withdrawSimulated(Vault $vault, float $amount, string $methodLabel): JsonResponse
+    private function withdrawSimulated(Vault $vault, float $amount, string $methodLabel, ?string $phone): JsonResponse
     {
         try {
             $fee = $this->fees->withdrawal($amount);
@@ -291,7 +290,7 @@ class VaultController extends Controller
         }
 
         try {
-            $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel) {
+            $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel, $phone) {
                 $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
                 if ($amount > (float) $locked->balance) {
@@ -309,6 +308,7 @@ class VaultController extends Controller
                     'net_amount' => $fee['net_amount'],
                     'note' => "Retrait via {$methodLabel} (simulation).",
                     'status' => 'completed',
+                    'phone' => $phone,
                 ]);
             });
         } catch (VaultTransactionException $e) {
