@@ -22,7 +22,7 @@ export function TontineMock() {
       <div className="rounded-xl bg-card p-3">
         <p className="text-[10px] text-muted-foreground">Cagnotte du cycle</p>
         <p className="text-lg font-extrabold tabular-nums">97 000 FCFA</p>
-        <p className="text-[9px] text-muted-foreground">Frais de gestion inclus : 3 %</p>
+        <p className="text-[9px] text-muted-foreground">Frais de gestion inclus : 4 %</p>
       </div>
 
       <div className="flex flex-col gap-2">

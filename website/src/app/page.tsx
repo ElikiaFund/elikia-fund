@@ -65,7 +65,7 @@ const TRUST_POINTS = [
   {
     icon: ShieldCheck,
     title: "Frais transparents",
-    description: `Elikia Fund prélève ${TONTINE_FEE_PERCENT} % de gestion sur chaque cotisation de tontine, ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA sur chaque dépôt au coffre et ${VAULT_WITHDRAWAL_FEE_PERCENT} % sur chaque retrait — toujours affichés avant confirmation.`,
+    description: `Elikia Fund prélève ${TONTINE_FEE_PERCENT} % de gestion sur chaque cotisation de tontine, ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA sur chaque dépôt au coffre et ${VAULT_WITHDRAWAL_FEE_PERCENT} % sur chaque retrait, toujours affichés avant confirmation.`,
   },
   {
     icon: Users,
