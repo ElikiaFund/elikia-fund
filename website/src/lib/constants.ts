@@ -12,7 +12,11 @@ export const META_DESCRIPTION =
 
 export const COUNTRY_NOTE = "Conçu pour les entrepreneurs du Congo-Brazzaville.";
 
-export const TONTINE_FEE_PERCENT = 3;
+export const TONTINE_FEE_PERCENT = "4,5";
+
+export const VAULT_DEPOSIT_FEE_PERCENT = "4";
+export const VAULT_DEPOSIT_FEE_FIXED_FCFA = 100;
+export const VAULT_WITHDRAWAL_FEE_PERCENT = "2";
 
 // Reviewed and approved by legal counsel. Update LEGAL_LAST_UPDATED whenever the copy changes.
 export const LEGAL_LAST_UPDATED = "30 juillet 2026";

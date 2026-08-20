@@ -19,7 +19,13 @@ import { VerdictBadge } from "@/components/verdict-badge";
 import { WaitlistCta } from "@/components/waitlist-cta";
 import { CREDIT_SCORE_FACTORS } from "@/lib/credit-score-content";
 import { buildMetadata } from "@/lib/metadata";
-import { TAGLINE, TONTINE_FEE_PERCENT } from "@/lib/constants";
+import {
+  TAGLINE,
+  TONTINE_FEE_PERCENT,
+  VAULT_DEPOSIT_FEE_FIXED_FCFA,
+  VAULT_DEPOSIT_FEE_PERCENT,
+  VAULT_WITHDRAWAL_FEE_PERCENT,
+} from "@/lib/constants";
 
 export const metadata: Metadata = buildMetadata({
   title: "Trésorerie, épargne et tontines pour entrepreneurs informels",
@@ -36,7 +42,7 @@ const FEATURES = [
   {
     icon: ShieldCheck,
     title: "Coffre",
-    description: "Mettez de l'argent de côté dans un coffre protégé par code PIN, séparé de vos dépenses courantes.",
+    description: `Mettez de l'argent de côté dans un coffre protégé par code PIN, séparé de vos dépenses courantes. Des frais de ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA s'appliquent au dépôt, et de ${VAULT_WITHDRAWAL_FEE_PERCENT} % au retrait.`,
   },
   {
     icon: Users,
@@ -59,7 +65,7 @@ const TRUST_POINTS = [
   {
     icon: ShieldCheck,
     title: "Frais transparents",
-    description: `La seule commission de l'application est le ${TONTINE_FEE_PERCENT} % de gestion sur les tontines, indiqué sur chaque cotisation.`,
+    description: `Elikia Fund prélève ${TONTINE_FEE_PERCENT} % de gestion sur chaque cotisation de tontine, ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA sur chaque dépôt au coffre et ${VAULT_WITHDRAWAL_FEE_PERCENT} % sur chaque retrait — toujours affichés avant confirmation.`,
   },
   {
     icon: Users,
@@ -96,11 +102,15 @@ const FAQS = [
   },
   {
     question: "Elikia Fund est-il gratuit ?",
-    answer: `Oui, l'application est gratuite. La seule commission est celle de ${TONTINE_FEE_PERCENT} % sur les tontines, décrite ci-dessous — aucun autre frais ni abonnement.`,
+    answer: `Oui, l'application est gratuite et il n'y a aucun abonnement. Des frais de service s'appliquent uniquement sur les tontines et le coffre, décrits ci-dessous, et sont toujours affichés avant confirmation.`,
   },
   {
     question: "Quels frais s'appliquent aux tontines ?",
     answer: `Une commission fixe de ${TONTINE_FEE_PERCENT} % est prélevée sur chaque cotisation versée dans une tontine. Ce montant est toujours affiché clairement, cotisation par cotisation.`,
+  },
+  {
+    question: "Quels frais s'appliquent au coffre ?",
+    answer: `Un dépôt dans le coffre est facturé ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA fixe, et un retrait ${VAULT_WITHDRAWAL_FEE_PERCENT} %. Ces frais sont toujours affichés avant que vous confirmiez l'opération.`,
   },
   {
     question: "Elikia Fund est-il disponible en dehors du Congo-Brazzaville ?",
