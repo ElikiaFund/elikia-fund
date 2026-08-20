@@ -109,8 +109,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Founder's word — not a team section, just one quote. Photo is a temporary stock
-          placeholder (Unsplash) until a real portrait of Rabbi Kinkoueta replaces it. */}
+      {/* Founder's word — not a team section, just one quote. */}
       <section className="mx-auto max-w-4xl px-4 py-20 sm:px-6">
         <div className="grid gap-8 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-10">
           <div className="mx-auto h-28 w-28 shrink-0 overflow-hidden rounded-full border border-border shadow-lg sm:mx-0 sm:h-32 sm:w-32">
