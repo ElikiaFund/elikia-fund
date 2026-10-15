@@ -2,15 +2,17 @@
 
 namespace Database\Factories;
 
+use App\Domains\Catalog\Infrastructure\Persistence\Eloquent\ProductRecord;
 use App\Models\Company;
-use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Product>
+ * @extends Factory<ProductRecord>
  */
 class ProductFactory extends Factory
 {
+    protected $model = ProductRecord::class;
+
     /**
      * Sample catalogs per company category — used to seed realistic demo data, not shown to users.
      */

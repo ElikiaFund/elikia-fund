@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Transaction\SyncTransactionsRequest;
-use App\Services\ProductStockService;
+use App\Services\TransactionProductLinker;
 use Illuminate\Http\JsonResponse;
 
 class SyncController extends Controller
 {
-    public function __construct(private readonly ProductStockService $productStock) {}
+    public function __construct(private readonly TransactionProductLinker $products) {}
 
     /**
      * POST /sync — batch upsert for the mobile sync_queue. Upserts by (company_id, uuid) so a
@@ -34,7 +34,7 @@ class SyncController extends Controller
             // false): an offline sale already physically happened by the time the server sees
             // it, so rejecting it would strand it unsynced with no resolution path from the phone.
             if ($transaction->wasRecentlyCreated) {
-                $this->productStock->applyProductLink($transaction, enforceStockLimit: false);
+                $this->products->link($transaction, enforceStockLimit: false);
             }
 
             $accepted[] = $transaction->uuid;

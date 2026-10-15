@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domains\Catalog\Infrastructure\Persistence\Eloquent\ProductRecord;
 use Database\Factories\TransactionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -30,6 +31,6 @@ class Transaction extends Model
 
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(ProductRecord::class, 'product_id');
     }
 }

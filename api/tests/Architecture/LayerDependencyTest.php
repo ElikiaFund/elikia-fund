@@ -19,7 +19,17 @@ class LayerDependencyTest extends TestCase
      *
      * @var array<string, list<string>> path relative to api/ => Infrastructure classes it may still use
      */
-    private const LEGACY_ALLOWLIST = [];
+    private const LEGACY_ALLOWLIST = [
+        // Eloquent relations used by eager loads (admin company page, financial dossier) — go
+        // away when Business and Bookkeeping are migrated.
+        'app/Models/Company.php' => [
+            'App\\Domains\\Catalog\\Infrastructure\\Persistence\\Eloquent\\ProductCategoryRecord',
+            'App\\Domains\\Catalog\\Infrastructure\\Persistence\\Eloquent\\ProductRecord',
+        ],
+        'app/Models/Transaction.php' => [
+            'App\\Domains\\Catalog\\Infrastructure\\Persistence\\Eloquent\\ProductRecord',
+        ],
+    ];
 
     private const DOMAINS = 'App\\Domains\\';
 

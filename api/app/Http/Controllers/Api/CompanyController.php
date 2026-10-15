@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Domains\Catalog\Application\Category\SeedDefaultProductCategories;
+use App\Domains\Shared\Application\Bus\CommandBus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Company\StoreCompanyRequest;
 use App\Models\Company;
-use App\Models\ProductCategory;
 use App\Models\TransactionCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
+    public function __construct(private readonly CommandBus $commands) {}
+
     /**
      * GET /companies — every company the authenticated user owns, for the mobile switcher.
      */
@@ -31,7 +34,7 @@ class CompanyController extends Controller
 
         $company = $user->companies()->create($request->validated());
 
-        ProductCategory::seedDefaultsFor($company);
+        $this->commands->dispatch(new SeedDefaultProductCategories($company->id, $company->category));
         TransactionCategory::seedDefaultsFor($company);
 
         if (! $user->onboarding_completed_at) {

@@ -2,14 +2,16 @@
 
 namespace Database\Seeders;
 
+use App\Domains\Catalog\Application\Category\SeedDefaultProductCategories;
+use App\Domains\Catalog\Infrastructure\Persistence\Eloquent\ProductCategoryRecord;
+use App\Domains\Catalog\Infrastructure\Persistence\Eloquent\ProductRecord;
+use App\Domains\Shared\Application\Bus\CommandBus;
 use App\Models\CashSession;
 use App\Models\Company;
 use App\Models\Contribution;
 use App\Models\Group;
 use App\Models\GroupMember;
 use App\Models\Permission;
-use App\Models\Product;
-use App\Models\ProductCategory;
 use App\Models\Role;
 use App\Models\Transaction;
 use App\Models\TransactionCategory;
@@ -75,13 +77,13 @@ class DatabaseSeeder extends Seeder
                         TransactionCategory::seedDefaultsFor($company);
 
                         if (array_key_exists($company->category, ProductFactory::CATALOG)) {
-                            ProductCategory::seedDefaultsFor($company);
+                            app(CommandBus::class)->dispatch(new SeedDefaultProductCategories($company->id, $company->category));
                             $tracksStock = $company->category !== 'services';
 
                             foreach (ProductFactory::CATALOG[$company->category] as $item) {
-                                $categoryId = ProductCategory::where('company_id', $company->id)->where('name', $item['category'])->value('id');
+                                $categoryId = ProductCategoryRecord::where('company_id', $company->id)->where('name', $item['category'])->value('id');
 
-                                Product::factory()->create([
+                                ProductRecord::factory()->create([
                                     'company_id' => $company->id,
                                     'name' => $item['name'],
                                     'category_id' => $categoryId,
