@@ -6,6 +6,9 @@ use App\Exceptions\FeeException;
 use App\Exceptions\VaultTransactionException;
 use App\Models\Vault;
 use App\Models\VaultMovement;
+use App\Models\YabetoSetting;
+use App\Services\Payment\DTOs\DisbursementResult;
+use App\Services\Payment\YabetoConnectClient;
 use App\Services\Payment\YabetoRequestException;
 use App\Services\Payment\YabetoService;
 use App\Services\Payment\YabetoStatus;
@@ -29,9 +32,27 @@ class VaultTransactionService
 {
     public function __construct(
         private readonly YabetoService $yabeto,
+        private readonly YabetoConnectClient $connectClient,
         private readonly FeeService $fees,
         private readonly VaultFraudDetectionService $fraudDetection,
     ) {}
+
+    /**
+     * Phase A router: a company signed up under Connect (its `yabeto_account_id` is set and KYC
+     * is approved) uses the Connect money paths; everyone else (legacy pre-Connect merchants,
+     * or new signups still pending KYC) continues on the plain-Yabeto path. One check, one
+     * place, so the branch is readable and reversible per-service.
+     *
+     * Deliberately requires `isConnectReady()` (KYC approved, `withdraw` in allowed_operations)
+     * — not just `hasConnectAccount()`. An un-approved Connect merchant would accumulate funds
+     * in Yabeto's pending balance that may be refunded charge-by-charge on rejection, which is
+     * catastrophic for a tontine or a savings vault. We'd rather fall back to legacy for that
+     * window.
+     */
+    private function shouldUseConnect(Vault $vault): bool
+    {
+        return $vault->company?->isConnectReady() === true;
+    }
 
     /**
      * @return array{vault: Vault, movement: VaultMovement, message?: string}
@@ -72,11 +93,26 @@ class VaultTransactionService
         });
 
         try {
-            $intent = $this->yabeto->createPaymentIntent(
-                (int) round($amount),
-                'Dépôt coffre Elikia Fund',
-                ['vault_id' => $vault->id, 'movement_id' => $movement->id],
-            );
+            // Phase A branch: Connect merchants deposit via `on_behalf_of` to their own
+            // connected account (funds land on *their* Yabeto balance, not Elikia's); legacy
+            // merchants keep the pre-Connect path. See shouldUseConnect().
+            if ($this->shouldUseConnect($vault)) {
+                $feeRate = (float) YabetoSetting::current()->default_application_fee_rate;
+
+                $intent = $this->yabeto->createPaymentIntentOnBehalfOf(
+                    (int) round($amount),
+                    $vault->company->yabeto_account_id,
+                    $feeRate,
+                    'Dépôt coffre Elikia Fund',
+                    ['vault_id' => $vault->id, 'movement_id' => $movement->id, 'routing' => 'connect'],
+                );
+            } else {
+                $intent = $this->yabeto->createPaymentIntent(
+                    (int) round($amount),
+                    'Dépôt coffre Elikia Fund',
+                    ['vault_id' => $vault->id, 'movement_id' => $movement->id],
+                );
+            }
 
             $movement->update(['yabeto_reference' => $intent->id]);
 
@@ -120,6 +156,18 @@ class VaultTransactionService
     {
         $this->reconcileStuck($vault, 'withdraw');
 
+        // Phase A constraint: Connect withdrawals are all-or-nothing on Yabeto's side
+        // (docs/fr/connect/payouts — sending `amount` returns 422). We expose this to the
+        // caller as "pas de retrait partiel" rather than silently withdrawing more than
+        // requested; the mobile app renders a two-step UI ("retirer tout, puis redéposer
+        // ce que vous voulez garder en épargne" — the "verrouiller comme épargne" primitive).
+        if ($this->shouldUseConnect($vault) && (float) $amount !== (float) $vault->balance) {
+            throw new VaultTransactionException(
+                'Les comptes Yabeto Connect ne supportent que le retrait de la totalité du solde. '
+                .'Retirez le solde complet puis redéposez le montant à conserver en épargne.'
+            );
+        }
+
         $fee = $this->fees->withdrawal($amount);
 
         $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel, $phone) {
@@ -156,16 +204,40 @@ class VaultTransactionService
         });
 
         try {
-            // Disbursement pays out the NET amount — the vault above was already debited the full
-            // gross amount the user asked to withdraw; the difference is the fee.
-            $result = $this->yabeto->createDisbursement(
-                (int) round($fee['net_amount']),
-                $phone,
-                YabetoService::OPERATOR_MAP[$paymentMethod],
-                $vault->company->user->name,
-            );
+            if ($this->shouldUseConnect($vault)) {
+                // Phase A Connect withdraw: payout the full available balance to the merchant's
+                // own registered payout destination (the phone they entered during Yabeto's
+                // hosted KYC). Yabeto doesn't let us pass a phone here — the destination is
+                // whatever the merchant registered on verify.yabetoo.com. Idempotency key
+                // scopes per-movement so retries don't double-pay.
+                $connectResult = $this->connectClient->withdraw(
+                    $vault->company->yabeto_account_id,
+                    "vault_withdraw:movement:{$movement->id}",
+                );
 
-            $movement->update(['yabeto_reference' => $result->id]);
+                $movement->update(['yabeto_reference' => $connectResult->id]);
+
+                // Connect withdraw is synchronous; its status is the final verdict (a 201 with
+                // status="failed" is a real failure, not a transport blip, per docs). Wrap it
+                // in the same shape as DisbursementResult so the resolveMovementStatus path
+                // below works unchanged.
+                $result = new DisbursementResult(
+                    id: $connectResult->id,
+                    status: $connectResult->status,
+                    failureMessage: $connectResult->isSuccessful() ? null : 'Le retrait Connect a échoué côté opérateur.',
+                );
+            } else {
+                // Disbursement pays out the NET amount — the vault above was already debited
+                // the full gross amount the user asked to withdraw; the difference is the fee.
+                $result = $this->yabeto->createDisbursement(
+                    (int) round($fee['net_amount']),
+                    $phone,
+                    YabetoService::OPERATOR_MAP[$paymentMethod],
+                    $vault->company->user->name,
+                );
+
+                $movement->update(['yabeto_reference' => $result->id]);
+            }
         } catch (YabetoRequestException|ConnectionException $e) {
             Log::warning('Yabeto withdrawal request failed', ['message' => $e->getMessage(), 'movement_id' => $movement->id]);
 

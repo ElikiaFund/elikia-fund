@@ -47,6 +47,37 @@ class YabetoService
         return PaymentIntentResult::fromCreateResponse($response->json());
     }
 
+    /**
+     * Connect direct charge (docs/fr/connect/payments/charges). Adds `on_behalf_of` + required
+     * paired `application_fee_rate` to the usual payment-intent body — both must travel together
+     * or Yabeto returns 422 connect.incomplete_request. Funds land in the vendor's `pending_balance`
+     * and mature per the account's delay; Elikia's share lands immediately available.
+     *
+     * `account` mode (Elikia's fee_payer) applies no rate floor, so a 0 rate is valid — tontine
+     * contributions typically pass 0 (no Elikia commission), vault deposits whatever
+     * `yabeto_settings.default_application_fee_rate` currently is.
+     */
+    public function createPaymentIntentOnBehalfOf(
+        int $amountXaf,
+        string $connectAccountId,
+        float $applicationFeeRate,
+        string $description,
+        array $metadata = [],
+    ): PaymentIntentResult {
+        $response = $this->client->post('/payment-intents', [
+            'amount' => $amountXaf,
+            'currency' => 'xaf',
+            'description' => $description,
+            'metadata' => $metadata,
+            'on_behalf_of' => $connectAccountId,
+            'application_fee_rate' => $applicationFeeRate,
+        ]);
+
+        $this->assertSuccessful($response);
+
+        return PaymentIntentResult::fromCreateResponse($response->json());
+    }
+
     public function confirmPaymentIntent(
         string $intentId,
         string $clientSecret,
@@ -117,6 +148,23 @@ class YabetoService
         $this->assertSuccessful($response);
 
         return DisbursementResult::fromResponse($response->json());
+    }
+
+    /**
+     * Reads Yabeto's cached Connect activation state (docs/fr/connect/quickstart §1). The
+     * response's `connect_mode` is what tells us Elikia's chosen fee_payer actually took effect on
+     * Yabeto's side — any other value (including null) means Connect endpoints will refuse with
+     * `connect.controller_mode_unset`. Admin\YabetoSettingController caches it on `yabeto_settings`
+     * so YabetoConfig::isConnectReady() can gate direct charges without re-hitting the network.
+     *
+     * @return array{id?: string, object?: string, connect_mode?: ?string}
+     */
+    public function fetchConnectActivation(): array
+    {
+        $response = $this->client->get('/connect/activations');
+        $this->assertSuccessful($response);
+
+        return $response->json();
     }
 
     /**

@@ -29,6 +29,30 @@ class YabetoFailureMessages
         'NOT_ALLOWED' => "Cette opération n'est pas autorisée pour ce compte Mobile Money.",
         'EXPIRED' => 'La demande de confirmation a expiré sans réponse.',
         'REJECTED' => 'Le paiement a été refusé sur le téléphone du payeur.',
+
+        // Yabeto Connect (docs/fr/connect/pricing, /payouts, /refunds, /errors). These codes
+        // only appear in the Connect routing paths — see each service's shouldUseConnect()
+        // branch and app/Http/Controllers/Api/YabetoWebhookController's Connect event handlers.
+        'connect.application_fee_too_low' => 'La commission marketplace configurée est inférieure au plancher Yabeto. Contactez le support Elikia pour ajuster le taux dans les paramètres.',
+        'connect.application_fee_too_high' => 'La commission marketplace dépasse le montant encaissé. Contactez le support Elikia.',
+        'connect.vendor_net_not_positive' => 'Après commission, le vendeur recevrait zéro ou moins. Réduisez la commission ou augmentez le montant.',
+        'connect.incomplete_request' => 'La configuration de la cotisation est incomplète (compte connecté ou taux de commission manquant). Contactez le support.',
+        'connect.fee_payer_unset' => "Le compte Yabeto Connect n'a pas de mode de commission configuré. Contactez le support Elikia.",
+        'connect.controller_mode_unset' => "Yabeto Connect n'est pas encore activé pour Elikia. Contactez le support.",
+        'connect.insufficient_funds_for_refund' => 'Impossible de rembourser : solde Elikia insuffisant côté marketplace. Réessayez une fois le solde reconstitué.',
+        'connect.insufficient_funds_for_reversal' => "Impossible d'annuler l'allocation : le vendeur ne peut plus restituer les fonds (déjà retirés).",
+        'E_CONNECT_VENDOR_PAYOUT_METHOD_UNAVAILABLE' => 'Vous devez terminer la vérification de votre identité (CNI + selfie) et enregistrer votre numéro Mobile Money avant de pouvoir recevoir des versements.',
+        'E_CONNECT_VENDOR_EMPTY_BALANCE' => "Les fonds de ce cycle sont encore en période de maturation chez Yabeto. Le versement se fera automatiquement dès qu'ils seront disponibles.",
+        'E_CONNECT_PRICING_UNAVAILABLE' => 'Impossible de résoudre la grille tarifaire Yabeto. Réessayez dans un instant.',
+        'E_PENDING_WITHDRAW' => "Un versement est déjà en cours pour ce cycle. Attendez sa confirmation avant d'en lancer un autre.",
+        'E_VERIFICATION_REQUIRED' => 'Votre identité doit être vérifiée par Yabeto avant toute opération. Lancez la vérification depuis votre entreprise.',
+        'E_SERVICE_UNAVAILABLE' => 'Le service de paiement Yabeto est momentanément indisponible. Réessayez dans quelques instants.',
+        'E_SSO_UNAVAILABLE' => "Le service d'identité Yabeto est momentanément indisponible. Réessayez dans quelques instants.",
+        'E_REFERENTIAL_COUNTRY_MISSING' => 'Pays non reconnu dans le référentiel Yabeto. Contactez le support.',
+        'E_CONNECT_ONBOARDING_UNSUPPORTED' => "Yabeto n'offre pas encore de vérification d'identité pour votre pays. Contactez le support.",
+        'E_IDEMPOTENCY_CONFLICT' => 'Une requête identique est déjà en cours. Attendez quelques secondes et réessayez.',
+        'E_DUPLICATE_OPERATION' => 'Cette opération a déjà été effectuée. Vérifiez vos relevés avant de réessayer.',
+        'E_TOO_MANY_REQUESTS' => 'Trop de requêtes. Attendez une minute puis réessayez.',
     ];
 
     public static function translate(?string $rawCode): ?string

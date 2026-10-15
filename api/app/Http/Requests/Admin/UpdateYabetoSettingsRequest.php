@@ -31,6 +31,12 @@ class UpdateYabetoSettingsRequest extends FormRequest
             'secret_key' => ['sometimes', 'nullable', 'string', 'max:255'],
             'webhook_secret' => ['sometimes', 'nullable', 'string', 'max:255'],
             'is_enabled' => ['sometimes', 'boolean'],
+            // Connect-specific — `connect_mode` is read-only (populated by connectStatus()
+            // from Yabeto's own API) and never settable from the back-office, so it's absent
+            // here on purpose. `default_application_fee_rate` is a percentage, bounded 0..100
+            // to match Yabeto's `application_fee_rate` field range (docs/fr/connect/pricing).
+            'connect_enabled' => ['sometimes', 'boolean'],
+            'default_application_fee_rate' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             // Required only when switching from 'sandbox' to 'live' — enforced (not just
             // validated) in Admin\YabetoSettingController@update, since whether it's required
             // depends on the currently-stored mode, not just this request's payload.
