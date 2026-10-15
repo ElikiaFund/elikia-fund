@@ -10,11 +10,68 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['user_id', 'name', 'category', 'other_category', 'department', 'city', 'neighborhood', 'address'])]
+#[Fillable([
+    'user_id', 'name', 'category', 'other_category', 'department', 'city', 'neighborhood', 'address',
+    'yabeto_connect_required', 'yabeto_account_id', 'yabeto_onboarding_url', 'yabeto_onboarding_expires_at',
+    'yabeto_verification_status', 'yabeto_capabilities', 'yabeto_compliance_checked_at',
+])]
 class Company extends Model
 {
     /** @use HasFactory<CompanyFactory> */
     use HasFactory;
+
+    /**
+     * Yabeto Connect verification states, mirrored from GET
+     * /v1/connect/accounts/{acct}/compliance.verification.status (docs/fr/connect/accounts/
+     * onboarding). Flow: null → created → documents_submitted → in_review →
+     * {approved, rejected, needs_info}. Only `approved` with `withdraw` in allowed_operations
+     * unlocks the money flows for a Connect-routed company.
+     */
+    public const YABETO_VERIFICATION_APPROVED = 'approved';
+
+    public const YABETO_VERIFICATION_TERMINAL = ['approved', 'rejected'];
+
+    protected function casts(): array
+    {
+        return [
+            'yabeto_connect_required' => 'boolean',
+            'yabeto_capabilities' => 'array',
+            'yabeto_onboarding_expires_at' => 'datetime',
+            'yabeto_compliance_checked_at' => 'datetime',
+        ];
+    }
+
+    public function hasConnectAccount(): bool
+    {
+        return filled($this->yabeto_account_id);
+    }
+
+    /**
+     * Signed up under the Connect regime: its money must flow through its own connected account,
+     * never Elikia's. False for every legacy company, which keeps today's flow. Whether money may
+     * move at all is decided by App\Services\YabetoConnectGate.
+     */
+    public function requiresConnect(): bool
+    {
+        return $this->yabeto_connect_required || $this->hasConnectAccount();
+    }
+
+    /**
+     * KYC is approved AND `withdraw` is in allowed_operations. Both conditions must hold before
+     * any Connect money operation is safe: Yabeto refunds buyers charge-by-charge if an account
+     * accepts contributions then gets rejected (docs/fr/connect/accounts/onboarding "Si rejet"),
+     * which would be catastrophic mid-tontine-cycle.
+     */
+    public function isConnectReady(): bool
+    {
+        if ($this->yabeto_verification_status !== self::YABETO_VERIFICATION_APPROVED) {
+            return false;
+        }
+
+        $capabilities = $this->yabeto_capabilities ?? [];
+
+        return in_array('withdraw', (array) ($capabilities['allowed_operations'] ?? []), true);
+    }
 
     public const CATEGORIES = [
         'commerce',

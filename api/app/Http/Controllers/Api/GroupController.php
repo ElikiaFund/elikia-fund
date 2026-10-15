@@ -22,6 +22,7 @@ use App\Models\Group;
 use App\Models\GroupCycleRecipient;
 use App\Models\GroupRoundGoal;
 use App\Models\User;
+use App\Models\YabetoSetting;
 use App\Services\ContributionService;
 use App\Services\FeeService;
 use App\Services\GroupCycleRecipientService;
@@ -33,6 +34,7 @@ use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\TontineReportService;
+use App\Services\YabetoConnectGate;
 use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
@@ -46,6 +48,7 @@ class GroupController extends Controller
 {
     public function __construct(
         private readonly YabetoService $yabeto,
+        private readonly YabetoConnectGate $connectGate,
         private readonly PaymentNotificationService $paymentNotifications,
         private readonly GroupMembershipNotificationService $membershipNotifications,
         private readonly GroupCycleRecipientService $cycleRecipients,
@@ -598,6 +601,11 @@ class GroupController extends Controller
             return response()->json(['message' => 'Ce tour de tontine est terminé. Le créateur doit relancer un nouveau tour avant de reprendre les cotisations.'], 409);
         }
 
+        $this->connectGate->assertCanMoveMoney(
+            $group->company,
+            "Les cotisations de cette tontine s'ouvriront dès que l'entreprise organisatrice aura fait vérifier son identité.",
+        );
+
         $cyclePeriod = $group->currentCyclePeriod();
         $amount = (float) $group->contribution_amount;
 
@@ -634,11 +642,30 @@ class GroupController extends Controller
         }
 
         try {
-            $intent = $this->yabeto->createPaymentIntent(
-                (int) round($amount),
-                "Cotisation tontine « {$group->name} »",
-                ['group_id' => $group->id, 'user_id' => $user->id, 'contribution_id' => $contribution->id],
-            );
+            // Phase A routing: a tontine group's funds flow via `on_behalf_of` when the group's
+            // owning company is a Connect-approved merchant. Legacy groups stay on plain
+            // intents, where contributions aggregate on Elikia's own Yabeto account exactly
+            // as before. The branch is on the *group's company*, not the contributing
+            // member — because that's where the pool lands (see TontinePayoutService's
+            // "payout lands in the group's company's vault" comment).
+            $ownerCompany = $group->company;
+            if ($this->connectGate->routesThroughConnect($ownerCompany)) {
+                $feeRate = (float) YabetoSetting::current()->default_application_fee_rate;
+
+                $intent = $this->yabeto->createPaymentIntentOnBehalfOf(
+                    (int) round($amount),
+                    $ownerCompany->yabeto_account_id,
+                    $feeRate,
+                    "Cotisation tontine « {$group->name} »",
+                    ['group_id' => $group->id, 'user_id' => $user->id, 'contribution_id' => $contribution->id, 'routing' => 'connect'],
+                );
+            } else {
+                $intent = $this->yabeto->createPaymentIntent(
+                    (int) round($amount),
+                    "Cotisation tontine « {$group->name} »",
+                    ['group_id' => $group->id, 'user_id' => $user->id, 'contribution_id' => $contribution->id],
+                );
+            }
 
             $contribution->update(['yabeto_reference' => $intent->id]);
 
