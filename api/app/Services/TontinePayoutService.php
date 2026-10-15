@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  * withdraw flow if they want cash right away, or leave it as savings — both of which feed the
  * credit score's savings_behavior factor, unlike money that just leaves the system.
  *
- * Mirrors ProductStockService's shape: guard checks, then a single DB::transaction() that mutates
+ * Shape: guard checks, then a single DB::transaction() that mutates
  * the running balance and writes the audit-trail row together.
  *
  * disburseAndNotify()/disburseIfEligibleAndNotify() are the two public entry points — manual

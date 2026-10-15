@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Domains\Catalog\Infrastructure\Persistence\Eloquent\ProductCategoryRecord;
+use App\Domains\Catalog\Infrastructure\Persistence\Eloquent\ProductRecord;
 use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -79,12 +81,12 @@ class Company extends Model
 
     public function products(): HasMany
     {
-        return $this->hasMany(Product::class);
+        return $this->hasMany(ProductRecord::class);
     }
 
     public function productCategories(): HasMany
     {
-        return $this->hasMany(ProductCategory::class);
+        return $this->hasMany(ProductCategoryRecord::class);
     }
 
     public function transactionCategories(): HasMany

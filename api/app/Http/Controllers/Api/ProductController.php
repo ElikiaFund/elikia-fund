@@ -2,129 +2,143 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\InsufficientStockException;
+use App\Domains\Catalog\Application\Product\AdjustProductStock;
+use App\Domains\Catalog\Application\Product\CreateProduct;
+use App\Domains\Catalog\Application\Product\DeleteProduct;
+use App\Domains\Catalog\Application\Product\GetProduct;
+use App\Domains\Catalog\Application\Product\GetStockMovement;
+use App\Domains\Catalog\Application\Product\ListProducts;
+use App\Domains\Catalog\Application\Product\ListStockMovements;
+use App\Domains\Catalog\Application\Product\RestockProduct;
+use App\Domains\Catalog\Application\Product\UpdateProduct;
+use App\Domains\Shared\Application\Bus\CommandBus;
+use App\Domains\Shared\Application\Bus\QueryBus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Product\AdjustStockRequest;
 use App\Http\Requests\Product\RestockProductRequest;
 use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
-use App\Models\Product;
-use App\Services\ProductStockService;
+use App\Models\Transaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * The active company's catalog. Business rules (stock can't go below zero on a correction,
+ * weighted-average cost on restock, …) live in the Catalog context — see
+ * app/Domains/Catalog and docs/architecture/ddd.md.
+ */
 class ProductController extends Controller
 {
-    public function __construct(private readonly ProductStockService $stock) {}
+    public function __construct(
+        private readonly CommandBus $commands,
+        private readonly QueryBus $queries,
+    ) {}
 
-    /**
-     * GET /products — the active company's product/service catalog.
-     */
     public function index(Request $request): JsonResponse
     {
-        return response()->json($request->company()->products()->with('category')->latest()->get());
+        return response()->json($this->queries->ask(new ListProducts($request->company()->id)));
     }
 
-    /**
-     * GET /products/{product} — single item, for the detail/edit screen.
-     */
-    public function show(Request $request, Product $product): JsonResponse
+    public function show(Request $request, int $product): JsonResponse
     {
-        abort_unless($product->company_id === $request->company()->id, 403);
-
-        return response()->json($product->load('category'));
+        return response()->json($this->queries->ask(new GetProduct($product, $request->company()->id)));
     }
 
-    /**
-     * POST /products — add an item to the catalog (e.g. a drink, a dish, a service).
-     */
     public function store(StoreProductRequest $request): JsonResponse
     {
-        $product = $request->company()->products()->create($request->validated());
+        $companyId = $request->company()->id;
 
-        if ($product->tracks_stock && $product->stock_quantity > 0) {
-            $this->stock->recordInitialStock($product);
+        $productId = $this->commands->dispatch(new CreateProduct(
+            companyId: $companyId,
+            name: $request->validated('name'),
+            categoryId: $request->validated('category_id'),
+            sellPrice: $request->validated('sell_price'),
+            costPrice: $request->validated('cost_price'),
+            tracksStock: $request->boolean('tracks_stock'),
+            stockQuantity: (int) ($request->validated('stock_quantity') ?? 0),
+            lowStockThreshold: $request->validated('low_stock_threshold'),
+        ));
+
+        return response()->json($this->queries->ask(new GetProduct($productId, $companyId)), 201);
+    }
+
+    /**
+     * Only the fields actually sent are changed. stock_quantity isn't accepted: after creation it
+     * moves only through restock, adjust-stock or a sale, each of which leaves a stock movement.
+     */
+    public function update(UpdateProductRequest $request, int $product): JsonResponse
+    {
+        $companyId = $request->company()->id;
+        $fields = [
+            'name' => 'name',
+            'category_id' => 'categoryId',
+            'sell_price' => 'sellPrice',
+            'cost_price' => 'costPrice',
+            'tracks_stock' => 'tracksStock',
+            'low_stock_threshold' => 'lowStockThreshold',
+        ];
+
+        $changes = [];
+        foreach ($request->validated() as $key => $value) {
+            if (isset($fields[$key])) {
+                $changes[$fields[$key]] = $value;
+            }
         }
 
-        return response()->json($product, 201);
+        $this->commands->dispatch(new UpdateProduct($product, $companyId, $changes));
+
+        return response()->json($this->queries->ask(new GetProduct($product, $companyId)));
     }
 
-    /**
-     * PUT /products/{product} — edit a catalog item. stock_quantity is deliberately not accepted
-     * here — post-creation it can only change via restock/adjust-stock/a sale, each of which
-     * leaves an audit trail in stock_movements.
-     */
-    public function update(UpdateProductRequest $request, Product $product): JsonResponse
+    public function destroy(Request $request, int $product): JsonResponse
     {
-        abort_unless($product->company_id === $request->company()->id, 403);
-
-        $product->update($request->validated());
-
-        return response()->json($product);
-    }
-
-    /**
-     * DELETE /products/{product} — remove a catalog item. Cascades to stock_movements.
-     */
-    public function destroy(Request $request, Product $product): JsonResponse
-    {
-        abort_unless($product->company_id === $request->company()->id, 403);
-
-        $product->delete();
+        $this->commands->dispatch(new DeleteProduct($product, $request->company()->id));
 
         return response()->json(null, 204);
     }
 
-    /**
-     * POST /products/{product}/restock — add stock at a given unit cost, recomputing the
-     * product's weighted-average cost_price, optionally logging a matching expense transaction.
-     */
-    public function restock(RestockProductRequest $request, Product $product): JsonResponse
+    /** Adds stock at a unit cost; by default also logs the purchase as an expense. */
+    public function restock(RestockProductRequest $request, int $product): JsonResponse
     {
-        abort_unless($product->company_id === $request->company()->id, 403);
+        $companyId = $request->company()->id;
 
-        if (! $product->tracks_stock) {
-            return response()->json(['message' => 'Ce produit ne suit pas de stock.'], 422);
-        }
+        $outcome = $this->commands->dispatch(new RestockProduct(
+            productId: $product,
+            companyId: $companyId,
+            quantity: $request->validated('quantity'),
+            unitCost: $request->validated('unit_cost'),
+            note: $request->validated('note'),
+            recordExpense: $request->boolean('create_expense', true),
+        ));
 
-        $result = $this->stock->restock(
-            $product,
-            $request->validated('quantity'),
-            $request->validated('unit_cost'),
-            $request->validated('note'),
-            $request->boolean('create_expense', true),
-        );
-
-        return response()->json($result, 201);
+        return response()->json([
+            'product' => $this->queries->ask(new GetProduct($product, $companyId)),
+            'movement' => $this->queries->ask(new GetStockMovement($outcome->movementId)),
+            // Bookkeeping isn't a bounded context yet, so its row is read through the legacy model.
+            'transaction' => $outcome->expenseTransactionId ? Transaction::find($outcome->expenseTransactionId) : null,
+        ], 201);
     }
 
-    /**
-     * POST /products/{product}/adjust-stock — a manual correction (loss, breakage, recount).
-     */
-    public function adjustStock(AdjustStockRequest $request, Product $product): JsonResponse
+    /** A manual correction — loss, breakage, recount. */
+    public function adjustStock(AdjustStockRequest $request, int $product): JsonResponse
     {
-        abort_unless($product->company_id === $request->company()->id, 403);
+        $companyId = $request->company()->id;
 
-        if (! $product->tracks_stock) {
-            return response()->json(['message' => 'Ce produit ne suit pas de stock.'], 422);
-        }
+        $movementId = $this->commands->dispatch(new AdjustProductStock(
+            productId: $product,
+            companyId: $companyId,
+            quantityChange: $request->validated('quantity_change'),
+            note: $request->validated('note'),
+        ));
 
-        try {
-            $movement = $this->stock->adjust($product, $request->validated('quantity_change'), $request->validated('note'));
-        } catch (InsufficientStockException) {
-            return response()->json(['message' => 'Stock insuffisant pour ce produit.'], 422);
-        }
-
-        return response()->json(['product' => $product->fresh(), 'movement' => $movement], 201);
+        return response()->json([
+            'product' => $this->queries->ask(new GetProduct($product, $companyId)),
+            'movement' => $this->queries->ask(new GetStockMovement($movementId)),
+        ], 201);
     }
 
-    /**
-     * GET /products/{product}/movements — full stock movement history, most recent first.
-     */
-    public function movements(Request $request, Product $product): JsonResponse
+    public function movements(Request $request, int $product): JsonResponse
     {
-        abort_unless($product->company_id === $request->company()->id, 403);
-
-        return response()->json($product->stockMovements()->latest()->get());
+        return response()->json($this->queries->ask(new ListStockMovements($product, $request->company()->id)));
     }
 }
