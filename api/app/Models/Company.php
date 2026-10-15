@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'user_id', 'name', 'category', 'other_category', 'department', 'city', 'neighborhood', 'address',
-    'yabeto_account_id', 'yabeto_onboarding_url', 'yabeto_onboarding_expires_at',
+    'yabeto_connect_required', 'yabeto_account_id', 'yabeto_onboarding_url', 'yabeto_onboarding_expires_at',
     'yabeto_verification_status', 'yabeto_capabilities', 'yabeto_compliance_checked_at',
 ])]
 class Company extends Model
@@ -34,20 +34,26 @@ class Company extends Model
     protected function casts(): array
     {
         return [
+            'yabeto_connect_required' => 'boolean',
             'yabeto_capabilities' => 'array',
             'yabeto_onboarding_expires_at' => 'datetime',
             'yabeto_compliance_checked_at' => 'datetime',
         ];
     }
 
-    /**
-     * Whether this company was signed up under the Connect regime. Returns false for every
-     * legacy user — their money flows continue through Elikia's own Yabeto account exactly as
-     * today. Every money service's router branches on this one method.
-     */
     public function hasConnectAccount(): bool
     {
         return filled($this->yabeto_account_id);
+    }
+
+    /**
+     * Signed up under the Connect regime: its money must flow through its own connected account,
+     * never Elikia's. False for every legacy company, which keeps today's flow. Whether money may
+     * move at all is decided by App\Services\YabetoConnectGate.
+     */
+    public function requiresConnect(): bool
+    {
+        return $this->yabeto_connect_required || $this->hasConnectAccount();
     }
 
     /**

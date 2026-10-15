@@ -64,10 +64,36 @@ class ConnectVaultRoutingTest extends TestCase
             && (float) $r['application_fee_rate'] === 2.0);
     }
 
-    public function test_a_connect_company_still_pending_kyc_stays_on_the_legacy_flow(): void
+    public function test_a_connect_company_still_pending_kyc_cannot_move_money_at_all(): void
     {
         [$user, $company] = $this->companyWithVault();
         $company->update(['yabeto_account_id' => 'acct_test', 'yabeto_verification_status' => 'in_review']);
+
+        $this->deposit($user, $company)
+            ->assertForbidden()
+            ->assertJsonPath('code', 'identity_verification_required')
+            ->assertJsonPath('company_id', $company->id);
+        $this->withdraw($user, $company, 20000)->assertForbidden();
+
+        Http::assertNothingSent();
+    }
+
+    /** Provisioning failed at signup, so there's no account yet — still never the legacy flow. */
+    public function test_a_company_marked_for_connect_without_an_account_is_locked_too(): void
+    {
+        [$user, $company] = $this->companyWithVault();
+        $company->update(['yabeto_connect_required' => true]);
+
+        $this->deposit($user, $company)->assertForbidden()->assertJsonPath('code', 'identity_verification_required');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_switching_connect_off_unlocks_pending_companies_onto_the_legacy_flow(): void
+    {
+        YabetoSetting::current()->update(['connect_enabled' => false]);
+        [$user, $company] = $this->companyWithVault();
+        $company->update(['yabeto_connect_required' => true, 'yabeto_account_id' => 'acct_test']);
 
         $this->deposit($user, $company)->assertSuccessful();
 

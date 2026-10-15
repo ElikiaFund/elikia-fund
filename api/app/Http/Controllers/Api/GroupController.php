@@ -34,6 +34,7 @@ use App\Services\Payment\YabetoStatus;
 use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\TontineReportService;
+use App\Services\YabetoConnectGate;
 use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,7 @@ class GroupController extends Controller
 {
     public function __construct(
         private readonly YabetoService $yabeto,
+        private readonly YabetoConnectGate $connectGate,
         private readonly PaymentNotificationService $paymentNotifications,
         private readonly GroupMembershipNotificationService $membershipNotifications,
         private readonly GroupCycleRecipientService $cycleRecipients,
@@ -599,6 +601,11 @@ class GroupController extends Controller
             return response()->json(['message' => 'Ce tour de tontine est terminé. Le créateur doit relancer un nouveau tour avant de reprendre les cotisations.'], 409);
         }
 
+        $this->connectGate->assertCanMoveMoney(
+            $group->company,
+            "Les cotisations de cette tontine s'ouvriront dès que l'entreprise organisatrice aura fait vérifier son identité.",
+        );
+
         $cyclePeriod = $group->currentCyclePeriod();
         $amount = (float) $group->contribution_amount;
 
@@ -642,7 +649,7 @@ class GroupController extends Controller
             // member — because that's where the pool lands (see TontinePayoutService's
             // "payout lands in the group's company's vault" comment).
             $ownerCompany = $group->company;
-            if ($ownerCompany?->isConnectReady()) {
+            if ($this->connectGate->routesThroughConnect($ownerCompany)) {
                 $feeRate = (float) YabetoSetting::current()->default_application_fee_rate;
 
                 $intent = $this->yabeto->createPaymentIntentOnBehalfOf(

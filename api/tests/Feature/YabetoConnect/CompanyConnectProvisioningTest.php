@@ -63,8 +63,25 @@ class CompanyConnectProvisioningTest extends TestCase
 
         $this->postJson('/api/companies', self::COMPANY)->assertCreated();
 
-        $this->assertNull(Company::first()->yabeto_account_id);
+        $company = Company::first();
+        $this->assertNull($company->yabeto_account_id);
+        $this->assertTrue($company->yabeto_connect_required, 'a failed provisioning must not make the company a legacy one');
         $this->assertSame(1, YabetoConnectAuditLog::where('result', 'failure')->count());
+
+        $this->getJson("/api/companies/{$company->id}/yabeto-connect")
+            ->assertOk()
+            ->assertJsonPath('requires_verification', true)
+            ->assertJsonPath('has_account', false);
+    }
+
+    public function test_a_company_created_while_connect_is_off_is_a_legacy_company(): void
+    {
+        Http::fake();
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+
+        $this->postJson('/api/companies', self::COMPANY)->assertCreated();
+
+        $this->assertFalse(Company::first()->yabeto_connect_required);
     }
 
     public function test_a_merchant_cannot_read_another_merchants_connect_status(): void

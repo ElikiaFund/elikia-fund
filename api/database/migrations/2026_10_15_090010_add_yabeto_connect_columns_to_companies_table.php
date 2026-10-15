@@ -26,6 +26,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('companies', function (Blueprint $table) {
+            // Set when a company is created while Connect is live — even if provisioning its
+            // account fails — so it can never slip into the legacy (Elikia-custody) money flow.
+            // Its vault and tontines stay locked until Yabeto approves its KYC.
+            $table->boolean('yabeto_connect_required')->default(false);
             $table->string('yabeto_account_id', 64)->nullable()->unique();
             $table->text('yabeto_onboarding_url')->nullable();
             $table->timestamp('yabeto_onboarding_expires_at')->nullable();
@@ -40,6 +44,7 @@ return new class extends Migration
         Schema::table('companies', function (Blueprint $table) {
             $table->dropUnique(['yabeto_account_id']);
             $table->dropColumn([
+                'yabeto_connect_required',
                 'yabeto_account_id',
                 'yabeto_onboarding_url',
                 'yabeto_onboarding_expires_at',

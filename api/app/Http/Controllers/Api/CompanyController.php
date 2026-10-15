@@ -11,6 +11,7 @@ use App\Models\TransactionCategory;
 use App\Services\CompanyConnectService;
 use App\Services\Payment\YabetoConfig;
 use App\Services\Payment\YabetoRequestException;
+use App\Services\YabetoConnectGate;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,7 @@ class CompanyController extends Controller
     public function __construct(
         private readonly CompanyConnectService $connect,
         private readonly YabetoConfig $yabetoConfig,
+        private readonly YabetoConnectGate $connectGate,
     ) {}
 
     /**
@@ -49,14 +51,13 @@ class CompanyController extends Controller
             $user->forceFill(['onboarding_completed_at' => now()])->save();
         }
 
-        // Phase A policy (CLAUDE.md "Connect for new signups"): every company created while
-        // Connect is enabled gets a Yabeto connected account provisioned here. Failures must
-        // not abort signup — Elikia is mobile-first and the merchant finishes onboarding even
-        // if Yabeto is slow. The scheduled yabeto:sync-compliance sweep + the back-office
-        // retry endpoint catch up later. Legacy companies (pre-Connect) never pass through
-        // this branch because yabetoConfig->isConnectReady() is cheap and `connect_enabled`
-        // flips once per deployment, not per request.
+        // Every company created while Connect is live is a Connect company: marked first, so a
+        // failed provisioning below still keeps it out of the legacy (Elikia-custody) flow — its
+        // money stays locked until KYC is approved (see YabetoConnectGate). Provisioning failures
+        // don't abort signup; the merchant's "Vérifier mon identité" tap provisions on demand.
         if ($this->yabetoConfig->isConnectReady()) {
+            $company->update(['yabeto_connect_required' => true]);
+
             try {
                 $company = $this->connect->provision($company, 'signup');
             } catch (YabetoRequestException|ConnectionException|YabetoConnectUnavailableException $e) {
@@ -120,6 +121,7 @@ class CompanyController extends Controller
         }
 
         return response()->json([
+            'requires_verification' => $this->connectGate->requiresVerification($company),
             'has_account' => $company->hasConnectAccount(),
             'verification_status' => $company->yabeto_verification_status,
             'is_connect_ready' => $company->isConnectReady(),

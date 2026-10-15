@@ -33,6 +33,7 @@ class VaultTransactionService
     public function __construct(
         private readonly YabetoService $yabeto,
         private readonly YabetoConnectClient $connectClient,
+        private readonly YabetoConnectGate $connectGate,
         private readonly FeeService $fees,
         private readonly VaultFraudDetectionService $fraudDetection,
     ) {}
@@ -51,7 +52,7 @@ class VaultTransactionService
      */
     private function shouldUseConnect(Vault $vault): bool
     {
-        return $vault->company?->isConnectReady() === true;
+        return $this->connectGate->routesThroughConnect($vault->company);
     }
 
     /**

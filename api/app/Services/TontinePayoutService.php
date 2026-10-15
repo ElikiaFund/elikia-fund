@@ -38,6 +38,7 @@ class TontinePayoutService
         private readonly GroupCycleRecipientService $cycleRecipients,
         private readonly PaymentNotificationService $paymentNotifications,
         private readonly YabetoConnectClient $connectClient,
+        private readonly YabetoConnectGate $connectGate,
     ) {}
 
     /**
@@ -156,7 +157,7 @@ class TontinePayoutService
             // A legacy group (owning company isn't Connect-ready) continues to credit the
             // company's internal vault as today — no behaviour change for pre-Connect users.
             $ownerCompany = $group->company;
-            $isConnectPayout = $ownerCompany?->isConnectReady() === true;
+            $isConnectPayout = $this->connectGate->routesThroughConnect($ownerCompany);
 
             if ($isConnectPayout) {
                 // Connect withdraws are ALL-OR-NOTHING and go to the merchant's own registered

@@ -80,6 +80,7 @@ class CompanyConnectController extends Controller
         return [
             'id' => $company->id,
             'name' => $company->name,
+            'yabeto_connect_required' => $company->requiresConnect(),
             'yabeto_account_id' => $company->yabeto_account_id,
             'yabeto_onboarding_url' => $company->yabeto_onboarding_url,
             'yabeto_onboarding_expires_at' => $company->yabeto_onboarding_expires_at,
