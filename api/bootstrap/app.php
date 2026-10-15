@@ -3,6 +3,9 @@
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActiveCompany;
+use Elikia\Shared\Application\Exception\AccessDenied;
+use Elikia\Shared\Application\Exception\NotFound;
+use Elikia\Shared\Domain\DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -57,9 +60,24 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        $exceptions->render(function (ModelNotFoundException|NotFoundHttpException $e, Request $request) {
+        $exceptions->render(function (ModelNotFoundException|NotFoundHttpException|NotFound $e, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json(['message' => 'Ressource introuvable.'], 404);
+            }
+        });
+
+        // Bounded contexts under src/ (see docs/architecture/ddd.md) signal ownership failures
+        // with AccessDenied and broken business rules with DomainException, whose message is
+        // already user-facing French.
+        $exceptions->render(function (AccessDenied $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => 'Action non autorisée.'], 403);
+            }
+        });
+
+        $exceptions->render(function (DomainException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => $e->getMessage()], 422);
             }
         });
 

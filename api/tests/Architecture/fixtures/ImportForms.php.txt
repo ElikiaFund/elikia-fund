@@ -1,0 +1,19 @@
+<?php
+
+// Scanner fixture for LayerDependencyTest. Kept as .txt so Pint never "fixes" the imports below.
+
+namespace Fixture;
+
+use Elikia\Catalog\Domain\Product\Product as DomainProduct;
+use Elikia\Shared\Domain\{CompanyId, Money as Amount};
+use Illuminate\Support\Facades\DB;
+
+class ImportForms
+{
+    use SomeTrait;
+
+    public function run(): void
+    {
+        \App\Models\Company::query();
+    }
+}
