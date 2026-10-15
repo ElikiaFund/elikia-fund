@@ -4,8 +4,8 @@
 
 namespace Fixture;
 
-use Elikia\Catalog\Domain\Product\Product as DomainProduct;
-use Elikia\Shared\Domain\{CompanyId, Money as Amount};
+use App\Domains\Catalog\Domain\Product\Product as DomainProduct;
+use App\Domains\Shared\Domain\{CompanyId, Money as Amount};
 use Illuminate\Support\Facades\DB;
 
 class ImportForms

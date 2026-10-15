@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Shared;
 
+use App\Domains\Shared\Application\Bus\Command;
+use App\Domains\Shared\Application\Bus\CommandBus;
+use App\Domains\Shared\Application\Event\DomainEventPublisher;
+use App\Domains\Shared\Domain\DomainEvent;
 use DateTimeImmutable;
-use Elikia\Shared\Application\Bus\Command;
-use Elikia\Shared\Application\Bus\CommandBus;
-use Elikia\Shared\Application\Event\DomainEventPublisher;
-use Elikia\Shared\Domain\DomainEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;

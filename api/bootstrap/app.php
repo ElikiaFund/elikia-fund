@@ -1,11 +1,11 @@
 <?php
 
+use App\Domains\Shared\Application\Exception\AccessDenied;
+use App\Domains\Shared\Application\Exception\NotFound;
+use App\Domains\Shared\Domain\DomainException;
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\ResolveActiveCompany;
-use Elikia\Shared\Application\Exception\AccessDenied;
-use Elikia\Shared\Application\Exception\NotFound;
-use Elikia\Shared\Domain\DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;

@@ -1,6 +1,6 @@
 <?php
 
-namespace Elikia\Shared\Domain;
+namespace App\Domains\Shared\Domain;
 
 abstract class AggregateRoot
 {

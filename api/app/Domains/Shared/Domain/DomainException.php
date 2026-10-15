@@ -1,6 +1,6 @@
 <?php
 
-namespace Elikia\Shared\Domain;
+namespace App\Domains\Shared\Domain;
 
 /**
  * A business rule was violated. The message is French and safe to show to the end user —

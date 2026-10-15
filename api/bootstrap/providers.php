@@ -1,7 +1,7 @@
 <?php
 
+use App\Domains\Shared\Infrastructure\Providers\SharedServiceProvider;
 use App\Providers\AppServiceProvider;
-use Elikia\Shared\Infrastructure\Providers\SharedServiceProvider;
 
 return [
     AppServiceProvider::class,

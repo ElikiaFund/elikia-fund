@@ -1,6 +1,6 @@
 <?php
 
-namespace Elikia\Shared\Application\Bus;
+namespace App\Domains\Shared\Application\Bus;
 
 /**
  * Marker for a state-changing use case. Each Command class `Foo` has exactly one invokable

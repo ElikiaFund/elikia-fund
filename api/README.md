@@ -10,7 +10,7 @@ back-office/   Vite + React + shadcn/ui — admin app
 
 See the root [`fintech-mvp-one-week-plan.md`](../fintech-mvp-one-week-plan.md) for the original sprint scope/day-by-day plan and [`yabeto.md`](../yabeto.md) for the full mobile-money payment provider reference this API integrates against.
 
-> **Architecture in transition.** The API is moving to Domain-Driven Design, one bounded context at a time — see [`docs/architecture/ddd.md`](docs/architecture/ddd.md) for the layering, dependency rules and migration order. Migrated contexts live in `src/` (namespace `Elikia\`); everything still described below under `app/Services` and `app/Models` is the legacy layout until its context is migrated.
+> **Architecture in transition.** The API is moving to Domain-Driven Design, one bounded context at a time — see [`docs/architecture/ddd.md`](docs/architecture/ddd.md) for the layering, dependency rules and migration order. Migrated contexts live in `app/Domains/<Context>` (namespace `App\Domains\`); everything still described below under `app/Services` and `app/Models` is the legacy layout until its context is migrated.
 
 ## Setup
 

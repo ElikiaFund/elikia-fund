@@ -1,6 +1,6 @@
 <?php
 
-namespace Elikia\Shared\Infrastructure\Bus;
+namespace App\Domains\Shared\Infrastructure\Bus;
 
 use LogicException;
 

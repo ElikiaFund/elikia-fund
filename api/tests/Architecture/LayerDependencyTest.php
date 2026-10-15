@@ -8,7 +8,7 @@ use RecursiveIteratorIterator;
 
 /**
  * Enforces the dependency rules of docs/architecture/ddd.md by reading every imported or
- * fully-qualified class name under src/ and app/. Plain PHPUnit (no Laravel boot) so it runs in
+ * fully-qualified class name under app/. Plain PHPUnit (no Laravel boot) so it runs in
  * milliseconds and can never be skipped by a broken container.
  */
 class LayerDependencyTest extends TestCase
@@ -17,9 +17,11 @@ class LayerDependencyTest extends TestCase
      * Legacy files that still reach into a migrated context's Infrastructure. Each entry is
      * temporary and is removed when the legacy side is migrated — this list only shrinks.
      *
-     * @var array<string, list<string>> relative path => forbidden class names it may still use
+     * @var array<string, list<string>> path relative to api/ => Infrastructure classes it may still use
      */
     private const LEGACY_ALLOWLIST = [];
+
+    private const DOMAINS = 'App\\Domains\\';
 
     private const ROOT = __DIR__.'/../..';
 
@@ -27,15 +29,13 @@ class LayerDependencyTest extends TestCase
     {
         $violations = [];
 
-        foreach ($this->srcFiles() as [$path, $context, $layer]) {
+        foreach ($this->contextFiles() as [$path, $context, $layer]) {
             if ($layer !== 'Domain') {
                 continue;
             }
 
             foreach ($this->referencedClasses($path) as $class) {
-                if (! $this->isNamespaced($class)
-                    || $this->startsWith($class, 'Elikia\\Shared\\Domain\\')
-                    || $this->startsWith($class, "Elikia\\{$context}\\Domain\\")) {
+                if ($this->isGlobal($class) || $this->isLayer($class, 'Shared', 'Domain') || $this->isLayer($class, $context, 'Domain')) {
                     continue;
                 }
 
@@ -50,21 +50,22 @@ class LayerDependencyTest extends TestCase
     {
         $violations = [];
 
-        foreach ($this->srcFiles() as [$path, $context, $layer]) {
+        foreach ($this->contextFiles() as [$path, $context, $layer]) {
             if ($layer !== 'Application') {
                 continue;
             }
 
             foreach ($this->referencedClasses($path) as $class) {
-                if (! $this->isNamespaced($class)
-                    || $this->startsWith($class, 'Elikia\\Shared\\Domain\\')
-                    || $this->startsWith($class, 'Elikia\\Shared\\Application\\')
-                    || $this->startsWith($class, "Elikia\\{$context}\\Domain\\")
-                    || preg_match('/^Elikia\\\\\w+\\\\Application\\\\/', $class)) {
-                    continue;
-                }
+                [$otherContext, $otherLayer] = $this->locate($class);
 
-                $violations[] = "{$this->relative($path)} uses {$class}";
+                $allowed = $this->isGlobal($class)
+                    || $this->isLayer($class, 'Shared', 'Domain')
+                    || $this->isLayer($class, $context, 'Domain')
+                    || $otherLayer === 'Application';
+
+                if (! $allowed) {
+                    $violations[] = "{$this->relative($path)} uses {$class}";
+                }
             }
         }
 
@@ -75,15 +76,11 @@ class LayerDependencyTest extends TestCase
     {
         $violations = [];
 
-        foreach ($this->srcFiles() as [$path, $context]) {
+        foreach ($this->contextFiles() as [$path, $context]) {
             foreach ($this->referencedClasses($path) as $class) {
-                if (! preg_match('/^Elikia\\\\(\w+)\\\\(\w+)\\\\/', $class, $m)) {
-                    continue;
-                }
+                [$otherContext, $otherLayer] = $this->locate($class);
 
-                [, $otherContext, $otherLayer] = $m;
-
-                if ($otherContext !== $context && $otherContext !== 'Shared' && $otherLayer !== 'Application') {
+                if ($otherContext !== null && $otherContext !== $context && $otherContext !== 'Shared' && $otherLayer !== 'Application') {
                     $violations[] = "{$this->relative($path)} uses {$class}";
                 }
             }
@@ -99,41 +96,73 @@ class LayerDependencyTest extends TestCase
         foreach ($this->phpFiles(self::ROOT.'/app') as $path) {
             $relative = $this->relative($path);
 
+            if (str_starts_with($relative, 'app/Domains/')) {
+                continue;
+            }
+
             foreach ($this->referencedClasses($path) as $class) {
-                if (preg_match('/^Elikia\\\\\w+\\\\Infrastructure\\\\/', $class)
-                    && ! in_array($class, self::LEGACY_ALLOWLIST[$relative] ?? [], true)) {
+                if ($this->locate($class)[1] === 'Infrastructure' && ! in_array($class, self::LEGACY_ALLOWLIST[$relative] ?? [], true)) {
                     $violations[] = "{$relative} uses {$class}";
                 }
             }
         }
 
-        $this->assertSame([], $violations, "app/ must dispatch commands/queries instead of using Infrastructure:\n".implode("\n", $violations));
+        $this->assertSame([], $violations, "Controllers, commands and legacy code must go through the buses, not Infrastructure:\n".implode("\n", $violations));
     }
 
-    public function test_the_scanner_sees_the_source_tree_and_every_import_form(): void
+    public function test_the_scanner_sees_the_contexts_and_every_import_form(): void
     {
-        $this->assertNotEmpty(iterator_to_array($this->srcFiles(), false));
+        $this->assertNotEmpty(iterator_to_array($this->contextFiles(), false));
 
         $found = $this->referencedClasses(__DIR__.'/fixtures/ImportForms.php.txt');
         sort($found);
 
         $this->assertSame([
+            'App\\Domains\\Catalog\\Domain\\Product\\Product',
+            'App\\Domains\\Shared\\Domain\\CompanyId',
+            'App\\Domains\\Shared\\Domain\\Money',
             'App\\Models\\Company',
-            'Elikia\\Catalog\\Domain\\Product\\Product',
-            'Elikia\\Shared\\Domain\\CompanyId',
-            'Elikia\\Shared\\Domain\\Money',
             'Illuminate\\Support\\Facades\\DB',
         ], $found);
+        $this->assertSame(['Catalog', 'Domain'], $this->locate('App\\Domains\\Catalog\\Domain\\Product\\Product'));
+        $this->assertSame([null, null], $this->locate('App\\Models\\Company'));
     }
 
     /** @return iterable<array{0: string, 1: string, 2: string}> path, context, layer */
-    private function srcFiles(): iterable
+    private function contextFiles(): iterable
     {
-        foreach ($this->phpFiles(self::ROOT.'/src') as $path) {
-            $parts = explode('/', str_replace('\\', '/', substr($path, strlen(realpath(self::ROOT.'/src')) + 1)));
+        foreach ($this->phpFiles(self::ROOT.'/app/Domains') as $path) {
+            $parts = explode('/', substr($this->relative($path), strlen('app/Domains/')));
 
             yield [$path, $parts[0], $parts[1] ?? ''];
         }
+    }
+
+    /**
+     * Which context and layer a class belongs to, or [null, null] if it isn't under App\Domains.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function locate(string $class): array
+    {
+        if (! str_starts_with($class, self::DOMAINS)) {
+            return [null, null];
+        }
+
+        $parts = explode('\\', substr($class, strlen(self::DOMAINS)));
+
+        return [$parts[0], $parts[1] ?? null];
+    }
+
+    private function isLayer(string $class, string $context, string $layer): bool
+    {
+        return str_starts_with($class, self::DOMAINS."{$context}\\{$layer}\\");
+    }
+
+    /** PHP's own classes (DateTimeImmutable, InvalidArgumentException, …) carry no namespace. */
+    private function isGlobal(string $class): bool
+    {
+        return ! str_contains($class, '\\');
     }
 
     /** @return iterable<string> */
@@ -153,8 +182,9 @@ class LayerDependencyTest extends TestCase
     }
 
     /**
-     * Top-level `use` imports (including grouped `use A\{B, C};`) plus fully-qualified names
-     * written inline, plus same-namespace references are irrelevant (always allowed).
+     * Top-level `use` imports (including aliased and grouped `use A\{B, C as D};`) plus
+     * fully-qualified names written inline. Indented `use` lines are trait uses and are skipped;
+     * unqualified same-namespace references never cross a boundary, so they're ignored.
      *
      * @return list<string>
      */
@@ -163,19 +193,23 @@ class LayerDependencyTest extends TestCase
         $source = file_get_contents($path);
         $classes = [];
 
-        // Column-0 `use` lines are imports; indented ones are trait uses inside a class body.
         preg_match_all('/^use\s+(?:function\s+|const\s+)?([^;]+);/m', $source, $imports);
 
         foreach ($imports[1] as $import) {
-            if (preg_match('/^(.+?)\\\\\{(.+)\}$/s', trim($import), $group)) {
-                foreach (explode(',', $group[2]) as $member) {
-                    $classes[] = $group[1].'\\'.trim(preg_split('/\s+as\s+/i', trim($member))[0]);
+            $import = trim($import);
+            $brace = strpos($import, '{');
+
+            if ($brace !== false) {
+                $prefix = rtrim(substr($import, 0, $brace), '\\');
+
+                foreach (explode(',', rtrim(substr($import, $brace + 1), '}')) as $member) {
+                    $classes[] = $prefix.'\\'.$this->withoutAlias($member);
                 }
 
                 continue;
             }
 
-            $classes[] = trim(preg_split('/\s+as\s+/i', trim($import))[0]);
+            $classes[] = $this->withoutAlias($import);
         }
 
         preg_match_all('/(?<![\w\\\\])\\\\([A-Z]\w*(?:\\\\\w+)+)/', $source, $inline);
@@ -183,14 +217,9 @@ class LayerDependencyTest extends TestCase
         return array_values(array_unique([...$classes, ...$inline[1]]));
     }
 
-    private function isNamespaced(string $class): bool
+    private function withoutAlias(string $import): string
     {
-        return str_contains($class, '\\');
-    }
-
-    private function startsWith(string $class, string $prefix): bool
-    {
-        return str_starts_with($class, $prefix);
+        return trim(preg_split('/\s+as\s+/i', trim($import))[0]);
     }
 
     private function relative(string $path): string

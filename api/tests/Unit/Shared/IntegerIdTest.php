@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Shared;
 
-use Elikia\Shared\Domain\CompanyId;
-use Elikia\Shared\Domain\UserId;
+use App\Domains\Shared\Domain\CompanyId;
+use App\Domains\Shared\Domain\UserId;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

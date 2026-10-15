@@ -1,8 +1,8 @@
 <?php
 
-namespace Elikia\Shared\Application\Event;
+namespace App\Domains\Shared\Application\Event;
 
-use Elikia\Shared\Domain\DomainEvent;
+use App\Domains\Shared\Domain\DomainEvent;
 
 interface DomainEventPublisher
 {

@@ -1,9 +1,9 @@
 <?php
 
-namespace Elikia\Shared\Infrastructure\Bus;
+namespace App\Domains\Shared\Infrastructure\Bus;
 
-use Elikia\Shared\Application\Bus\Query;
-use Elikia\Shared\Application\Bus\QueryBus;
+use App\Domains\Shared\Application\Bus\Query;
+use App\Domains\Shared\Application\Bus\QueryBus;
 use Illuminate\Contracts\Container\Container;
 
 final class ContainerQueryBus implements QueryBus

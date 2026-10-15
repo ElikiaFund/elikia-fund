@@ -1,9 +1,9 @@
 <?php
 
-namespace Elikia\Shared\Infrastructure\Event;
+namespace App\Domains\Shared\Infrastructure\Event;
 
-use Elikia\Shared\Application\Event\DomainEventPublisher;
-use Elikia\Shared\Domain\DomainEvent;
+use App\Domains\Shared\Application\Event\DomainEventPublisher;
+use App\Domains\Shared\Domain\DomainEvent;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\ConnectionInterface;
 

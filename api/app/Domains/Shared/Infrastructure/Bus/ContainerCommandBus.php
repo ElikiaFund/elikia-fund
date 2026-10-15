@@ -1,9 +1,9 @@
 <?php
 
-namespace Elikia\Shared\Infrastructure\Bus;
+namespace App\Domains\Shared\Infrastructure\Bus;
 
-use Elikia\Shared\Application\Bus\Command;
-use Elikia\Shared\Application\Bus\CommandBus;
+use App\Domains\Shared\Application\Bus\Command;
+use App\Domains\Shared\Application\Bus\CommandBus;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\ConnectionInterface;
 

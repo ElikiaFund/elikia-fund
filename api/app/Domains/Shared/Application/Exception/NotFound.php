@@ -1,6 +1,6 @@
 <?php
 
-namespace Elikia\Shared\Application\Exception;
+namespace App\Domains\Shared\Application\Exception;
 
 use RuntimeException;
 

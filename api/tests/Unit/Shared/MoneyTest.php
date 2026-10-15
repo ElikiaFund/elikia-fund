@@ -2,7 +2,7 @@
 
 namespace Tests\Unit\Shared;
 
-use Elikia\Shared\Domain\Money;
+use App\Domains\Shared\Domain\Money;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 

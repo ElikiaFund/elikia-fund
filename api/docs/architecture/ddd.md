@@ -13,34 +13,37 @@ Restructure the API into **bounded contexts**, each split into **Domain / Applic
 
 ### Where code lives
 
+Everything stays inside Laravel's `app/` and the `App\` namespace. The bounded contexts get their own folder, `app/Domains`, next to the framework's usual delivery folders:
+
 ```
-api/
-├── app/                      Delivery layer (framework glue only)
-│   ├── Http/                 Controllers, FormRequests, middleware — translate HTTP ⇄ commands/queries
-│   ├── Console/              Artisan commands — translate CLI/schedule ⇄ commands
-│   └── Providers/
-└── src/                      The model — namespace Elikia\
+api/app/
+├── Http/                     Delivery: controllers, FormRequests, middleware — translate HTTP ⇄ commands/queries
+├── Console/                  Delivery: Artisan commands — translate CLI/schedule ⇄ commands
+├── Providers/
+└── Domains/                  The model — namespace App\Domains\
     ├── Shared/               Shared kernel: base types every context may use
     │   ├── Domain/           AggregateRoot, DomainEvent, DomainException, ids, Money
     │   ├── Application/      CommandBus, QueryBus, DomainEventPublisher, NotFound/AccessDenied
     │   └── Infrastructure/   Laravel implementations of the above
-    └── <Context>/
+    └── <Context>/            e.g. Catalog, Tontine, Savings
         ├── Domain/           Aggregates, entities, value objects, domain events, repository interfaces
         ├── Application/      Commands, queries, their handlers, ports (interfaces to the outside)
         └── Infrastructure/   Eloquent records + repositories, read models, adapters, service provider
 ```
 
+`app/Models`, `app/Services` and `app/Exceptions` are the legacy layout. Each one empties as its context migrates into `app/Domains`, and disappears when the last context has moved.
+
 ### Dependency rules (enforced by `tests/Architecture`)
 
 | Layer | May depend on | Must not depend on |
 |---|---|---|
-| `<Context>\Domain` | its own Domain, `Shared\Domain`, PHP | Laravel (`Illuminate\`), `App\`, any Application/Infrastructure, any other context |
-| `<Context>\Application` | its own Domain and Application, `Shared\Domain`, `Shared\Application` | Laravel, `App\`, any Infrastructure |
-| `<Context>\Infrastructure` | anything in its own context, `Shared`, Laravel, legacy `App\` (only as a temporary adapter) | another context's Domain or Infrastructure |
-| Another context | only `<OtherContext>\Application\…` (its public API: commands, queries, DTOs, integration events) | `<OtherContext>\Domain` or `\Infrastructure` |
-| `app/Http`, `app/Console` | `Application` of any context, Domain exception classes (to map them to HTTP) | any `Infrastructure` class |
+| `Domains\<Context>\Domain` | its own Domain, `Domains\Shared\Domain`, PHP | Laravel (`Illuminate\`), legacy `App\Models`/`App\Services`, any Application/Infrastructure, any other context |
+| `Domains\<Context>\Application` | its own Domain and Application, `Shared\Domain`, `Shared\Application` | Laravel, legacy `App\` code, any Infrastructure |
+| `Domains\<Context>\Infrastructure` | anything in its own context, `Shared`, Laravel, legacy `App\` code (only as a temporary adapter) | another context's Domain or Infrastructure |
+| Another context | only `Domains\<OtherContext>\Application\…` (its public API: commands, queries, DTOs, integration events) | `<OtherContext>\Domain` or `\Infrastructure` |
+| `app/Http`, `app/Console`, legacy code | `Application` of any context, Domain exception classes (to map them to HTTP) | any `Infrastructure` class |
 
-During the migration, legacy `App\` code is exempt. Any legacy file that has to reference a migrated context's Infrastructure (for example the legacy `Company` model's `products()` relation) is listed in an explicit allowlist in the architecture test. The allowlist only shrinks.
+During the migration, legacy `App\` code is otherwise exempt. Any legacy file that has to reference a migrated context's Infrastructure (for example the legacy `Company` model's `products()` relation) is listed in an explicit allowlist in the architecture test. The allowlist only shrinks.
 
 ## Bounded contexts
 
@@ -82,11 +85,11 @@ During the migration, legacy `App\` code is exempt. Any legacy file that has to 
 
 - **Domain:** fast unit tests in `tests/Unit/<Context>` with no database and no Laravel — just the aggregate.
 - **Application and HTTP:** feature tests in `tests/Feature`, written against the HTTP contract. The existing feature tests are the safety net for each migration PR and must pass unchanged.
-- **Architecture:** `tests/Architecture` parses the `use` statements and fully-qualified names under `src/` and `app/` and fails on any violation of the dependency rules above.
+- **Architecture:** `tests/Architecture` parses the `use` statements and fully-qualified names under `app/` and fails on any violation of the dependency rules above.
 
 ## Migration playbook (one context per PR)
 
-1. Model the aggregates, value objects, events and repository interfaces in `src/<Context>/Domain`, with unit tests.
+1. Model the aggregates, value objects, events and repository interfaces in `app/Domains/<Context>/Domain`, with unit tests.
 2. Write the commands, queries and handlers in `Application`, plus a port for anything the context needs from outside.
 3. Move the Eloquent models into `Infrastructure/Persistence/Eloquent` as `*Record`s; write the repositories, read models and the context's service provider.
 4. Point the controllers, console commands and legacy callers at the bus, then delete the old service, model and exception classes. No compatibility aliases.

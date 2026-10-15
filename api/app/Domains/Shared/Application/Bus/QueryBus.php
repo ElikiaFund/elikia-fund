@@ -1,6 +1,6 @@
 <?php
 
-namespace Elikia\Shared\Application\Bus;
+namespace App\Domains\Shared\Application\Bus;
 
 interface QueryBus
 {
