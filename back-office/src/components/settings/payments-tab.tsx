@@ -106,7 +106,13 @@ export function PaymentsTab() {
         setRevealedSecret(result.secret)
       }
       fetchSettings()
-      toast.success('Webhook enregistré auprès de Yabeto Pay.')
+      if (result.connect_events_registered === false) {
+        // Payments still reconcile, but Connect events (funds matured, blocked refunds) won't
+        // arrive until an admin adds them from Yabeto's dashboard.
+        toast.warning(result.message ?? 'Webhook enregistré sans les événements Connect.', { duration: 15000 })
+      } else {
+        toast.success('Webhook enregistré auprès de Yabeto Pay.')
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement du webhook.")
     } finally {

@@ -282,6 +282,9 @@ export type AdminSettings = {
     deposit_elikia_fixed: number
     withdrawal_yabeto_percent: number
     withdrawal_elikia_percent: number
+    /** Yabeto Connect surcharge and fixed collection fee — absent until first saved. */
+    connect_yabeto_percent?: number
+    connect_collection_fixed?: number
   }
 }
 
@@ -320,6 +323,9 @@ export type YabetoTestConnectionResult = {
 export type YabetoWebhookRegistration = {
   id: string | null
   secret: string | null
+  /** False when Yabeto refused the Connect events and only the payment events were registered. */
+  connect_events_registered?: boolean
+  message?: string
 }
 
 export const adminService = {
