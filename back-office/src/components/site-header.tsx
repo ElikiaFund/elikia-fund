@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom"
 
+import { AlertsBell } from "@/components/alerts-bell"
 import { navMain } from "@/components/nav-config"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -15,7 +16,8 @@ export function SiteHeader() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mx-2 data-[orientation=vertical]:h-4" />
         <h1 className="text-base font-medium">{current?.title ?? "Elikia Fund"}</h1>
-        <ThemeToggle className="ml-auto" />
+        <AlertsBell />
+        <ThemeToggle />
       </div>
     </header>
   )
