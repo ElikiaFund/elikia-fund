@@ -19,6 +19,17 @@ class YabetoStatus
     /** Public so callers can also build `whereNotIn('status', ...)` queries against it. */
     public const TERMINAL = ['succeeded', 'failed', 'expired', 'canceled'];
 
+    /**
+     * Ours, not Yabeto's: a withdrawal Yabeto couldn't confirm either way within the reconcile
+     * window. Deliberately NOT terminal — a late webhook or lookup can still settle it on its own
+     * — but it no longer counts as "in flight", so it doesn't block the merchant's next withdrawal.
+     * Its money stays reserved until a real outcome arrives or support settles it.
+     */
+    public const NEEDS_REVIEW = 'needs_review';
+
+    /** Statuses that no longer block a new attempt: final outcomes plus NEEDS_REVIEW. */
+    public const NOT_IN_FLIGHT = [...self::TERMINAL, self::NEEDS_REVIEW];
+
     public static function isTerminal(string $status): bool
     {
         return in_array($status, self::TERMINAL, true);

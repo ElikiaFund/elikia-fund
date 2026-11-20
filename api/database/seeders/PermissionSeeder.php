@@ -27,6 +27,7 @@ class PermissionSeeder extends Seeder
             'Rôles' => ['roles.view' => 'Voir les rôles', 'roles.manage' => 'Gérer les rôles et permissions'],
             'Paramètres' => ['settings.view' => 'Voir les paramètres', 'settings.manage' => 'Gérer les paramètres et la notation de crédit'],
             'Yabeto Connect' => ['yabeto_connect.manage' => 'Gérer les comptes Yabeto Connect (provisionnement, onboarding, vérification)'],
+            'Finance' => ['vault_movements.settle' => 'Régler les retraits à vérifier (confirmer le versement ou rembourser le coffre)'],
         ];
     }
 
