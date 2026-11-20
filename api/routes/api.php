@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminAlertController;
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\CashSessionController as AdminCashSessionController;
 use App\Http\Controllers\Api\Admin\CompanyConnectController;
@@ -186,6 +187,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/users/{user}', [AdminUserController::class, 'show']);
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy'])->middleware('permission:users.delete');
         Route::get('/users/{user}/vault-security-events', VaultSecurityEventController::class);
+        Route::get('/alerts', [AdminAlertController::class, 'index']);
+        Route::post('/alerts/acknowledge-all', [AdminAlertController::class, 'acknowledgeAll']);
+        Route::post('/alerts/{alert}/acknowledge', [AdminAlertController::class, 'acknowledge']);
+
         Route::get('/vault-movements', [VaultMovementController::class, 'index']);
         Route::post('/vault-movements/{movement}/settle', [VaultMovementController::class, 'settle'])->middleware(['permission:vault_movements.settle', 'throttle:5,1']);
 

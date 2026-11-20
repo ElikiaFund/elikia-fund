@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\FeeException;
 use App\Exceptions\VaultTransactionException;
+use App\Models\AdminAlert;
 use App\Models\Vault;
 use App\Models\VaultMovement;
 use App\Services\Payment\YabetoConnectClient;
@@ -37,6 +38,7 @@ class VaultTransactionService
         private readonly YabetoConnectGate $connectGate,
         private readonly FeeService $fees,
         private readonly VaultFraudDetectionService $fraudDetection,
+        private readonly AdminAlertService $adminAlerts,
     ) {}
 
     /** KYC-approved Connect company → its own connected account. See YabetoConnectGate. */
@@ -394,6 +396,19 @@ class VaultTransactionService
                 'yabeto_reference' => $flagged->yabeto_reference,
                 'reason' => $reason,
             ]);
+
+            $flagged->loadMissing('vault.company');
+            $amount = number_format((float) $flagged->amount, 0, ',', ' ');
+            $company = $flagged->vault?->company?->name ?? 'une entreprise';
+
+            $this->adminAlerts->raise(
+                AdminAlert::WITHDRAWAL_NEEDS_REVIEW,
+                "Retrait de {$amount} FCFA à vérifier ({$company})",
+                "{$reason} Référence Yabeto : ".($flagged->yabeto_reference ?? 'aucune').'. '
+                    .'Le montant reste réservé. Vérifiez ce retrait dans le tableau de bord Yabeto, puis réglez-le dans Finances › Retraits à vérifier.',
+                ['company' => $company, 'amount' => (float) $flagged->amount, 'yabeto_reference' => $flagged->yabeto_reference],
+                $flagged->id,
+            );
         }
 
         return $flagged;
