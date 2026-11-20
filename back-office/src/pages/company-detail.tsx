@@ -6,6 +6,7 @@ import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import type { DateRange } from 'react-day-picker'
 
+import { YabetoConnectCard } from '@/components/company-detail/yabeto-connect-card'
 import { DateRangeFilter } from '@/components/dashboard/date-range-filter'
 import { filterByRange } from '@/components/dashboard/aggregations'
 import type { Transaction } from '@/components/dashboard/types'
@@ -163,6 +164,8 @@ export function CompanyDetailPage() {
                   </Button>
                 </CardContent>
               </Card>
+
+              <YabetoConnectCard companyId={company.id} />
             </div>
           </TabsContent>
 
