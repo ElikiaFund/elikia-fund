@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Contribution;
-use App\Models\Group;
-use App\Models\GroupCycleRecipient;
 use App\Models\VaultMovement;
 use App\Models\YabetoWebhookEvent;
 use App\Services\ContributionService;
@@ -124,15 +122,10 @@ class YabetoWebhookController extends Controller
             case 'connect.application_fee.refunded':
             case 'connect.transfer.created':
             case 'connect.transfer.reversed':
-                Log::info('Connect ledger event received', ['type' => $payload->type, 'account' => $payload->accountId]);
-
-                return;
-
-                // The signal to trigger a tontine payout: funds on a group company's connected
-                // account have matured from pending → available. If an eligible cycle for that
-                // company is awaiting its payout, this is the moment to disburse.
+                // Funds matured on a merchant's account: what they can withdraw just grew. The
+                // vault reads available/pending live from Yabeto, so there is nothing to update.
             case 'connect.funds.available':
-                $this->onFundsAvailable($payload);
+                Log::info('Connect ledger event received', ['type' => $payload->type, 'account' => $payload->accountId]);
 
                 return;
 
@@ -224,33 +217,6 @@ class YabetoWebhookController extends Controller
             $this->paymentNotifications->withdrawSucceeded($resolved->vault->company->user, (float) $resolved->amount);
         } elseif ($status === 'failed') {
             $this->paymentNotifications->withdrawFailed($resolved->vault->company->user, (float) $resolved->amount);
-        }
-    }
-
-    /**
-     * `connect.funds.available` fires when a company's connected-account funds mature from
-     * pending → available. If any tontine cycle on a group belonging to that company is both
-     * fully-contributed and still awaiting payout, this is the right moment to disburse.
-     * Idempotent — disburseIfEligibleAndNotify() no-ops on already-paid cycles.
-     */
-    private function onFundsAvailable(YabetoEventPayload $payload): void
-    {
-        $accountId = $payload->accountId;
-
-        if (! $accountId) {
-            return;
-        }
-
-        $groups = Group::whereHas('company', fn ($q) => $q->where('yabeto_account_id', $accountId))->get();
-
-        foreach ($groups as $group) {
-            $pendingCycles = GroupCycleRecipient::where('group_id', $group->id)
-                ->whereNull('paid_out_at')
-                ->pluck('cycle_period');
-
-            foreach ($pendingCycles as $cyclePeriod) {
-                $this->payouts->disburseIfEligibleAndNotify($group, $cyclePeriod);
-            }
         }
     }
 }

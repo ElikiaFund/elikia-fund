@@ -46,6 +46,10 @@ class UpdateSettingsRequest extends FormRequest
             'fees.deposit_elikia_fixed' => ['required_with:fees', 'numeric', 'min:0'],
             'fees.withdrawal_yabeto_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
             'fees.withdrawal_elikia_percent' => ['required_with:fees', 'numeric', 'min:0', 'max:100'],
+            // Yabeto Connect pricing: the per-collection Connect surcharge and fixed fee Yabeto
+            // bills a connected merchant. Optional so older back-office builds keep working.
+            'fees.connect_yabeto_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'fees.connect_collection_fixed' => ['sometimes', 'numeric', 'min:0'],
         ];
     }
 }

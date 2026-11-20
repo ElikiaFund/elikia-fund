@@ -53,9 +53,9 @@ class YabetoService
      * or Yabeto returns 422 connect.incomplete_request. Funds land in the vendor's `pending_balance`
      * and mature per the account's delay; Elikia's share lands immediately available.
      *
-     * `account` mode (Elikia's fee_payer) applies no rate floor, so a 0 rate is valid — tontine
-     * contributions typically pass 0 (no Elikia commission), vault deposits whatever
-     * `yabeto_settings.default_application_fee_rate` currently is.
+     * `account` mode (Elikia's fee_payer) applies no rate floor, so a 0 rate is valid. The rate
+     * is derived per charge from Elikia's own fee grid by FeeService::applicationFeeRate(), so
+     * Connect and legacy merchants pay the same Elikia commission.
      */
     public function createPaymentIntentOnBehalfOf(
         int $amountXaf,

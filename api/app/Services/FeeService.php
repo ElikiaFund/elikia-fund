@@ -14,6 +14,13 @@ use App\Models\Setting;
  *
  * A fee is computed once, at movement/contribution creation time, and never recomputed later —
  * an admin changing rates mid-flight never retroactively touches an already-created row.
+ *
+ * Yabeto Connect (`$viaConnect`): Yabeto bills the connected merchant directly, so the provider
+ * half must match what Yabeto actually withholds — its collection percentage plus the Connect
+ * surcharge and a fixed collection fee — or the vault ledger drifts from the merchant's Yabeto
+ * balance. Elikia's half is unchanged and travels to Yabeto as `application_fee_rate` (see
+ * applicationFeeRate()). Connect payouts carry no fee at all: Yabeto charges none, and Elikia
+ * has no way to withhold a commission on a payout.
  */
 class FeeService
 {
@@ -26,6 +33,8 @@ class FeeService
         'deposit_elikia_fixed' => 75,
         'withdrawal_yabeto_percent' => 2,
         'withdrawal_elikia_percent' => 0.5,
+        'connect_yabeto_percent' => 1,
+        'connect_collection_fixed' => 25,
     ];
 
     /**
@@ -33,13 +42,17 @@ class FeeService
      *
      * @throws FeeException if the fee would leave nothing (or less than nothing) to contribute
      */
-    public function contribution(float $amount): array
+    public function contribution(float $amount, bool $viaConnect = false): array
     {
         $rates = $this->rates();
 
+        $providerFee = $viaConnect
+            ? $this->connectCollectionFee($amount, $rates['contribution_yabeto_percent'], $rates)
+            : round($amount * $rates['contribution_yabeto_percent'] / 100, 2);
+
         return $this->breakdown(
             $amount,
-            round($amount * $rates['contribution_yabeto_percent'] / 100, 2),
+            $providerFee,
             round($amount * $rates['contribution_elikia_percent'] / 100, 2),
             'Le montant de la cotisation doit être supérieur aux frais applicables.',
         );
@@ -50,11 +63,13 @@ class FeeService
      *
      * @throws FeeException if the fee would leave nothing (or less than nothing) to deposit
      */
-    public function deposit(float $amount): array
+    public function deposit(float $amount, bool $viaConnect = false): array
     {
         $rates = $this->rates();
 
-        $providerFee = round($amount * $rates['deposit_yabeto_percent'] / 100, 2) + $rates['deposit_yabeto_fixed'];
+        $providerFee = $viaConnect
+            ? $this->connectCollectionFee($amount, $rates['deposit_yabeto_percent'], $rates)
+            : round($amount * $rates['deposit_yabeto_percent'] / 100, 2) + $rates['deposit_yabeto_fixed'];
         $platformFee = round($amount * $rates['deposit_elikia_percent'] / 100, 2) + $rates['deposit_elikia_fixed'];
 
         return $this->breakdown(
@@ -70,8 +85,12 @@ class FeeService
      *
      * @throws FeeException if the fee would leave nothing (or less than nothing) to disburse
      */
-    public function withdrawal(float $amount): array
+    public function withdrawal(float $amount, bool $viaConnect = false): array
     {
+        if ($viaConnect) {
+            return ['fee_amount' => 0.0, 'provider_fee_amount' => 0.0, 'platform_fee_amount' => 0.0, 'net_amount' => round($amount, 2)];
+        }
+
         $rates = $this->rates();
 
         return $this->breakdown(
@@ -82,10 +101,26 @@ class FeeService
         );
     }
 
-    /** Raw 8-key rate map — used by the mobile fee-preview endpoint and the back-office settings form. */
+    /**
+     * Elikia's half of a breakdown expressed as a percentage of the gross — Connect only accepts a
+     * rate, never a fixed amount, so a fixed Elikia fee is folded into this charge's own rate.
+     *
+     * @param  array{platform_fee_amount: float}  $fee
+     */
+    public function applicationFeeRate(array $fee, float $amount): float
+    {
+        return $amount > 0 ? round($fee['platform_fee_amount'] / $amount * 100, 4) : 0.0;
+    }
+
+    /** Raw rate map — used by the mobile fee-preview endpoint and the back-office settings form. */
     public function currentRates(): array
     {
         return $this->rates();
+    }
+
+    private function connectCollectionFee(float $amount, float $collectionPercent, array $rates): float
+    {
+        return round($amount * ($collectionPercent + $rates['connect_yabeto_percent']) / 100, 2) + $rates['connect_collection_fixed'];
     }
 
     /**
@@ -112,15 +147,11 @@ class FeeService
     {
         $configured = Setting::where('key', 'fees')->value('value') ?? [];
 
-        return [
-            'contribution_yabeto_percent' => (float) ($configured['contribution_yabeto_percent'] ?? self::DEFAULTS['contribution_yabeto_percent']),
-            'contribution_elikia_percent' => (float) ($configured['contribution_elikia_percent'] ?? self::DEFAULTS['contribution_elikia_percent']),
-            'deposit_yabeto_percent' => (float) ($configured['deposit_yabeto_percent'] ?? self::DEFAULTS['deposit_yabeto_percent']),
-            'deposit_elikia_percent' => (float) ($configured['deposit_elikia_percent'] ?? self::DEFAULTS['deposit_elikia_percent']),
-            'deposit_yabeto_fixed' => (float) ($configured['deposit_yabeto_fixed'] ?? self::DEFAULTS['deposit_yabeto_fixed']),
-            'deposit_elikia_fixed' => (float) ($configured['deposit_elikia_fixed'] ?? self::DEFAULTS['deposit_elikia_fixed']),
-            'withdrawal_yabeto_percent' => (float) ($configured['withdrawal_yabeto_percent'] ?? self::DEFAULTS['withdrawal_yabeto_percent']),
-            'withdrawal_elikia_percent' => (float) ($configured['withdrawal_elikia_percent'] ?? self::DEFAULTS['withdrawal_elikia_percent']),
-        ];
+        $rates = [];
+        foreach (self::DEFAULTS as $key => $default) {
+            $rates[$key] = (float) ($configured[$key] ?? $default);
+        }
+
+        return $rates;
     }
 }

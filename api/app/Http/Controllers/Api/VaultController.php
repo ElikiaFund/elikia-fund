@@ -152,7 +152,13 @@ class VaultController extends Controller
             return response()->json(['message' => "Le coffre n'est pas encore activé."], 404);
         }
 
-        return response()->json($vault);
+        // Verified Connect merchants: what can be withdrawn right now vs. what is still maturing
+        // on their Yabeto account. `connect` is null for legacy vaults (or if Yabeto is unreachable).
+        $connect = $this->connectGate->routesThroughConnect($vault->company)
+            ? $this->vaultTransactions->connectBalances($vault)
+            : null;
+
+        return response()->json([...$vault->toArray(), 'connect' => $connect]);
     }
 
     /**
@@ -187,8 +193,13 @@ class VaultController extends Controller
 
         $amount = $request->validated('amount');
         $paymentMethod = $request->validated('payment_method');
-        $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
         $phone = $request->validated('phone');
+
+        if (! $paymentMethod) {
+            return response()->json(['message' => 'Moyen de paiement requis.'], 422);
+        }
+
+        $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
 
         if (! $this->yabeto->isEnabled()) {
             return $this->depositSimulated($vault, $amount, $methodLabel, $phone);
@@ -231,29 +242,39 @@ class VaultController extends Controller
 
         $amount = $request->validated('amount');
         $paymentMethod = $request->validated('payment_method');
-        $methodLabel = self::PAYMENT_METHOD_LABELS[$paymentMethod];
         $phone = $request->validated('phone');
+        $viaConnect = $this->connectGate->routesThroughConnect($vault->company);
 
-        if (! $this->yabeto->isEnabled()) {
-            return $this->withdrawSimulated($vault, $amount, $methodLabel, $phone);
+        // A Connect payout always goes to the number the merchant registered during KYC, so it
+        // needs neither an operator nor a phone; every other withdrawal needs both.
+        if (! $viaConnect && ! $paymentMethod) {
+            return response()->json(['message' => 'Moyen de paiement requis.'], 422);
         }
 
-        if (! $phone) {
+        if (! $this->yabeto->isEnabled()) {
+            return $this->withdrawSimulated($vault, $amount, self::PAYMENT_METHOD_LABELS[$paymentMethod], $phone);
+        }
+
+        if (! $viaConnect && ! $phone) {
             return response()->json(['message' => 'Numéro de téléphone Mobile Money requis.'], 422);
         }
 
         try {
-            $result = $this->vaultTransactions->withdraw($vault, $amount, $paymentMethod, $methodLabel, $phone);
+            $result = $viaConnect
+                ? $this->vaultTransactions->withdrawViaConnect($vault, $amount)
+                : $this->vaultTransactions->withdraw($vault, $amount, $paymentMethod, self::PAYMENT_METHOD_LABELS[$paymentMethod], $phone);
         } catch (VaultTransactionException $e) {
             return response()->json(['message' => $e->getMessage()], 409);
         } catch (FeeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
+        $paidAmount = (float) $result['movement']->amount;
+
         if ($result['movement']->status === 'succeeded') {
-            $this->paymentNotifications->withdrawSucceeded($vault->company->user, $amount);
+            $this->paymentNotifications->withdrawSucceeded($vault->company->user, $paidAmount);
         } elseif ($result['movement']->status === 'failed') {
-            $this->paymentNotifications->withdrawFailed($vault->company->user, $amount, $result['message'] ?? null);
+            $this->paymentNotifications->withdrawFailed($vault->company->user, $paidAmount, $result['message'] ?? null);
         }
 
         return response()->json($result, $this->statusFor($result['movement']));

@@ -14,10 +14,12 @@ use Illuminate\Support\Carbon;
 readonly class YabetoConfig
 {
     /**
-     * Elikia's chosen Connect fee mode (docs/fr/connect/pricing). Decided once, immutable at
-     * Yabeto's end — we refuse to call Connect endpoints unless the cached activation matches.
+     * Elikia's chosen Connect mode, as GET /v1/connect/activations reports it (`marketplace`,
+     * `platform` or null). `platform` is the mode whose derived `fee_payer` is `account`: the
+     * merchant is billed by Yabeto like an ordinary merchant. Decided once, immutable at Yabeto's
+     * end — we refuse to call Connect endpoints unless the cached activation matches.
      */
-    public const EXPECTED_CONNECT_MODE = 'account';
+    public const EXPECTED_CONNECT_MODE = 'platform';
 
     public function __construct(
         public string $mode,
@@ -29,7 +31,6 @@ readonly class YabetoConfig
         public ?string $relaySecret,
         public ?string $connectMode,
         public ?Carbon $connectActivationCheckedAt,
-        public float $defaultApplicationFeeRate,
         public bool $connectEnabled,
     ) {}
 
@@ -47,7 +48,6 @@ readonly class YabetoConfig
             relaySecret: config('services.yabeto.relay_secret'),
             connectMode: $setting->connect_mode,
             connectActivationCheckedAt: $setting->connect_activation_checked_at,
-            defaultApplicationFeeRate: (float) $setting->default_application_fee_rate,
             connectEnabled: (bool) $setting->connect_enabled,
         );
     }

@@ -91,6 +91,7 @@ class ReconcilePendingPayments extends Command
             });
 
         VaultMovement::whereIn('type', ['deposit', 'withdraw'])
+            ->where('provider', '!=', VaultTransactionService::CONNECT_PROVIDER)
             ->whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
             ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
@@ -126,6 +127,32 @@ class ReconcilePendingPayments extends Command
                             ? $paymentNotifications->depositFailed($user, (float) $movement->amount, $status['message'])
                             : $paymentNotifications->withdrawFailed($user, (float) $movement->amount, $status['message']);
                     }
+                }
+            });
+
+        // Connect payouts are synchronous, so one stuck `processing` was interrupted mid-request.
+        // Replaying it with its original Idempotency-Key returns the real outcome (Yabeto keeps it
+        // for 24h) without risking a second payout.
+        VaultMovement::where('type', 'withdraw')
+            ->where('provider', VaultTransactionService::CONNECT_PROVIDER)
+            ->whereNotIn('status', YabetoStatus::TERMINAL)
+            ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
+            ->where('created_at', '>', now()->subHours(self::ABANDON_AFTER_HOURS))
+            ->with('vault.company.user')
+            ->chunkById(50, function ($pending) use (&$resolved, $vaultTransactions, $paymentNotifications) {
+                foreach ($pending as $movement) {
+                    $replayed = $vaultTransactions->replayConnectWithdrawal($movement);
+
+                    if (! $replayed || ! YabetoStatus::isTerminal($replayed->status)) {
+                        continue;
+                    }
+
+                    $resolved++;
+                    $user = $movement->vault->company->user;
+
+                    $replayed->status === 'succeeded'
+                        ? $paymentNotifications->withdrawSucceeded($user, (float) $replayed->amount)
+                        : $paymentNotifications->withdrawFailed($user, (float) $replayed->amount);
                 }
             });
 

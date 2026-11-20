@@ -20,6 +20,19 @@ use Illuminate\Support\Facades\Log;
  */
 class YabetoSettingController extends Controller
 {
+    private const LEGACY_WEBHOOK_EVENTS = ['intent.completed', 'disbursement.completed'];
+
+    /** Bare names, no prefix (docs/fr/connect/webhooks) — all seven Yabeto emits for Connect. */
+    private const CONNECT_WEBHOOK_EVENTS = [
+        'connect.transfer.created',
+        'connect.transfer.reversed',
+        'connect.application_fee.created',
+        'connect.application_fee.refunded',
+        'connect.funds.available',
+        'connect.refund.blocked_insufficient_funds',
+        'connect.reversal.blocked_insufficient_funds',
+    ];
+
     public function __construct(
         private readonly YabetoService $yabeto,
         private readonly YabetoConfig $config,
@@ -151,7 +164,7 @@ class YabetoSettingController extends Controller
             'checked_at' => $setting->fresh()->connect_activation_checked_at,
             'message' => match (true) {
                 $mode === null => "Connect n'est pas activé pour ce compte Yabeto.",
-                $aligned => 'Connect est activé en mode plateforme (account).',
+                $aligned => 'Connect est activé en mode plateforme (les frais Yabeto sont facturés au marchand).',
                 default => "Connect est activé mais en mode « {$mode} » au lieu de « {$expected} ». Contactez Yabeto pour corriger.",
             },
         ]);
@@ -165,11 +178,27 @@ class YabetoSettingController extends Controller
             return response()->json(['message' => "Identifiant de compte et clé secrète requis pour l'enregistrement du webhook."], 422);
         }
 
+        // Yabeto's webhook API only documents the two legacy events; whether it accepts the
+        // Connect ones in `enabled_events` is undocumented. Ask for all of them, and if Yabeto
+        // refuses the list, register the legacy pair so payments keep reconciling and tell the
+        // admin to add the Connect events from Yabeto's dashboard.
+        $connectEventsRegistered = true;
+
         try {
-            $result = $this->yabeto->registerWebhook(
-                url('/api/webhooks/yabeto'),
-                ['intent.completed', 'disbursement.completed'],
-            );
+            try {
+                $result = $this->yabeto->registerWebhook(
+                    url('/api/webhooks/yabeto'),
+                    [...self::LEGACY_WEBHOOK_EVENTS, ...self::CONNECT_WEBHOOK_EVENTS],
+                );
+            } catch (YabetoRequestException $e) {
+                if (! in_array($e->response->status(), [400, 422], true)) {
+                    throw $e;
+                }
+
+                Log::warning('Yabeto refused the Connect webhook events, registering legacy events only', ['message' => $e->getMessage()]);
+                $connectEventsRegistered = false;
+                $result = $this->yabeto->registerWebhook(url('/api/webhooks/yabeto'), self::LEGACY_WEBHOOK_EVENTS);
+            }
         } catch (YabetoRequestException $e) {
             Log::warning('Yabeto webhook registration failed', ['message' => $e->getMessage()]);
 
@@ -188,7 +217,13 @@ class YabetoSettingController extends Controller
             YabetoSetting::current()->update(['webhook_secret' => $secret]);
         }
 
-        return response()->json(['id' => $result['id'] ?? null, 'secret' => $secret]);
+        return response()->json(array_filter([
+            'id' => $result['id'] ?? null,
+            'secret' => $secret,
+            'connect_events_registered' => $connectEventsRegistered,
+            'message' => $connectEventsRegistered ? null : 'Webhook enregistré pour les paiements uniquement : Yabeto a refusé les événements Connect. '
+                .'Ajoutez-les depuis le tableau de bord Yabeto (Développeurs > Webhooks) : '.implode(', ', self::CONNECT_WEBHOOK_EVENTS).'.',
+        ], fn ($value) => $value !== null));
     }
 
     private function present(YabetoSetting $setting): array
@@ -204,7 +239,6 @@ class YabetoSettingController extends Controller
             'connect_mode' => $setting->connect_mode,
             'connect_expected_mode' => YabetoConfig::EXPECTED_CONNECT_MODE,
             'connect_activation_checked_at' => $setting->connect_activation_checked_at,
-            'default_application_fee_rate' => (float) $setting->default_application_fee_rate,
         ];
     }
 }
