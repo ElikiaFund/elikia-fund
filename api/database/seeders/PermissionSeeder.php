@@ -26,6 +26,7 @@ class PermissionSeeder extends Seeder
             'Personnel' => ['personnel.view' => 'Voir le personnel', 'personnel.manage' => 'Gérer le personnel'],
             'Rôles' => ['roles.view' => 'Voir les rôles', 'roles.manage' => 'Gérer les rôles et permissions'],
             'Paramètres' => ['settings.view' => 'Voir les paramètres', 'settings.manage' => 'Gérer les paramètres et la notation de crédit'],
+            'Yabeto Connect' => ['yabeto_connect.manage' => 'Gérer les comptes Yabeto Connect (provisionnement, onboarding, vérification)'],
         ];
     }
 

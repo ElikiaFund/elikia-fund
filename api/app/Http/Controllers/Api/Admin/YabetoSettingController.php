@@ -106,6 +106,57 @@ class YabetoSettingController extends Controller
      * never returns it again on subsequent reads) — the frontend must display it once and warn
      * the admin to note it down.
      */
+    /**
+     * POST /admin/settings/yabeto/connect-status — probes GET /v1/connect/activations and
+     * caches `connect_mode` + the check timestamp on `yabeto_settings`. The result flows into
+     * YabetoConfig::isConnectReady(), which gates every per-company Connect call elsewhere in
+     * the codebase. Deliberately a POST (writes to settings) and admin-only.
+     */
+    public function connectStatus(): JsonResponse
+    {
+        if (! $this->config->secretKey) {
+            return response()->json(['success' => false, 'message' => 'Clé secrète requise.'], 422);
+        }
+
+        try {
+            $activation = $this->yabeto->fetchConnectActivation();
+        } catch (YabetoRequestException $e) {
+            Log::warning('Yabeto Connect activation check failed', ['message' => $e->getMessage()]);
+
+            return response()->json(['success' => false, 'message' => $e->userMessage()], 422);
+        } catch (ConnectionException $e) {
+            Log::warning('Yabeto Connect activation check could not reach the API', ['message' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => "Le serveur n'a pas pu joindre Yabeto Pay (réseau/DNS/SSL sortant).",
+            ], 422);
+        }
+
+        $mode = is_string($activation['connect_mode'] ?? null) ? $activation['connect_mode'] : null;
+
+        $setting = YabetoSetting::current();
+        $setting->update([
+            'connect_mode' => $mode,
+            'connect_activation_checked_at' => now(),
+        ]);
+
+        $expected = YabetoConfig::EXPECTED_CONNECT_MODE;
+        $aligned = $mode === $expected;
+
+        return response()->json([
+            'success' => $aligned,
+            'connect_mode' => $mode,
+            'expected_mode' => $expected,
+            'checked_at' => $setting->fresh()->connect_activation_checked_at,
+            'message' => match (true) {
+                $mode === null => "Connect n'est pas activé pour ce compte Yabeto.",
+                $aligned => 'Connect est activé en mode plateforme (account).',
+                default => "Connect est activé mais en mode « {$mode} » au lieu de « {$expected} ». Contactez Yabeto pour corriger.",
+            },
+        ]);
+    }
+
     public function registerWebhook(): JsonResponse
     {
         // Unlike testConnection(), this call is genuinely account-scoped
@@ -149,6 +200,11 @@ class YabetoSettingController extends Controller
             'has_secret_key' => filled($setting->secret_key),
             'has_webhook_secret' => filled($setting->webhook_secret),
             'webhook_url' => url('/api/webhooks/yabeto'),
+            'connect_enabled' => (bool) $setting->connect_enabled,
+            'connect_mode' => $setting->connect_mode,
+            'connect_expected_mode' => YabetoConfig::EXPECTED_CONNECT_MODE,
+            'connect_activation_checked_at' => $setting->connect_activation_checked_at,
+            'default_application_fee_rate' => (float) $setting->default_application_fee_rate,
         ];
     }
 }

@@ -19,6 +19,7 @@ use App\Services\PaymentNotificationService;
 use App\Services\VaultFraudDetectionService;
 use App\Services\VaultSecurityService;
 use App\Services\VaultTransactionService;
+use App\Services\YabetoConnectGate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,8 +38,11 @@ class VaultController extends Controller
         'airtel_money' => 'Airtel Money',
     ];
 
+    private const VERIFY_IDENTITY_MESSAGE = 'Vérifiez votre identité pour débloquer les dépôts et retraits de votre coffre.';
+
     public function __construct(
         private readonly YabetoService $yabeto,
+        private readonly YabetoConnectGate $connectGate,
         private readonly PaymentNotificationService $paymentNotifications,
         private readonly VaultTransactionService $vaultTransactions,
         private readonly FeeService $fees,
@@ -173,6 +177,8 @@ class VaultController extends Controller
      */
     public function deposit(VaultTransactionRequest $request): JsonResponse
     {
+        $this->connectGate->assertCanMoveMoney($request->company(), self::VERIFY_IDENTITY_MESSAGE);
+
         $vault = $this->vaultForVerifiedPin($request);
 
         if ($vault instanceof JsonResponse) {
@@ -215,6 +221,8 @@ class VaultController extends Controller
      */
     public function withdraw(VaultTransactionRequest $request): JsonResponse
     {
+        $this->connectGate->assertCanMoveMoney($request->company(), self::VERIFY_IDENTITY_MESSAGE);
+
         $vault = $this->vaultForVerifiedPin($request);
 
         if ($vault instanceof JsonResponse) {

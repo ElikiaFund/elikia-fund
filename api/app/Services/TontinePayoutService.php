@@ -7,8 +7,12 @@ use App\Exceptions\TontinePayoutRecipientVaultNotActivatedException;
 use App\Models\Group;
 use App\Models\GroupCycleRecipient;
 use App\Models\VaultMovement;
+use App\Services\Payment\YabetoConnectClient;
+use App\Services\Payment\YabetoRequestException;
 use Carbon\Carbon;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Disburses a tontine cycle's pooled contributions to that cycle's recipient — straight into
@@ -33,6 +37,8 @@ class TontinePayoutService
     public function __construct(
         private readonly GroupCycleRecipientService $cycleRecipients,
         private readonly PaymentNotificationService $paymentNotifications,
+        private readonly YabetoConnectClient $connectClient,
+        private readonly YabetoConnectGate $connectGate,
     ) {}
 
     /**
@@ -141,29 +147,86 @@ class TontinePayoutService
                 throw new TontinePayoutException('Aucune cotisation à verser pour ce cycle.');
             }
 
-            // The payout lands in the tontine's own company's vault, not the recipient member's
-            // personal vault — recipient *selection* (who's up next in rotation) is unaffected,
-            // but the money is attributed to the business the tontine itself belongs to.
-            $vault = $group->company->vault;
+            // Phase A branch: for a Connect-approved group company, the pooled contributions
+            // already sit on that company's Yabeto Connect balance (because every contribution
+            // routed via `on_behalf_of` in GroupController::contribute). The "payout" therefore
+            // means moving funds *out of Yabeto's custody* via a Connect withdrawal to the
+            // merchant's registered mobile money number — delivering on the "no custody by
+            // Elikia" posture that justified adopting Connect.
+            //
+            // A legacy group (owning company isn't Connect-ready) continues to credit the
+            // company's internal vault as today — no behaviour change for pre-Connect users.
+            $ownerCompany = $group->company;
+            $isConnectPayout = $this->connectGate->routesThroughConnect($ownerCompany);
 
-            if (! $vault) {
-                throw new TontinePayoutRecipientVaultNotActivatedException(
-                    $group,
-                    $recipient,
-                    "L'entreprise « {$group->company->name} » n'a pas encore activé son coffre. Le versement sera possible dès que ce sera fait.",
-                );
+            if ($isConnectPayout) {
+                // Connect withdraws are ALL-OR-NOTHING and go to the merchant's own registered
+                // destination (set during Yabeto's hosted KYC). Yabeto's call is synchronous
+                // and may still come back `status=failed` on 201 — treat that as a real failure
+                // (docs/fr/connect/payouts). The withdrawal moves the full available balance,
+                // not `$amount` — if contributions haven't matured yet, the call will fail with
+                // E_CONNECT_VENDOR_EMPTY_BALANCE and the cycle stays open until maturation.
+                try {
+                    $withdrawal = $this->connectClient->withdraw(
+                        $ownerCompany->yabeto_account_id,
+                        "tontine_payout:group:{$group->id}:cycle:{$cyclePeriod}",
+                    );
+                } catch (YabetoRequestException|ConnectionException $e) {
+                    Log::warning('Tontine Connect payout failed', [
+                        'group_id' => $group->id,
+                        'cycle_period' => $cyclePeriod,
+                        'message' => $e->getMessage(),
+                    ]);
+                    throw new TontinePayoutException(
+                        "Le versement Connect n'a pas pu être effectué : {$e->getMessage()}"
+                    );
+                }
+
+                if (! $withdrawal->isSuccessful()) {
+                    throw new TontinePayoutException(
+                        "Le versement Connect a été refusé par l'opérateur. Statut : {$withdrawal->status}."
+                    );
+                }
+
+                // We still write a `tontine_payout` movement row for the audit trail / member
+                // notifications, but it carries the Connect withdrawal reference, no vault, and
+                // records the amount actually transferred. The company's internal vault isn't
+                // incremented (money left Yabeto's system entirely).
+                $movement = VaultMovement::create([
+                    'type' => 'tontine_payout',
+                    'amount' => $amount,
+                    'note' => "Versement Connect de la tontine « {$group->name} », cycle {$cyclePeriod}, vers le mobile money enregistré.",
+                    'status' => 'completed',
+                    'group_id' => $group->id,
+                    'cycle_period' => $cyclePeriod,
+                    'yabeto_reference' => $withdrawal->id,
+                    'provider' => 'yabeto',
+                ]);
+            } else {
+                // Legacy path (unchanged): the payout lands in the tontine's own company's
+                // vault — the money stayed inside Elikia's Yabeto account during contributions,
+                // so the "payout" is just a ledger reclassification into the vault.
+                $vault = $group->company->vault;
+
+                if (! $vault) {
+                    throw new TontinePayoutRecipientVaultNotActivatedException(
+                        $group,
+                        $recipient,
+                        "L'entreprise « {$group->company->name} » n'a pas encore activé son coffre. Le versement sera possible dès que ce sera fait.",
+                    );
+                }
+
+                $vault->increment('balance', $amount);
+
+                $movement = $vault->movements()->create([
+                    'type' => 'tontine_payout',
+                    'amount' => $amount,
+                    'note' => "Versement de la tontine « {$group->name} », cycle {$cyclePeriod}.",
+                    'status' => 'completed',
+                    'group_id' => $group->id,
+                    'cycle_period' => $cyclePeriod,
+                ]);
             }
-
-            $vault->increment('balance', $amount);
-
-            $movement = $vault->movements()->create([
-                'type' => 'tontine_payout',
-                'amount' => $amount,
-                'note' => "Versement de la tontine « {$group->name} », cycle {$cyclePeriod}.",
-                'status' => 'completed',
-                'group_id' => $group->id,
-                'cycle_period' => $cyclePeriod,
-            ]);
 
             $cycleRecipient->update(['paid_out_at' => now(), 'vault_movement_id' => $movement->id]);
 

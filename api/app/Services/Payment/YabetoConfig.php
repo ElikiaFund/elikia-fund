@@ -3,6 +3,7 @@
 namespace App\Services\Payment;
 
 use App\Models\YabetoSetting;
+use Illuminate\Support\Carbon;
 
 /**
  * Resolves the *effective* Yabeto configuration: the admin-managed `yabeto_settings` row takes
@@ -12,6 +13,12 @@ use App\Models\YabetoSetting;
  */
 readonly class YabetoConfig
 {
+    /**
+     * Elikia's chosen Connect fee mode (docs/fr/connect/pricing). Decided once, immutable at
+     * Yabeto's end — we refuse to call Connect endpoints unless the cached activation matches.
+     */
+    public const EXPECTED_CONNECT_MODE = 'account';
+
     public function __construct(
         public string $mode,
         public ?string $secretKey,
@@ -20,6 +27,10 @@ readonly class YabetoConfig
         public bool $isEnabled,
         public ?string $relayUrl,
         public ?string $relaySecret,
+        public ?string $connectMode,
+        public ?Carbon $connectActivationCheckedAt,
+        public float $defaultApplicationFeeRate,
+        public bool $connectEnabled,
     ) {}
 
     public static function resolve(): self
@@ -34,6 +45,10 @@ readonly class YabetoConfig
             isEnabled: $setting->is_enabled,
             relayUrl: config('services.yabeto.relay_url'),
             relaySecret: config('services.yabeto.relay_secret'),
+            connectMode: $setting->connect_mode,
+            connectActivationCheckedAt: $setting->connect_activation_checked_at,
+            defaultApplicationFeeRate: (float) $setting->default_application_fee_rate,
+            connectEnabled: (bool) $setting->connect_enabled,
         );
     }
 
@@ -60,5 +75,18 @@ readonly class YabetoConfig
     public function isReady(): bool
     {
         return $this->isEnabled && ! empty($this->secretKey);
+    }
+
+    /**
+     * Whether Connect-specific routing (per-company connected accounts, direct charges with
+     * on_behalf_of) can be used. Requires: Yabeto is callable at all, Connect is toggled on by
+     * the admin, and the cached activation mode matches Elikia's chosen fee_payer. The cached
+     * mode is refreshed by Admin\YabetoSettingController::connectStatus().
+     */
+    public function isConnectReady(): bool
+    {
+        return $this->isReady()
+            && $this->connectEnabled
+            && $this->connectMode === self::EXPECTED_CONNECT_MODE;
     }
 }

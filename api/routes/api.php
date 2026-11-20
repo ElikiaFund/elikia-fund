@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Admin\AuthController as AdminAuthController;
 use App\Http\Controllers\Api\Admin\CashSessionController as AdminCashSessionController;
+use App\Http\Controllers\Api\Admin\CompanyConnectController;
 use App\Http\Controllers\Api\Admin\CompanyController as AdminCompanyController;
 use App\Http\Controllers\Api\Admin\ContactMessageController as AdminContactMessageController;
 use App\Http\Controllers\Api\Admin\CreditScoreController;
@@ -88,6 +89,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/companies', [CompanyController::class, 'index']);
     Route::post('/companies', [CompanyController::class, 'store']);
     Route::delete('/companies/{company}', [CompanyController::class, 'destroy']);
+
+    // Yabeto Connect — merchant-facing. These are what the mobile KYC flow calls:
+    // showConnectStatus() for the pending/approved/rejected empty-state, and
+    // requestOnboardingLink() for the "Vérifier mon identité" CTA.
+    Route::get('/companies/{company}/yabeto-connect', [CompanyController::class, 'showConnectStatus']);
+    Route::post('/companies/{company}/yabeto-connect/onboarding-link', [CompanyController::class, 'requestOnboardingLink']);
 
     // Every route below requires X-Company-Id — resolved + ownership-checked by
     // ResolveActiveCompany, exposed as $request->company(). Isolates each company's cash flow,
@@ -194,6 +201,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/companies/{company}/financial-dossier', [AdminCompanyController::class, 'financialDossier']);
         Route::delete('/companies/{company}', [AdminCompanyController::class, 'destroy'])->middleware('permission:companies.delete');
 
+        // Yabeto Connect — admin-facing per-company lifecycle. GET is open to any admin with
+        // company view access; the three state-mutating POSTs plus the audit-log read are
+        // gated by `yabeto_connect.manage`, so Support-tier accounts can see KYC state but
+        // not re-issue links or push a compliance refresh.
+        Route::get('/companies/{company}/yabeto-connect', [CompanyConnectController::class, 'show']);
+        Route::get('/companies/{company}/yabeto-connect/audit-log', [CompanyConnectController::class, 'auditLog'])->middleware('permission:yabeto_connect.manage');
+        Route::post('/companies/{company}/yabeto-connect/provision', [CompanyConnectController::class, 'provision'])->middleware('permission:yabeto_connect.manage');
+        Route::post('/companies/{company}/yabeto-connect/onboarding-link', [CompanyConnectController::class, 'issueOnboardingLink'])->middleware('permission:yabeto_connect.manage');
+        Route::post('/companies/{company}/yabeto-connect/compliance', [CompanyConnectController::class, 'refreshCompliance'])->middleware('permission:yabeto_connect.manage');
+
         Route::get('/waitlist', [AdminWaitlistController::class, 'index']);
         Route::delete('/waitlist/{waitlistEntry}', [AdminWaitlistController::class, 'destroy']);
 
@@ -231,5 +248,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/settings/yabeto', [YabetoSettingController::class, 'update'])->middleware('permission:settings.manage');
         Route::post('/settings/yabeto/test-connection', [YabetoSettingController::class, 'testConnection'])->middleware('permission:settings.manage');
         Route::post('/settings/yabeto/register-webhook', [YabetoSettingController::class, 'registerWebhook'])->middleware('permission:settings.manage');
+        Route::post('/settings/yabeto/connect-status', [YabetoSettingController::class, 'connectStatus'])->middleware('permission:settings.manage');
     });
 });

@@ -12,7 +12,17 @@ use Illuminate\Database\Eloquent\Model;
  * plaintext, and `#[Hidden]` keeps them out of JSON even if a future `to_array()` call forgets to
  * exclude them explicitly. Read through `Admin\YabetoSettingController`, never returned raw.
  */
-#[Fillable(['mode', 'account_id', 'secret_key', 'webhook_secret', 'is_enabled'])]
+#[Fillable([
+    'mode',
+    'account_id',
+    'secret_key',
+    'webhook_secret',
+    'is_enabled',
+    'connect_mode',
+    'connect_activation_checked_at',
+    'default_application_fee_rate',
+    'connect_enabled',
+])]
 #[Hidden(['secret_key', 'webhook_secret'])]
 class YabetoSetting extends Model
 {
@@ -22,6 +32,9 @@ class YabetoSetting extends Model
             'secret_key' => 'encrypted',
             'webhook_secret' => 'encrypted',
             'is_enabled' => 'boolean',
+            'connect_enabled' => 'boolean',
+            'connect_activation_checked_at' => 'datetime',
+            'default_application_fee_rate' => 'decimal:2',
         ];
     }
 

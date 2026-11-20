@@ -22,3 +22,10 @@ Schedule::command('tontines:resolve-deletion-requests')->hourly();
 // arrived) — every 15 minutes matches the command's own REFRESH_AFTER_MINUTES grace window, so a
 // stuck row gets its first reconciliation attempt as soon as it's eligible.
 Schedule::command('payments:reconcile-pending')->everyFifteenMinutes();
+
+// Yabeto Connect emits NO webhook on KYC verification changes (docs/fr/connect/accounts/
+// onboarding "Aucun webhook n'est émis…"), so compliance state has to be polled. The mobile
+// app also fires a live refresh on focus, so this schedule is a safety net rather than the
+// primary driver — 15 min matches the "reconcile-pending" cadence and is cheap in steady state
+// (most companies submit documents and then wait on review).
+Schedule::command('yabeto:sync-compliance')->everyFifteenMinutes();
