@@ -25,6 +25,7 @@ Repo-wide files (this file, `.gitignore`, root docs) use the `repo` scope. `api/
 5. **Never commit `CLAUDE.md`.** It is a local, gitignored file for internal notes. Shared instructions belong here, in `AGENTS.md`.
 6. **Never edit a migration that is already on `main`.** Add a new migration instead.
 7. **All user-facing copy is in French** — mobile, back-office, website, API error messages, notifications.
+8. **AI agents never sign their work on GitHub.** No `Co-Authored-By:` trailers, "Generated with …" footers, model names, tool links or any other AI credit in commits, PR titles and descriptions, review comments, issue comments or release notes.
 
 ## Branches
 
@@ -61,7 +62,7 @@ refactor(api): move tontine payout into the Tontine context
 - Imperative subject, ≤ 72 characters, no trailing period.
 - The body explains **why**; the diff already shows what.
 - Keep a commit to one app. Separate mechanical changes (file moves, renames, formatting) from behaviour changes so each is reviewable on its own.
-- AI agents add a `Co-Authored-By:` trailer naming the model.
+- No AI attribution trailers (see rule 8).
 
 ## Pull requests
 
