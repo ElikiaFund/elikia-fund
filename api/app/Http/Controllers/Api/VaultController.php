@@ -245,6 +245,16 @@ class VaultController extends Controller
         $phone = $request->validated('phone');
         $viaConnect = $this->connectGate->routesThroughConnect($vault->company);
 
+        // A company with its own Connect account keeps its real money there. If Connect routing is
+        // off (e.g. an admin rolled `connect_enabled` back), a legacy withdrawal would pay its vault
+        // balance out of Elikia's own Yabeto account while the same funds still sit on the
+        // merchant's — paying twice. Hold withdrawals until routing is restored or support settles it.
+        if (! $viaConnect && $vault->company->hasConnectAccount() && $this->yabeto->isEnabled()) {
+            return response()->json([
+                'message' => 'Les retraits sont momentanément suspendus pour votre compte vérifié. Contactez le support Elikia Fund.',
+            ], 409);
+        }
+
         // A Connect payout always goes to the number the merchant registered during KYC, so it
         // needs neither an operator nor a phone; every other withdrawal needs both.
         if (! $viaConnect && ! $paymentMethod) {

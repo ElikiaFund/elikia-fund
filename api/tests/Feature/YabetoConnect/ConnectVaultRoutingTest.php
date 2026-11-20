@@ -108,6 +108,34 @@ class ConnectVaultRoutingTest extends TestCase
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/payment-intents') && ! isset($r['on_behalf_of']));
     }
 
+    /**
+     * Rolling Connect back must not let a verified merchant withdraw from Elikia's own account
+     * while their real money still sits on their connected account (paying twice).
+     */
+    public function test_a_connect_company_cannot_withdraw_through_the_legacy_flow_after_a_rollback(): void
+    {
+        [$user, $company] = $this->companyWithVault(approved: true);
+        YabetoSetting::current()->update(['connect_enabled' => false]);
+
+        $this->withdraw($user, $company, 5000)
+            ->assertStatus(409)
+            ->assertJsonPath('message', fn ($m) => str_contains($m, 'suspendus'));
+
+        Http::assertNothingSent();
+        $this->assertSame(20000.0, (float) $company->vault->fresh()->balance);
+    }
+
+    public function test_a_legacy_company_cannot_start_identity_verification_itself(): void
+    {
+        [$user, $company] = $this->companyWithVault();
+        Sanctum::actingAs($user, ['*']);
+
+        $this->postJson("/api/companies/{$company->id}/yabeto-connect/onboarding-link")->assertStatus(422);
+
+        Http::assertNothingSent();
+        $this->assertNull($company->fresh()->yabeto_account_id);
+    }
+
     public function test_the_vault_shows_what_is_available_now_and_what_is_still_maturing(): void
     {
         [$user, $company] = $this->companyWithVault(approved: true);

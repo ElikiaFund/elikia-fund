@@ -81,6 +81,13 @@ class CompanyController extends Controller
     {
         abort_unless($company->user_id === $request->user()->id, 403);
 
+        // A legacy company has no verification to do; issuing a link would provision a Connect
+        // account and silently move it onto Connect (locking its money until KYC) — an
+        // owner-level migration decision, not something a merchant tap should trigger.
+        if (! $company->requiresConnect()) {
+            return response()->json(['message' => "Votre entreprise n'a pas besoin de vérification d'identité."], 422);
+        }
+
         try {
             $company = $this->connect->issueOnboardingLink($company, 'mobile');
         } catch (YabetoRequestException $e) {
