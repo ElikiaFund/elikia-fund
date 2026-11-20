@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminAlert;
+use App\Models\Company;
 use App\Models\Contribution;
 use App\Models\VaultMovement;
 use App\Models\YabetoWebhookEvent;
+use App\Services\AdminAlertService;
 use App\Services\ContributionService;
 use App\Services\Payment\YabetoConfig;
 use App\Services\Payment\YabetoEventPayload;
@@ -37,6 +40,7 @@ class YabetoWebhookController extends Controller
         private readonly VaultTransactionService $vaultTransactions,
         private readonly ContributionService $contributions,
         private readonly TontinePayoutService $payouts,
+        private readonly AdminAlertService $adminAlerts,
     ) {}
 
     public function __invoke(Request $request): Response
@@ -154,11 +158,42 @@ class YabetoWebhookController extends Controller
                     'currency' => $payload->dataGet('currency'),
                 ]);
 
+                $this->alertBlockedConnectOperation($payload);
+
                 return;
 
             default:
                 Log::info('Unhandled Yabeto webhook event', ['type' => $payload->type, 'id' => $payload->id]);
         }
+    }
+
+    /**
+     * Yabeto refused a Connect refund/reversal for lack of funds: nothing moves until Elikia tops
+     * up its own Yabeto balance, so staff must hear about it (deduplicated by event id upstream).
+     */
+    private function alertBlockedConnectOperation(YabetoEventPayload $payload): void
+    {
+        $isRefund = $payload->type === 'connect.refund.blocked_insufficient_funds';
+        $shortfall = $payload->dataGet('shortfall');
+        $company = $payload->accountId ? Company::where('yabeto_account_id', $payload->accountId)->value('name') : null;
+
+        $this->adminAlerts->raise(
+            $isRefund ? AdminAlert::CONNECT_REFUND_BLOCKED : AdminAlert::CONNECT_REVERSAL_BLOCKED,
+            ($isRefund ? 'Remboursement Yabeto bloqué' : 'Annulation Yabeto bloquée').' : solde Elikia insuffisant',
+            'Yabeto a refusé '.($isRefund ? 'un remboursement' : 'une annulation').' faute de fonds'
+                .($company ? " pour « {$company} »" : '').'.'
+                .($shortfall !== null ? ' Il manque '.number_format((float) $shortfall, 0, ',', ' ').' FCFA.' : '')
+                .' Approvisionnez le solde Elikia Fund dans le tableau de bord Yabeto pour débloquer l’opération.',
+            [
+                'event_id' => $payload->id,
+                'account' => $payload->accountId,
+                'company' => $company,
+                'required' => $payload->dataGet('required'),
+                'available' => $payload->dataGet('available'),
+                'shortfall' => $shortfall,
+                'currency' => $payload->dataGet('currency'),
+            ],
+        );
     }
 
     /**
