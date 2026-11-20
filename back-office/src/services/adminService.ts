@@ -328,6 +328,33 @@ export type YabetoWebhookRegistration = {
   message?: string
 }
 
+/** Yabeto's hosted identity-verification states; null before the merchant has started. */
+export type YabetoVerificationStatus = 'created' | 'documents_submitted' | 'in_review' | 'approved' | 'rejected' | 'needs_info'
+
+export type CompanyConnect = {
+  id: number
+  name: string
+  /** Signed up after Connect went live — money stays locked until KYC is approved. False = legacy flow. */
+  yabeto_connect_required: boolean
+  yabeto_account_id: string | null
+  yabeto_onboarding_url: string | null
+  yabeto_onboarding_expires_at: string | null
+  yabeto_verification_status: YabetoVerificationStatus | null
+  yabeto_capabilities: { resolved?: boolean; allowed_operations?: string[] } | null
+  yabeto_compliance_checked_at: string | null
+  is_connect_ready: boolean
+}
+
+export type CompanyConnectAuditEntry = {
+  id: number
+  action: string
+  source: 'admin' | 'mobile' | 'schedule' | 'signup' | string
+  result: 'success' | 'failure'
+  reason: string | null
+  created_at: string
+  actor: { id: number; name: string; email: string } | null
+}
+
 export const adminService = {
   stats() {
     return apiService.get<AdminStats>('/admin/stats').then((r) => r.data)
@@ -385,6 +412,30 @@ export const adminService = {
    * request needs the bearer token, which a plain <a href> can't attach. */
   getCompanyFinancialDossier(id: number) {
     return apiService.get(`/admin/companies/${id}/financial-dossier`, { responseType: 'blob' }).then((r) => r.data as Blob)
+  },
+
+  getCompanyConnect(id: number) {
+    return apiService.get<CompanyConnect>(`/admin/companies/${id}/yabeto-connect`).then((r) => r.data)
+  },
+
+  /** Needs `yabeto_connect.manage`. */
+  getCompanyConnectAuditLog(id: number) {
+    return apiService.get<CompanyConnectAuditEntry[]>(`/admin/companies/${id}/yabeto-connect/audit-log`).then((r) => r.data)
+  },
+
+  /** Retries creating the connected account (e.g. after a Yabeto outage at signup). Needs `yabeto_connect.manage`. */
+  provisionCompanyConnect(id: number) {
+    return apiService.post<CompanyConnect>(`/admin/companies/${id}/yabeto-connect/provision`).then((r) => r.data)
+  },
+
+  /** New hosted verification link to send the merchant. Needs `yabeto_connect.manage`. */
+  issueCompanyConnectOnboardingLink(id: number) {
+    return apiService.post<CompanyConnect>(`/admin/companies/${id}/yabeto-connect/onboarding-link`).then((r) => r.data)
+  },
+
+  /** Re-reads KYC state from Yabeto now instead of waiting for the 15-minute sweep. Needs `yabeto_connect.manage`. */
+  refreshCompanyConnectCompliance(id: number) {
+    return apiService.post<CompanyConnect>(`/admin/companies/${id}/yabeto-connect/compliance`).then((r) => r.data)
   },
 
   listWaitlist() {
