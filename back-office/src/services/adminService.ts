@@ -367,6 +367,19 @@ export type CompanyConnectAuditEntry = {
   actor: { id: number; name: string; email: string } | null
 }
 
+/** Something staff must act on (see the API's AdminAlertService). Acknowledging is shared across admins. */
+export type AdminAlert = {
+  id: number
+  type: 'withdrawal_needs_review' | 'connect_refund_blocked' | 'connect_reversal_blocked' | string
+  title: string
+  body: string
+  data: Record<string, unknown> | null
+  vault_movement_id: number | null
+  acknowledged_at: string | null
+  acknowledged_by: { id: number; name: string } | null
+  created_at: string
+}
+
 export const adminService = {
   stats() {
     return apiService.get<AdminStats>('/admin/stats').then((r) => r.data)
@@ -448,6 +461,18 @@ export const adminService = {
   /** Re-reads KYC state from Yabeto now instead of waiting for the 15-minute sweep. Needs `yabeto_connect.manage`. */
   refreshCompanyConnectCompliance(id: number) {
     return apiService.post<CompanyConnect>(`/admin/companies/${id}/yabeto-connect/compliance`).then((r) => r.data)
+  },
+
+  listAlerts() {
+    return apiService.get<AdminAlert[]>('/admin/alerts').then((r) => r.data)
+  },
+
+  acknowledgeAlert(id: number) {
+    return apiService.post<AdminAlert>(`/admin/alerts/${id}/acknowledge`).then((r) => r.data)
+  },
+
+  acknowledgeAllAlerts() {
+    return apiService.post<{ acknowledged: number }>('/admin/alerts/acknowledge-all').then((r) => r.data)
   },
 
   listWaitlist() {
