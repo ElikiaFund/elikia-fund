@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { adminService, type AdminSettings } from '@/services/adminService'
 
-type FeeForm = AdminSettings['fees']
+type FeeForm = Required<AdminSettings['fees']>
 
 const DEFAULT_FEES: FeeForm = {
   contribution_yabeto_percent: 3.5,
@@ -19,6 +19,8 @@ const DEFAULT_FEES: FeeForm = {
   deposit_elikia_fixed: 75,
   withdrawal_yabeto_percent: 2,
   withdrawal_elikia_percent: 0.5,
+  connect_yabeto_percent: 1,
+  connect_collection_fixed: 25,
 }
 
 function FeeField({
@@ -53,7 +55,8 @@ export function FeesTab() {
     setIsLoading(true)
     adminService
       .getSettings()
-      .then((settings) => setFees(settings.fees))
+      // Keys never saved yet (e.g. the Connect pair) fall back to the API's own defaults.
+      .then((settings) => setFees({ ...DEFAULT_FEES, ...settings.fees }))
       .finally(() => setIsLoading(false))
   }, [])
 
@@ -68,7 +71,7 @@ export function FeesTab() {
 
     try {
       const updated = await adminService.updateSettings({ fees })
-      setFees(updated.fees)
+      setFees({ ...DEFAULT_FEES, ...updated.fees })
       toast.success('Frais enregistrés.')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue.')
@@ -163,6 +166,29 @@ export function FeesTab() {
               <p className="pb-2 text-sm text-muted-foreground">Total : {withdrawalTotal.toFixed(1)}%</p>
             </div>
             <p className="text-xs text-muted-foreground">Aucun frais fixe sur les retraits.</p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <h3 className="text-sm font-medium">Comptes vérifiés (Yabeto Connect)</h3>
+            <div className="flex flex-wrap items-end gap-4">
+              <FeeField
+                label="Supplément Connect"
+                value={fees.connect_yabeto_percent}
+                onChange={(value) => updateField('connect_yabeto_percent', value)}
+                suffix="%"
+              />
+              <FeeField
+                label="Frais fixe d'encaissement"
+                value={fees.connect_collection_fixed}
+                onChange={(value) => updateField('connect_collection_fixed', value)}
+                suffix="FCFA"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ce que Yabeto facture en plus sur chaque dépôt et cotisation d'un compte vérifié : son pourcentage d'encaissement ci-dessus, plus ce
+              supplément et ce frais fixe (à la place du frais fixe Yabeto du dépôt). La part Elikia Fund ne change pas. Les retraits d'un compte
+              vérifié sont gratuits.
+            </p>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
