@@ -44,6 +44,7 @@ const KNOWN_STATUS_LABELS: Record<string, string> = {
   failed: 'Échoué',
   expired: 'Expiré',
   canceled: 'Annulé',
+  needs_review: 'En vérification',
 };
 
 /** null for a quiet terminal success — every other status (known or not) gets a callout. */
@@ -243,7 +244,10 @@ export default function VaultScreen() {
   }
 
   const recentMovements = movements.slice(0, RECENT_COUNT);
-  const stuckMovement = movements.find((m) => !TERMINAL_STATUSES.includes(m.status)) ?? null;
+  // A withdrawal Yabeto couldn't confirm is with the Elikia team (`needs_review`): its money stays
+  // reserved and "Vérifier" can't settle it, so it gets its own notice instead of the pending one.
+  const stuckMovement = movements.find((m) => !TERMINAL_STATUSES.includes(m.status) && m.status !== 'needs_review') ?? null;
+  const movementInReview = movements.find((m) => m.status === 'needs_review') ?? null;
   const needsVerification = connectStatus?.requires_verification === true;
   const connectBalances = vault.connect ?? null;
   const isConnectVault = connectBalances !== null || connectStatus?.is_connect_ready === true;
@@ -258,6 +262,16 @@ export default function VaultScreen() {
             <Ionicons name="cloud-offline-outline" size={16} color={theme.textSecondary} />
             <ThemedText type="small" themeColor="textSecondary" style={styles.offlineBannerText}>
               Hors ligne, dernières données connues affichées. Les dépôts et retraits nécessitent une connexion.
+            </ThemedText>
+          </View>
+        )}
+
+        {movementInReview && (
+          <View style={[styles.pendingBanner, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={theme.textSecondary} />
+            <ThemedText type="small" themeColor="textSecondary" style={styles.pendingBannerText}>
+              Retrait de {currency.format(Number(movementInReview.amount))} en vérification par l&apos;équipe Elikia Fund. Le montant reste
+              réservé et vous serez notifié dès qu&apos;il sera réglé.
             </ThemedText>
           </View>
         )}
