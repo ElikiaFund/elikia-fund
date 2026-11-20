@@ -13,8 +13,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useCompany } from '@/context/company-context';
 import { useTheme } from '@/hooks/use-theme';
 import { formatCycleLabel } from '@/lib/cycle-format';
+import { identityVerificationCompanyId } from '@/services/apiService';
 import { contributionPercent, feeService, FALLBACK_FEE_RATES, type FeeRates } from '@/services/feeService';
 import {
   groupService,
@@ -54,6 +56,7 @@ export default function GroupDetailScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { companies } = useCompany();
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [group, setGroup] = useState<Group | null>(null);
@@ -161,6 +164,16 @@ export default function GroupDetailScreen() {
       load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
+
+      // Contributions are locked until the *organising* company is verified. Only its owner can
+      // fix that, so offer the shortcut to them; other members just see the message above.
+      const companyToVerify = identityVerificationCompanyId(e);
+      if (companyToVerify !== null && companies.some((c) => c.id === companyToVerify)) {
+        Alert.alert('Vérification requise', "Vérifiez l'identité de votre entreprise pour ouvrir les cotisations de cette tontine.", [
+          { text: 'Plus tard', style: 'cancel' },
+          { text: 'Vérifier', onPress: () => router.push({ pathname: '/identity-verification', params: { companyId: String(companyToVerify) } }) },
+        ]);
+      }
     } finally {
       isContributingRef.current = false;
       setIsContributing(false);

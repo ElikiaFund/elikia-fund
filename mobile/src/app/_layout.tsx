@@ -114,6 +114,7 @@ function RootNavigator() {
         <Stack.Screen name="add-transaction" options={{ presentation: 'modal', title: 'Nouvelle transaction' }} />
         <Stack.Screen name="transactions" options={{ title: 'Transactions' }} />
         <Stack.Screen name="vault-transaction" options={{ presentation: 'modal', headerShown: false }} />
+        <Stack.Screen name="identity-verification" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="create-group" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="join-group" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="group/[id]" options={{ headerShown: false }} />

@@ -1,10 +1,26 @@
 import { apiService, ApiError } from '@/services/apiService';
 
+/**
+ * A verified (Yabeto Connect) merchant's money sits on their own Yabeto account, where each
+ * credit matures (7 days by default) before it can be withdrawn.
+ */
+export type ConnectBalances = {
+  /** Matured — the only amount that can be withdrawn, and only all at once. */
+  available: number;
+  /** Credited but still maturing. */
+  pending: number;
+  /** Reserved for a withdrawal in flight. */
+  held: number;
+  next_maturity_at: string | null;
+};
+
 export type Vault = {
   id: number;
   company_id: number;
   balance: string;
   created_at: string;
+  /** Null for a legacy vault, or when Yabeto couldn't be reached. */
+  connect?: ConnectBalances | null;
 };
 
 export type VaultMovement = {
@@ -74,6 +90,14 @@ export const vaultService = {
     return apiService
       .post<VaultTransactionResult>('/vault/withdraw', { amount, pin, payment_method: paymentMethod, phone })
       .then((r) => r.data);
+  },
+
+  /**
+   * Verified (Connect) vaults only: pays out exactly the available amount to the Mobile Money
+   * number registered during identity verification — no operator or phone to choose.
+   */
+  withdrawAvailable(amount: number, pin: string) {
+    return apiService.post<VaultTransactionResult>('/vault/withdraw', { amount, pin }).then((r) => r.data);
   },
 
   /** Manual fallback for a deposit/withdrawal stuck `processing` — re-checks the payment status with Yabeto directly instead of waiting on the webhook. */
