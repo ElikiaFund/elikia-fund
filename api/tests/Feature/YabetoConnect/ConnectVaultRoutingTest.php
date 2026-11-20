@@ -30,16 +30,20 @@ class ConnectVaultRoutingTest extends TestCase
             'secret_key' => 'test-secret-key',
             'mode' => 'sandbox',
             'connect_enabled' => true,
-            'connect_mode' => 'account',
-            'default_application_fee_rate' => 2,
+            'connect_mode' => 'platform',
         ]);
 
         Http::fake([
             'pay.sandbox.yabetoopay.com/v1/payment-intents/*/confirm' => Http::response(['intentId' => 'pi_test', 'status' => 'processing']),
             'pay.sandbox.yabetoopay.com/v1/payment-intents' => Http::response(['id' => 'pi_test', 'clientSecret' => 'cs_test', 'status' => 'pending']),
             'pay.sandbox.yabetoopay.com/v1/connect/accounts/*/withdrawals' => Http::response([
-                'id' => 'wd_test', 'object' => 'connect_withdrawal', 'amount' => 20000, 'currency' => 'xaf', 'status' => 'succeeded',
+                'id' => 'wd_test', 'object' => 'connect_withdrawal', 'amount' => 15000, 'currency' => 'xaf', 'status' => 'succeeded',
             ], 201),
+            // 15 000 matured and withdrawable, 5 000 still maturing — the vault ledger holds 20 000.
+            'pay.sandbox.yabetoopay.com/v1/connect/accounts/acct_test' => Http::response([
+                'id' => 'acct_test', 'object' => 'connect_account', 'status' => 'active',
+                'balances' => [['currency' => 'xaf', 'balance' => 15000, 'pending_balance' => 5000, 'held_balance' => 0, 'next_maturity_at' => '2026-10-23T00:00:00.000Z']],
+            ]),
             'pay.sandbox.yabetoopay.com/v1/disbursements' => Http::response(['id' => 'dis_test', 'status' => 'processing']),
         ]);
     }
@@ -61,7 +65,11 @@ class ConnectVaultRoutingTest extends TestCase
 
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/payment-intents')
             && $r['on_behalf_of'] === 'acct_test'
-            && (float) $r['application_fee_rate'] === 2.0);
+            // Elikia's default deposit fee (0.5 % + 75) on 10 000 = 125, i.e. 1.25 % of this charge.
+            && (float) $r['application_fee_rate'] === 1.25);
+
+        // Yabeto's Connect fee (3.5 % + 1 % + 25 = 475) and Elikia's 125 come off the gross.
+        $this->assertDatabaseHas('vault_movements', ['type' => 'deposit', 'provider_fee_amount' => 475, 'platform_fee_amount' => 125, 'net_amount' => 9400]);
     }
 
     public function test_a_connect_company_still_pending_kyc_cannot_move_money_at_all(): void
@@ -100,29 +108,65 @@ class ConnectVaultRoutingTest extends TestCase
         Http::assertSent(fn (Request $r) => str_ends_with($r->url(), '/payment-intents') && ! isset($r['on_behalf_of']));
     }
 
-    public function test_a_partial_withdrawal_is_refused_for_a_connect_vault_before_any_network_call(): void
+    public function test_the_vault_shows_what_is_available_now_and_what_is_still_maturing(): void
+    {
+        [$user, $company] = $this->companyWithVault(approved: true);
+        Sanctum::actingAs($user, ['*']);
+
+        $this->getJson('/api/vault', ['X-Company-Id' => (string) $company->id])
+            ->assertOk()
+            ->assertJsonPath('balance', '20000.00')
+            ->assertJsonPath('connect.available', 15000)
+            ->assertJsonPath('connect.pending', 5000)
+            ->assertJsonPath('connect.next_maturity_at', '2026-10-23T00:00:00.000Z');
+    }
+
+    public function test_a_legacy_vault_has_no_connect_balances(): void
+    {
+        [$user, $company] = $this->companyWithVault();
+        Sanctum::actingAs($user, ['*']);
+
+        $this->getJson('/api/vault', ['X-Company-Id' => (string) $company->id])->assertOk()->assertJsonPath('connect', null);
+    }
+
+    public function test_a_connect_withdrawal_must_ask_for_exactly_the_available_amount(): void
     {
         [$user, $company] = $this->companyWithVault(approved: true);
 
-        $this->withdraw($user, $company, 5000)
+        $this->withdraw($user, $company, 20000)
             ->assertStatus(409)
-            ->assertJsonPath('message', fn ($m) => str_contains($m, 'totalité du solde'));
+            ->assertJsonPath('message', fn ($m) => str_contains($m, 'totalité du montant disponible (15 000 FCFA)'));
 
-        Http::assertNothingSent();
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/withdrawals'));
         $this->assertSame(20000.0, (float) $company->vault->fresh()->balance);
     }
 
-    public function test_a_full_withdrawal_uses_the_connect_payout_with_an_idempotency_key_and_no_amount(): void
+    public function test_a_connect_withdrawal_pays_the_available_amount_to_the_registered_number_for_free(): void
     {
         [$user, $company] = $this->companyWithVault(approved: true);
+        Sanctum::actingAs($user, ['*']);
 
-        $this->withdraw($user, $company, 20000)->assertSuccessful();
+        // No payment method or phone: Yabeto pays the number registered during KYC.
+        $this->postJson('/api/vault/withdraw', ['amount' => 15000, 'pin' => '1234'], ['X-Company-Id' => (string) $company->id])
+            ->assertSuccessful()
+            ->assertJsonPath('movement.status', 'succeeded')
+            ->assertJsonPath('movement.fee_amount', '0.00');
 
         Http::assertSent(fn (Request $r) => str_contains($r->url(), '/connect/accounts/acct_test/withdrawals')
             && $r->hasHeader('Idempotency-Key')
             && ! isset($r['amount']));
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/disbursements'));
-        $this->assertSame(0.0, (float) $company->vault->fresh()->balance);
+        $this->assertSame(5000.0, (float) $company->vault->fresh()->balance, 'the still-maturing part stays in the vault');
+    }
+
+    public function test_a_legacy_withdrawal_still_needs_a_payment_method(): void
+    {
+        [$user, $company] = $this->companyWithVault();
+        Sanctum::actingAs($user, ['*']);
+
+        $this->postJson('/api/vault/withdraw', ['amount' => 5000, 'pin' => '1234', 'phone' => '242068166360'], ['X-Company-Id' => (string) $company->id])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Moyen de paiement requis.');
     }
 
     /** @return array{0: User, 1: Company} */

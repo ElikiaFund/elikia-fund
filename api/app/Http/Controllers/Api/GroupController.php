@@ -22,7 +22,6 @@ use App\Models\Group;
 use App\Models\GroupCycleRecipient;
 use App\Models\GroupRoundGoal;
 use App\Models\User;
-use App\Models\YabetoSetting;
 use App\Services\ContributionService;
 use App\Services\FeeService;
 use App\Services\GroupCycleRecipientService;
@@ -608,9 +607,11 @@ class GroupController extends Controller
 
         $cyclePeriod = $group->currentCyclePeriod();
         $amount = (float) $group->contribution_amount;
+        // The pot lands on the organising company's account, so its routing decides the fees.
+        $viaConnect = $this->connectGate->routesThroughConnect($group->company);
 
         try {
-            $fee = $this->fees->contribution($amount);
+            $fee = $this->fees->contribution($amount, $viaConnect);
         } catch (FeeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -642,20 +643,14 @@ class GroupController extends Controller
         }
 
         try {
-            // Phase A routing: a tontine group's funds flow via `on_behalf_of` when the group's
-            // owning company is a Connect-approved merchant. Legacy groups stay on plain
-            // intents, where contributions aggregate on Elikia's own Yabeto account exactly
-            // as before. The branch is on the *group's company*, not the contributing
-            // member — because that's where the pool lands (see TontinePayoutService's
-            // "payout lands in the group's company's vault" comment).
-            $ownerCompany = $group->company;
-            if ($this->connectGate->routesThroughConnect($ownerCompany)) {
-                $feeRate = (float) YabetoSetting::current()->default_application_fee_rate;
-
+            // Connect: the contribution settles `on_behalf_of` the organising company — the pot
+            // belongs in its vault (see TontinePayoutService), so it lands on its own Yabeto
+            // account. Legacy groups keep pooling on Elikia's account as before.
+            if ($viaConnect) {
                 $intent = $this->yabeto->createPaymentIntentOnBehalfOf(
                     (int) round($amount),
-                    $ownerCompany->yabeto_account_id,
-                    $feeRate,
+                    $group->company->yabeto_account_id,
+                    $this->fees->applicationFeeRate($fee, $amount),
                     "Cotisation tontine « {$group->name} »",
                     ['group_id' => $group->id, 'user_id' => $user->id, 'contribution_id' => $contribution->id, 'routing' => 'connect'],
                 );

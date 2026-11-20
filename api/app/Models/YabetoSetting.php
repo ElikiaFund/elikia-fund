@@ -20,7 +20,6 @@ use Illuminate\Database\Eloquent\Model;
     'is_enabled',
     'connect_mode',
     'connect_activation_checked_at',
-    'default_application_fee_rate',
     'connect_enabled',
 ])]
 #[Hidden(['secret_key', 'webhook_secret'])]
@@ -34,7 +33,6 @@ class YabetoSetting extends Model
             'is_enabled' => 'boolean',
             'connect_enabled' => 'boolean',
             'connect_activation_checked_at' => 'datetime',
-            'default_application_fee_rate' => 'decimal:2',
         ];
     }
 

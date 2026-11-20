@@ -26,7 +26,9 @@ class VaultTransactionRequest extends FormRequest
         return [
             'amount' => ['required', 'numeric', 'min:1'],
             'pin' => ['required', 'digits:4'],
-            'payment_method' => ['required', 'string', Rule::in(['mtn_momo', 'airtel_money'])],
+            // Required everywhere except a verified Connect withdrawal, which always pays the
+            // number registered during KYC — enforced in VaultController.
+            'payment_method' => ['nullable', 'string', Rule::in(['mtn_momo', 'airtel_money'])],
             // Only actually required when Yabeto is enabled — enforced in VaultController, not
             // here, so the simulated path (the default) doesn't force every dev/demo user to
             // type a phone number for a mock transaction.

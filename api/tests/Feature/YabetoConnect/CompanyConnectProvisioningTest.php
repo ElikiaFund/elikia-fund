@@ -99,7 +99,7 @@ class CompanyConnectProvisioningTest extends TestCase
             'secret_key' => 'test-secret-key',
             'mode' => 'sandbox',
             'connect_enabled' => true,
-            'connect_mode' => 'account',
+            'connect_mode' => 'platform',
         ]);
     }
 }
