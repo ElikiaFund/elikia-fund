@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\User;
 use App\Models\Vault;
 use App\Models\YabetoSetting;
+use App\Services\VaultTransactionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Hash;
@@ -185,6 +186,23 @@ class ConnectVaultRoutingTest extends TestCase
             && ! isset($r['amount']));
         Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/disbursements'));
         $this->assertSame(5000.0, (float) $company->vault->fresh()->balance, 'the still-maturing part stays in the vault');
+    }
+
+    /** A Connect payout takes everything available, so one under review must block the next. */
+    public function test_a_connect_payout_under_review_blocks_a_new_one(): void
+    {
+        [$user, $company] = $this->companyWithVault(approved: true);
+        $company->vault->movements()->create([
+            'type' => 'withdraw', 'amount' => 3000, 'net_amount' => 3000, 'status' => 'needs_review',
+            'provider' => VaultTransactionService::CONNECT_PROVIDER,
+        ]);
+        Sanctum::actingAs($user, ['*']);
+
+        $this->postJson('/api/vault/withdraw', ['amount' => 15000, 'pin' => '1234'], ['X-Company-Id' => (string) $company->id])
+            ->assertStatus(409)
+            ->assertJsonPath('message', fn ($m) => str_contains($m, 'vérification'));
+
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), '/withdrawals'));
     }
 
     public function test_a_legacy_withdrawal_still_needs_a_payment_method(): void

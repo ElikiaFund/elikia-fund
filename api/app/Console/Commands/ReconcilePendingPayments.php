@@ -14,6 +14,7 @@ use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\VaultTransactionService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\ConnectionException;
 
 /**
@@ -25,8 +26,10 @@ use Illuminate\Http\Client\ConnectionException;
  * all refuse a new attempt while a `processing` row already exists for that user/vault). Give
  * Yabeto a head start (REFRESH_AFTER_MINUTES) before even asking — most resolve via the webhook
  * within seconds — then ask directly; if Yabeto itself still can't resolve it after a much longer
- * window (ABANDON_AFTER_HOURS), treat it as abandoned (mark failed, which refunds a reserved
- * withdrawal) rather than leave the user blocked indefinitely.
+ * window (ABANDON_AFTER_HOURS), treat it as abandoned rather than leave the user blocked
+ * indefinitely: deposits and contributions are marked failed (no money left Elikia's side), but
+ * withdrawals become `needs_review` instead — refunding one Yabeto may have paid out would pay the
+ * merchant twice. Support settles those from the back-office.
  */
 class ReconcilePendingPayments extends Command
 {
@@ -60,6 +63,7 @@ class ReconcilePendingPayments extends Command
         }
 
         $resolved = 0;
+        $flagged = 0;
 
         Contribution::whereNotIn('status', YabetoStatus::TERMINAL)
             ->whereNotNull('yabeto_reference')
@@ -96,7 +100,7 @@ class ReconcilePendingPayments extends Command
             ->whereNotNull('yabeto_reference')
             ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
             ->with('vault.company.user')
-            ->chunkById(50, function ($pending) use (&$resolved, $yabeto, $vaultTransactions, $paymentNotifications) {
+            ->chunkById(50, function ($pending) use (&$resolved, &$flagged, $yabeto, $vaultTransactions, $paymentNotifications) {
                 foreach ($pending as $movement) {
                     $status = $this->fetchStatus(
                         fn () => $movement->type === 'deposit'
@@ -106,6 +110,16 @@ class ReconcilePendingPayments extends Command
                     );
 
                     if ($status === null) {
+                        continue;
+                    }
+
+                    // A withdrawal we gave up on goes to support, never to a refund (see
+                    // abandonIfOldEnough()).
+                    if ($status['status'] === YabetoStatus::NEEDS_REVIEW) {
+                        if ($vaultTransactions->flagForReview($movement, $status['message'])) {
+                            $flagged++;
+                        }
+
                         continue;
                     }
 
@@ -129,6 +143,24 @@ class ReconcilePendingPayments extends Command
                     }
                 }
             });
+
+        // A legacy withdrawal whose request died before Yabeto answered has no reference to look
+        // up, so nothing above can ever resolve it — and it may or may not have been paid.
+        $flagged += $this->flagStuckWithdrawals(
+            $vaultTransactions,
+            'yabeto',
+            fn ($query) => $query->whereNull('yabeto_reference')->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES)),
+            "La demande de retrait n'a pas reçu de réponse de Yabeto : impossible de savoir si le versement a eu lieu.",
+        );
+
+        // Past Yabeto's 24h idempotency window a Connect payout can no longer be replayed safely,
+        // so an unresolved one goes to support too.
+        $flagged += $this->flagStuckWithdrawals(
+            $vaultTransactions,
+            VaultTransactionService::CONNECT_PROVIDER,
+            fn ($query) => $query->where('created_at', '<=', now()->subHours(self::ABANDON_AFTER_HOURS)),
+            "Le retrait Connect n'a pas pu être confirmé auprès de Yabeto dans les {$this->hours()}h.",
+        );
 
         // Connect payouts are synchronous, so one stuck `processing` was interrupted mid-request.
         // Replaying it with its original Idempotency-Key returns the real outcome (Yabeto keeps it
@@ -156,7 +188,7 @@ class ReconcilePendingPayments extends Command
                 }
             });
 
-        $this->info("Paiements résolus : {$resolved}.");
+        $this->info("Paiements résolus : {$resolved}. Retraits à vérifier : {$flagged}.");
 
         return self::SUCCESS;
     }
@@ -183,12 +215,54 @@ class ReconcilePendingPayments extends Command
     }
 
     /**
+     * Sends unresolvable in-flight withdrawals of one provider to support.
+     *
+     * @param  \Closure(Builder): mixed  $scope  narrows which rows count as stuck
+     */
+    private function flagStuckWithdrawals(VaultTransactionService $vaultTransactions, string $provider, \Closure $scope, string $reason): int
+    {
+        $flagged = 0;
+
+        $query = VaultMovement::where('type', 'withdraw')
+            ->where('provider', $provider)
+            ->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT);
+        $scope($query);
+
+        $query->chunkById(50, function ($pending) use (&$flagged, $vaultTransactions, $reason) {
+            foreach ($pending as $movement) {
+                if ($vaultTransactions->flagForReview($movement, $reason)) {
+                    $flagged++;
+                }
+            }
+        });
+
+        return $flagged;
+    }
+
+    /**
      * @param  Contribution|VaultMovement  $row
      */
     private function abandonIfOldEnough($row): ?array
     {
+        // Already with support: keep asking Yabeto for a real outcome, never give up twice.
+        if ($row->status === YabetoStatus::NEEDS_REVIEW) {
+            return null;
+        }
+
         if ($row->created_at->greaterThan(now()->subHours(self::ABANDON_AFTER_HOURS))) {
             return null;
+        }
+
+        // Giving up on a withdrawal must never refund it: Yabeto may well have paid it out, and a
+        // refund would let the merchant withdraw the same money again. It goes to support.
+        // Deposits and contributions can fail safely — no money left Elikia's side.
+        if ($row instanceof VaultMovement && $row->type === 'withdraw') {
+            return [
+                'status' => YabetoStatus::NEEDS_REVIEW,
+                'succeeded' => false,
+                'failed' => false,
+                'message' => "Yabeto n'a pas pu confirmer ce retrait après {$this->hours()}h : versement à vérifier avant tout remboursement.",
+            ];
         }
 
         return [

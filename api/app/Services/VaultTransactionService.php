@@ -150,7 +150,7 @@ class VaultTransactionService
         $movement = DB::transaction(function () use ($vault, $amount, $fee, $methodLabel, $phone) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
+            if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT)->exists()) {
                 throw new VaultTransactionException('Un retrait est déjà en cours de confirmation.');
             }
 
@@ -276,8 +276,11 @@ class VaultTransactionService
         $movement = DB::transaction(function () use ($vault, $available, $fee) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
+            // Unlike a legacy withdrawal, a Connect payout under review still blocks: payouts take
+            // everything available on the merchant's Yabeto account, so a new one could pay out
+            // the very funds support is still checking.
             if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
-                throw new VaultTransactionException('Un retrait est déjà en cours de confirmation.');
+                throw new VaultTransactionException('Un retrait est déjà en cours de confirmation ou de vérification par notre équipe.');
             }
 
             // Reserved up front like a legacy withdrawal; refunded by resolveMovementStatus() if
@@ -354,7 +357,7 @@ class VaultTransactionService
         $stuck = $vault->movements()
             ->where('type', 'withdraw')
             ->where('provider', self::CONNECT_PROVIDER)
-            ->whereNotIn('status', YabetoStatus::TERMINAL)
+            ->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT)
             ->first();
 
         if ($stuck) {
@@ -363,9 +366,83 @@ class VaultTransactionService
     }
 
     /**
+     * Parks a withdrawal Yabeto can't confirm either way. Auto-failing it would refund the vault
+     * even though the payout may have gone through — paying the merchant twice from Elikia's
+     * account — so the money stays reserved and support decides (settleReview()). Null if the
+     * movement already has an outcome or is already flagged.
+     */
+    public function flagForReview(VaultMovement $movement, string $reason): ?VaultMovement
+    {
+        $flagged = DB::transaction(function () use ($movement, $reason) {
+            /** @var VaultMovement|null $locked */
+            $locked = VaultMovement::whereKey($movement->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->type !== 'withdraw' || ! YabetoStatus::isPending($locked->status) || $locked->status === YabetoStatus::NEEDS_REVIEW) {
+                return null;
+            }
+
+            $locked->update(['status' => YabetoStatus::NEEDS_REVIEW, 'review_reason' => $reason]);
+
+            return $locked->fresh();
+        });
+
+        if ($flagged) {
+            Log::warning('Withdrawal flagged for manual review — Yabeto could not confirm it', [
+                'movement_id' => $flagged->id,
+                'vault_id' => $flagged->vault_id,
+                'amount' => (float) $flagged->amount,
+                'yabeto_reference' => $flagged->yabeto_reference,
+                'reason' => $reason,
+            ]);
+        }
+
+        return $flagged;
+    }
+
+    /**
+     * Support's verdict on a flagged withdrawal, after checking Yabeto's dashboard: `succeeded`
+     * keeps the reserved money out of the vault, `failed` refunds it. Records who and why.
+     *
+     * @param  'succeeded'|'failed'  $outcome
+     *
+     * @throws VaultTransactionException if the movement isn't awaiting review any more
+     */
+    public function settleReview(VaultMovement $movement, string $outcome, int $reviewerId, ?string $note): VaultMovement
+    {
+        $settled = DB::transaction(function () use ($movement, $outcome, $reviewerId, $note) {
+            /** @var VaultMovement $locked */
+            $locked = VaultMovement::whereKey($movement->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== YabetoStatus::NEEDS_REVIEW) {
+                throw new VaultTransactionException("Ce retrait n'est plus en attente de vérification.");
+            }
+
+            if ($outcome === 'failed') {
+                Vault::whereKey($locked->vault_id)->lockForUpdate()->firstOrFail()->increment('balance', $locked->amount);
+            }
+
+            $locked->update([
+                'status' => $outcome,
+                'reviewed_by_user_id' => $reviewerId,
+                'reviewed_at' => now(),
+                'review_note' => $note,
+            ]);
+
+            return $locked->fresh();
+        });
+
+        // Same as every other path that confirms a withdrawal (see resolveMovementStatus()).
+        if ($outcome === 'succeeded') {
+            $this->fraudDetection->evaluate($settled);
+        }
+
+        return $settled;
+    }
+
+    /**
      * The only place a movement's balance side-effect is ever applied — deposits credit the vault
      * exactly once on the succeeded transition; withdrawals (already debited eagerly at
-     * withdraw() time) refund exactly once on the failed transition. Locked so a webhook delivery
+     * withdraw() time) refund exactly once on a failed/expired/canceled transition. Locked so a webhook delivery
      * racing a manual refresh-status call — or two racing webhook deliveries — can never apply
      * the same transition twice. Only ever transitions a movement out of 'processing': a
      * movement already terminal is left alone, since a late/duplicate/contradictory status
@@ -381,6 +458,12 @@ class VaultTransactionService
                 return null;
             }
 
+            // A flagged withdrawal only leaves review for a real outcome — a "still processing"
+            // answer must not quietly put it back in flight.
+            if ($movement->status === YabetoStatus::NEEDS_REVIEW && YabetoStatus::isPending($newStatus)) {
+                return null;
+            }
+
             $vault = Vault::whereKey($movement->vault_id)->lockForUpdate()->first();
 
             if ($vault) {
@@ -388,7 +471,7 @@ class VaultTransactionService
                     // Credit only the post-fee amount — the gap between gross (what Yabeto
                     // collected) and net (what actually lands in the vault) is the fee.
                     $vault->increment('balance', $movement->net_amount);
-                } elseif ($movement->type === 'withdraw' && $newStatus === 'failed') {
+                } elseif ($movement->type === 'withdraw' && in_array($newStatus, YabetoStatus::FAILURES, true)) {
                     // Refund the full gross amount that was reserved at withdraw() time.
                     $vault->increment('balance', $movement->amount);
                 }
@@ -425,7 +508,7 @@ class VaultTransactionService
         $stuck = $vault->movements()
             ->where('type', $type)
             ->where('provider', 'yabeto')
-            ->whereNotIn('status', YabetoStatus::TERMINAL)
+            ->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT)
             ->whereNotNull('yabeto_reference')
             ->first();
 
