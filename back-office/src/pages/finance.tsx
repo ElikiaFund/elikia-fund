@@ -19,10 +19,11 @@ import { ForecastCallout } from '@/components/dashboard/forecast-callout'
 import { RecentRevenueTable } from '@/components/dashboard/recent-revenue-table'
 import { RevenueTrendChart } from '@/components/dashboard/revenue-trend-chart'
 import { TontinesChart } from '@/components/dashboard/tontines-chart'
+import { WithdrawalsReviewCard } from '@/components/dashboard/withdrawals-review-card'
 import type { RevenueEvent } from '@/components/dashboard/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePageTitle } from '@/hooks/use-page-title'
-import { adminService } from '@/services/adminService'
+import { adminService, type AdminVaultMovement } from '@/services/adminService'
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 })
 
@@ -32,10 +33,13 @@ export function FinancePage() {
   const [range, setRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 30), to: new Date() })
   const [isLoading, setIsLoading] = useState(true)
   const [events, setEvents] = useState<RevenueEvent[]>([])
+  const [toReview, setToReview] = useState<AdminVaultMovement[]>([])
 
   useEffect(() => {
     Promise.all([adminService.listGroups(), adminService.listVaultMovements()])
       .then(([groups, vaultMovements]) => {
+        setToReview(vaultMovements.filter((m) => m.type === 'withdraw' && m.status === 'needs_review'))
+
         // fee_amount/provider_fee_amount/platform_fee_amount are computed and persisted once, at
         // creation time (FeeService), before Yabeto has confirmed anything — a contribution/
         // movement still 'processing' or that later resolves 'failed' carries the same fee fields
@@ -108,6 +112,8 @@ export function FinancePage() {
       <div className="flex justify-end">
         <DateRangeFilter value={range} onChange={setRange} />
       </div>
+
+      <WithdrawalsReviewCard movements={toReview} onSettled={(settled) => setToReview((list) => list.filter((m) => m.id !== settled.id))} />
 
       <FinanceStatCards current={current} previous={previous} />
 
