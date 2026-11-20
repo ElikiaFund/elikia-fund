@@ -29,7 +29,7 @@ class AdminAlertRaised extends Mailable
                 'body' => $this->alert->body,
                 // Withdrawals under review are settled from Finance; everything else is listed
                 // with the alerts themselves.
-                'path' => $this->alert->type === AdminAlert::WITHDRAWAL_NEEDS_REVIEW ? '/finance' : '/',
+                'path' => $this->alert->type === AdminAlert::WITHDRAWAL_NEEDS_REVIEW ? '/finances' : '/',
             ],
         );
     }
