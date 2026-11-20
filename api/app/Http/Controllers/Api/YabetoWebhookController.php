@@ -23,7 +23,8 @@ use Illuminate\Support\Facades\Log;
  * authoritative confirmation path for anything that came back `processing` from a synchronous
  * request (see VaultController/GroupController). See yabeto.md §7 and docs/fr/connect/webhooks.
  *
- * Handles both the plain legacy events (intent.completed / disbursement.completed) AND the 7
+ * Handles the payment events (intent.succeeded/failed, disbursement.succeeded/failed, plus the
+ * older intent.completed / disbursement.completed names) AND the 7
  * Connect events, with per-event dedup gated by the yabeto_webhook_events table (required
  * because `connect.*_blocked_insufficient_funds` have no idempotency anchor on Yabeto's side).
  */
@@ -94,11 +95,14 @@ class YabetoWebhookController extends Controller
      */
     private function dispatch(YabetoEventPayload $payload): void
     {
-        // Legacy events carry the reference and status at the top level of the body.
-        $reference = (string) ($payload->body['id'] ?? $payload->body['intentId'] ?? '');
-        $status = (string) ($payload->body['status'] ?? '');
+        [$reference, $status] = $this->referenceAndStatus($payload);
 
         switch ($payload->type) {
+            // What Yabeto actually sends (seen on live deliveries): intent.succeeded / intent.failed
+            // and disbursement.succeeded / disbursement.failed, in the `{id: evt_…, type, data}`
+            // envelope. The older names are kept for any destination still on them.
+            case 'intent.succeeded':
+            case 'intent.failed':
             case 'intent.completed':
             case 'payment_intent.succeeded':
                 if ($reference && $status) {
@@ -107,11 +111,18 @@ class YabetoWebhookController extends Controller
 
                 return;
 
+            case 'disbursement.succeeded':
+            case 'disbursement.failed':
             case 'disbursement.completed':
                 if ($reference && $status) {
                     $this->resolveDisbursement($reference, $status);
                 }
 
+                return;
+
+                // Creation notices carry no outcome; the matching succeeded/failed event follows.
+            case 'intent.created':
+            case 'disbursement.created':
                 return;
 
                 // Connect: an application fee was collected on direct-charge capture
@@ -148,6 +159,31 @@ class YabetoWebhookController extends Controller
             default:
                 Log::info('Unhandled Yabeto webhook event', ['type' => $payload->type, 'id' => $payload->id]);
         }
+    }
+
+    /**
+     * The payment reference and status an event is about. Yabeto's envelope nests them —
+     * `data.intent.{id,status}` for intent events, `data.{id,status}` for disbursements — while
+     * the old flat format had them at the top level, where `id` is now the *event* id (evt_…).
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function referenceAndStatus(YabetoEventPayload $payload): array
+    {
+        $intent = $payload->data['intent'] ?? null;
+
+        if (is_array($intent)) {
+            return [(string) ($intent['id'] ?? ''), (string) ($intent['status'] ?? '')];
+        }
+
+        if (isset($payload->data['id'])) {
+            return [(string) $payload->data['id'], (string) ($payload->data['status'] ?? '')];
+        }
+
+        return [
+            (string) ($payload->body['id'] ?? $payload->body['intentId'] ?? ''),
+            (string) ($payload->body['status'] ?? ''),
+        ];
     }
 
     /**
