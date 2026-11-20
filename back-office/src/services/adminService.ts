@@ -253,8 +253,20 @@ export type AdminVaultMovement = {
   net_amount: string
   status: string
   created_at: string
+  note: string | null
+  phone: string | null
+  yabeto_reference: string | null
+  provider: string | null
+  /** Why a withdrawal was parked as `needs_review` (Yabeto couldn't confirm it either way). */
+  review_reason: string | null
+  reviewed_at: string | null
+  review_note: string | null
+  reviewer: { id: number; name: string } | null
   vault: { id: number; company_id: number; company: { id: number; name: string; user: { id: number; name: string } } }
 }
+
+/** `succeeded`: Yabeto's dashboard shows the payout went through. `failed`: it didn't — the vault is refunded. */
+export type SettleOutcome = 'succeeded' | 'failed'
 
 export type VaultSecurityEventType = 'pin_failed' | 'pin_locked' | 'activated' | 'flagged_transaction'
 
@@ -516,6 +528,11 @@ export const adminService = {
 
   listVaultMovements() {
     return apiService.get<AdminVaultMovement[]>('/admin/vault-movements').then((r) => r.data)
+  },
+
+  /** Settles a `needs_review` withdrawal. Needs `vault_movements.settle`; the password is re-checked server-side. */
+  settleVaultMovement(id: number, payload: { outcome: SettleOutcome; password: string; note?: string }) {
+    return apiService.post<AdminVaultMovement>(`/admin/vault-movements/${id}/settle`, payload).then((r) => r.data)
   },
 
   listScoringCriteria() {
