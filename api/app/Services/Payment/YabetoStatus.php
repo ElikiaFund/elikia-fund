@@ -17,7 +17,15 @@ namespace App\Services\Payment;
 class YabetoStatus
 {
     /** Public so callers can also build `whereNotIn('status', ...)` queries against it. */
-    public const TERMINAL = ['succeeded', 'failed', 'expired', 'canceled'];
+    /**
+     * 'completed' is ours, not Yabeto's: the simulated (Yabeto disabled) path and tontine payouts
+     * record it. It's final too — left out, a past simulated movement counted as "in flight" and
+     * blocked every real deposit/withdrawal once Yabeto was switched on.
+     */
+    public const TERMINAL = ['succeeded', 'completed', 'failed', 'expired', 'canceled'];
+
+    /** Final outcomes where the money did NOT move — a reserved withdrawal is refunded on any of them. */
+    public const FAILURES = ['failed', 'expired', 'canceled'];
 
     /**
      * Ours, not Yabeto's: a withdrawal Yabeto couldn't confirm either way within the reconcile

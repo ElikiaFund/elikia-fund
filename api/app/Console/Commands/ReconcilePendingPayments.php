@@ -14,6 +14,7 @@ use App\Services\PaymentNotificationService;
 use App\Services\TontinePayoutService;
 use App\Services\VaultTransactionService;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\ConnectionException;
 
 /**
@@ -112,11 +113,9 @@ class ReconcilePendingPayments extends Command
                         continue;
                     }
 
-                    // Giving up on a withdrawal must never refund it blindly: Yabeto may well have
-                    // paid it out, and refunding would let the merchant withdraw the same money
-                    // again. Park it for support instead. (Deposits can still fail safely — no
-                    // money left Elikia's side.)
-                    if (($status['abandoned'] ?? false) && $movement->type === 'withdraw') {
+                    // A withdrawal we gave up on goes to support, never to a refund (see
+                    // abandonIfOldEnough()).
+                    if ($status['status'] === YabetoStatus::NEEDS_REVIEW) {
                         if ($vaultTransactions->flagForReview($movement, $status['message'])) {
                             $flagged++;
                         }
@@ -147,32 +146,21 @@ class ReconcilePendingPayments extends Command
 
         // A legacy withdrawal whose request died before Yabeto answered has no reference to look
         // up, so nothing above can ever resolve it — and it may or may not have been paid.
-        VaultMovement::where('type', 'withdraw')
-            ->where('provider', 'yabeto')
-            ->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT)
-            ->whereNull('yabeto_reference')
-            ->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES))
-            ->chunkById(50, function ($pending) use (&$flagged, $vaultTransactions) {
-                foreach ($pending as $movement) {
-                    if ($vaultTransactions->flagForReview($movement, "La demande de retrait n'a pas reçu de réponse de Yabeto : impossible de savoir si le versement a eu lieu.")) {
-                        $flagged++;
-                    }
-                }
-            });
+        $flagged += $this->flagStuckWithdrawals(
+            $vaultTransactions,
+            'yabeto',
+            fn ($query) => $query->whereNull('yabeto_reference')->where('created_at', '<=', now()->subMinutes(self::REFRESH_AFTER_MINUTES)),
+            "La demande de retrait n'a pas reçu de réponse de Yabeto : impossible de savoir si le versement a eu lieu.",
+        );
 
         // Past Yabeto's 24h idempotency window a Connect payout can no longer be replayed safely,
         // so an unresolved one goes to support too.
-        VaultMovement::where('type', 'withdraw')
-            ->where('provider', VaultTransactionService::CONNECT_PROVIDER)
-            ->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT)
-            ->where('created_at', '<=', now()->subHours(self::ABANDON_AFTER_HOURS))
-            ->chunkById(50, function ($pending) use (&$flagged, $vaultTransactions) {
-                foreach ($pending as $movement) {
-                    if ($vaultTransactions->flagForReview($movement, "Le retrait Connect n'a pas pu être confirmé auprès de Yabeto dans les {$this->hours()}h.")) {
-                        $flagged++;
-                    }
-                }
-            });
+        $flagged += $this->flagStuckWithdrawals(
+            $vaultTransactions,
+            VaultTransactionService::CONNECT_PROVIDER,
+            fn ($query) => $query->where('created_at', '<=', now()->subHours(self::ABANDON_AFTER_HOURS)),
+            "Le retrait Connect n'a pas pu être confirmé auprès de Yabeto dans les {$this->hours()}h.",
+        );
 
         // Connect payouts are synchronous, so one stuck `processing` was interrupted mid-request.
         // Replaying it with its original Idempotency-Key returns the real outcome (Yabeto keeps it
@@ -227,6 +215,31 @@ class ReconcilePendingPayments extends Command
     }
 
     /**
+     * Sends unresolvable in-flight withdrawals of one provider to support.
+     *
+     * @param  \Closure(Builder): mixed  $scope  narrows which rows count as stuck
+     */
+    private function flagStuckWithdrawals(VaultTransactionService $vaultTransactions, string $provider, \Closure $scope, string $reason): int
+    {
+        $flagged = 0;
+
+        $query = VaultMovement::where('type', 'withdraw')
+            ->where('provider', $provider)
+            ->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT);
+        $scope($query);
+
+        $query->chunkById(50, function ($pending) use (&$flagged, $vaultTransactions, $reason) {
+            foreach ($pending as $movement) {
+                if ($vaultTransactions->flagForReview($movement, $reason)) {
+                    $flagged++;
+                }
+            }
+        });
+
+        return $flagged;
+    }
+
+    /**
      * @param  Contribution|VaultMovement  $row
      */
     private function abandonIfOldEnough($row): ?array
@@ -240,11 +253,22 @@ class ReconcilePendingPayments extends Command
             return null;
         }
 
+        // Giving up on a withdrawal must never refund it: Yabeto may well have paid it out, and a
+        // refund would let the merchant withdraw the same money again. It goes to support.
+        // Deposits and contributions can fail safely — no money left Elikia's side.
+        if ($row instanceof VaultMovement && $row->type === 'withdraw') {
+            return [
+                'status' => YabetoStatus::NEEDS_REVIEW,
+                'succeeded' => false,
+                'failed' => false,
+                'message' => "Yabeto n'a pas pu confirmer ce retrait après {$this->hours()}h : versement à vérifier avant tout remboursement.",
+            ];
+        }
+
         return [
             'status' => 'failed',
             'succeeded' => false,
             'failed' => true,
-            'abandoned' => true,
             'message' => "Yabeto n'a pas pu confirmer cette transaction après {$this->hours()}h — abandonnée automatiquement.",
         ];
     }

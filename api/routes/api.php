@@ -187,7 +187,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy'])->middleware('permission:users.delete');
         Route::get('/users/{user}/vault-security-events', VaultSecurityEventController::class);
         Route::get('/vault-movements', [VaultMovementController::class, 'index']);
-        Route::post('/vault-movements/{movement}/settle', [VaultMovementController::class, 'settle'])->middleware('permission:vault_movements.settle');
+        Route::post('/vault-movements/{movement}/settle', [VaultMovementController::class, 'settle'])->middleware(['permission:vault_movements.settle', 'throttle:5,1']);
 
         Route::get('/transactions', [AdminTransactionController::class, 'index']);
         Route::delete('/transactions/{transaction}', [AdminTransactionController::class, 'destroy'])->middleware('permission:transactions.delete');

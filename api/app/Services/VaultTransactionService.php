@@ -276,8 +276,11 @@ class VaultTransactionService
         $movement = DB::transaction(function () use ($vault, $available, $fee) {
             $locked = Vault::whereKey($vault->id)->lockForUpdate()->firstOrFail();
 
-            if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::NOT_IN_FLIGHT)->exists()) {
-                throw new VaultTransactionException('Un retrait est déjà en cours de confirmation.');
+            // Unlike a legacy withdrawal, a Connect payout under review still blocks: payouts take
+            // everything available on the merchant's Yabeto account, so a new one could pay out
+            // the very funds support is still checking.
+            if ($locked->movements()->where('type', 'withdraw')->whereNotIn('status', YabetoStatus::TERMINAL)->exists()) {
+                throw new VaultTransactionException('Un retrait est déjà en cours de confirmation ou de vérification par notre équipe.');
             }
 
             // Reserved up front like a legacy withdrawal; refunded by resolveMovementStatus() if
@@ -363,15 +366,6 @@ class VaultTransactionService
     }
 
     /**
-     * The only place a movement's balance side-effect is ever applied — deposits credit the vault
-     * exactly once on the succeeded transition; withdrawals (already debited eagerly at
-     * withdraw() time) refund exactly once on the failed transition. Locked so a webhook delivery
-     * racing a manual refresh-status call — or two racing webhook deliveries — can never apply
-     * the same transition twice. Only ever transitions a movement out of 'processing': a
-     * movement already terminal is left alone, since a late/duplicate/contradictory status
-     * report for an already-resolved movement must never mutate the balance again.
-     */
-    /**
      * Parks a withdrawal Yabeto can't confirm either way. Auto-failing it would refund the vault
      * even though the payout may have gone through — paying the merchant twice from Elikia's
      * account — so the money stays reserved and support decides (settleReview()). Null if the
@@ -415,7 +409,7 @@ class VaultTransactionService
      */
     public function settleReview(VaultMovement $movement, string $outcome, int $reviewerId, ?string $note): VaultMovement
     {
-        return DB::transaction(function () use ($movement, $outcome, $reviewerId, $note) {
+        $settled = DB::transaction(function () use ($movement, $outcome, $reviewerId, $note) {
             /** @var VaultMovement $locked */
             $locked = VaultMovement::whereKey($movement->id)->lockForUpdate()->firstOrFail();
 
@@ -436,8 +430,24 @@ class VaultTransactionService
 
             return $locked->fresh();
         });
+
+        // Same as every other path that confirms a withdrawal (see resolveMovementStatus()).
+        if ($outcome === 'succeeded') {
+            $this->fraudDetection->evaluate($settled);
+        }
+
+        return $settled;
     }
 
+    /**
+     * The only place a movement's balance side-effect is ever applied — deposits credit the vault
+     * exactly once on the succeeded transition; withdrawals (already debited eagerly at
+     * withdraw() time) refund exactly once on a failed/expired/canceled transition. Locked so a webhook delivery
+     * racing a manual refresh-status call — or two racing webhook deliveries — can never apply
+     * the same transition twice. Only ever transitions a movement out of 'processing': a
+     * movement already terminal is left alone, since a late/duplicate/contradictory status
+     * report for an already-resolved movement must never mutate the balance again.
+     */
     public function resolveMovementStatus(int $movementId, string $newStatus): ?VaultMovement
     {
         $movement = DB::transaction(function () use ($movementId, $newStatus) {
@@ -461,7 +471,7 @@ class VaultTransactionService
                     // Credit only the post-fee amount — the gap between gross (what Yabeto
                     // collected) and net (what actually lands in the vault) is the fee.
                     $vault->increment('balance', $movement->net_amount);
-                } elseif ($movement->type === 'withdraw' && $newStatus === 'failed') {
+                } elseif ($movement->type === 'withdraw' && in_array($newStatus, YabetoStatus::FAILURES, true)) {
                     // Refund the full gross amount that was reserved at withdraw() time.
                     $vault->increment('balance', $movement->amount);
                 }

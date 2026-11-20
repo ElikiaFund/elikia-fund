@@ -86,6 +86,29 @@ class WithdrawalReviewTest extends TestCase
         $this->assertSame(20000.0, (float) $vault->fresh()->balance, 'a confirmed failure refunds the reserved amount');
     }
 
+    public function test_a_canceled_withdrawal_is_refunded_too(): void
+    {
+        Http::fake(['*/disbursement/*' => Http::response(['id' => 'dis_canceled', 'status' => 'canceled'])]);
+        [$vault, $movement] = $this->stuckMovement('withdraw', reference: 'dis_canceled', hoursAgo: 30, status: 'needs_review');
+
+        $this->artisan('payments:reconcile-pending')->assertSuccessful();
+
+        $this->assertSame('canceled', $movement->fresh()->status);
+        $this->assertSame(20000.0, (float) $vault->fresh()->balance, 'no money moved, so the reserved amount comes back');
+    }
+
+    public function test_a_past_simulated_withdrawal_does_not_block_a_real_one(): void
+    {
+        Http::fake(['*/disbursements' => Http::response(['id' => 'dis_real', 'status' => 'processing'])]);
+        [$vault, , $user] = $this->stuckMovement('withdraw', reference: null, hoursAgo: 48, status: 'completed');
+        $vault->movements()->first()->update(['provider' => null]);
+        Sanctum::actingAs($user, ['*']);
+
+        $this->postJson('/api/vault/withdraw', [
+            'amount' => 5000, 'pin' => '1234', 'payment_method' => 'mtn_momo', 'phone' => '242068166360',
+        ], ['X-Company-Id' => (string) $vault->company_id])->assertSuccessful();
+    }
+
     public function test_a_flagged_withdrawal_does_not_block_the_next_one(): void
     {
         Http::fake(['*/disbursements' => Http::response(['id' => 'dis_next', 'status' => 'processing'])]);
