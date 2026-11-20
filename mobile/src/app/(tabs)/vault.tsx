@@ -12,11 +12,13 @@ import { useCompany } from '@/context/company-context';
 import { useVault } from '@/context/vault-context';
 import { useTheme } from '@/hooks/use-theme';
 import { buildVaultStatementHtml, printAndShareHtml } from '@/lib/pdf';
+import { companyService, type ConnectStatus } from '@/services/companyService';
 import { vaultService, type Vault, type VaultMovement } from '@/services/vaultService';
 
 const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'XAF', maximumFractionDigits: 0 });
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' });
 const fullDateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' });
+const maturityFormatter = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long' });
 const RECENT_COUNT = 5;
 
 const MOVEMENT_META: Record<VaultMovement['type'], { label: string; icon: keyof typeof Ionicons.glyphMap; isCredit: boolean }> = {
@@ -67,6 +69,8 @@ export default function VaultScreen() {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [selectedMovement, setSelectedMovement] = useState<VaultMovement | null>(null);
   const [isCheckingMovementStatus, setIsCheckingMovementStatus] = useState(false);
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
+  const activeCompanyId = activeCompany?.id ?? null;
 
   // Refetch vault status every time this tab gains focus, and re-lock every time it loses
   // focus — the PIN protects each visit, not just the first. On a failed refetch (offline),
@@ -97,11 +101,28 @@ export default function VaultScreen() {
           }
         });
 
+      // Yabeto Connect: whether this company's money is locked until its identity is verified.
+      // Legacy companies always come back unlocked; a failed read just hides the banner.
+      if (activeCompanyId !== null) {
+        companyService
+          .getConnectStatus(activeCompanyId)
+          .then((status) => {
+            if (!cancelled) {
+              setConnectStatus(status);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setConnectStatus(null);
+            }
+          });
+      }
+
       return () => {
         cancelled = true;
         lock();
       };
-    }, [lock]),
+    }, [lock, activeCompanyId]),
   );
 
   // Derived straight from the already-fetched movements list (server data, not transient local
@@ -223,6 +244,11 @@ export default function VaultScreen() {
 
   const recentMovements = movements.slice(0, RECENT_COUNT);
   const stuckMovement = movements.find((m) => !TERMINAL_STATUSES.includes(m.status)) ?? null;
+  const needsVerification = connectStatus?.requires_verification === true;
+  const connectBalances = vault.connect ?? null;
+  const isConnectVault = connectBalances !== null || connectStatus?.is_connect_ready === true;
+  const isVerificationInReview =
+    connectStatus?.verification_status === 'in_review' || connectStatus?.verification_status === 'documents_submitted';
 
   return (
     <ThemedView style={styles.container}>
@@ -254,6 +280,22 @@ export default function VaultScreen() {
           </View>
         )}
 
+        {needsVerification && (
+          <Pressable
+            onPress={() => router.push('/identity-verification')}
+            style={[styles.verificationCard, { backgroundColor: theme.backgroundElement, borderColor: theme.tint }]}
+          >
+            <Ionicons name="id-card-outline" size={22} color={theme.tint} />
+            <View style={styles.verificationContent}>
+              <ThemedText type="smallBold">{isVerificationInReview ? 'Vérification en cours' : 'Vérifiez votre identité'}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Les dépôts et retraits s&apos;ouvriront dès que Yabeto aura validé votre identité.
+              </ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+          </Pressable>
+        )}
+
         <View style={styles.balanceCard}>
           <ThemedText type="small" themeColor="textSecondary">
             Solde du coffre
@@ -263,18 +305,57 @@ export default function VaultScreen() {
           </ThemedText>
         </View>
 
+        {connectBalances && (
+          <View style={[styles.connectCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <View style={styles.connectRow}>
+              <ThemedText type="small" themeColor="textSecondary">
+                Disponible au retrait
+              </ThemedText>
+              <ThemedText type="smallBold">{currency.format(connectBalances.available)}</ThemedText>
+            </View>
+            <View style={styles.connectRow}>
+              <ThemedText type="small" themeColor="textSecondary">
+                En maturation
+              </ThemedText>
+              <ThemedText type="smallBold">{currency.format(connectBalances.pending)}</ThemedText>
+            </View>
+            {connectBalances.held > 0 && (
+              <View style={styles.connectRow}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Retrait en cours
+                </ThemedText>
+                <ThemedText type="smallBold">{currency.format(connectBalances.held)}</ThemedText>
+              </View>
+            )}
+            {connectBalances.pending > 0 && connectBalances.next_maturity_at && (
+              <ThemedText type="small" themeColor="textSecondary">
+                Prochaine disponibilité le {maturityFormatter.format(new Date(connectBalances.next_maturity_at))}.
+              </ThemedText>
+            )}
+          </View>
+        )}
+
         <View style={styles.actions}>
           <VaultAction
             icon="add-circle-outline"
             label="Déposer"
-            disabled={isOffline}
-            onPress={() => router.push('/vault-transaction?type=deposit')}
+            disabled={isOffline || needsVerification}
+            onPress={() =>
+              router.push({ pathname: '/vault-transaction', params: isConnectVault ? { type: 'deposit', connect: '1' } : { type: 'deposit' } })
+            }
           />
           <VaultAction
             icon="arrow-down-circle-outline"
             label="Retirer"
-            disabled={isOffline}
-            onPress={() => router.push({ pathname: '/vault-transaction', params: { type: 'withdraw', balance: vault.balance } })}
+            disabled={isOffline || needsVerification}
+            onPress={() =>
+              router.push({
+                pathname: '/vault-transaction',
+                params: connectBalances
+                  ? { type: 'withdraw', connect: '1', available: String(connectBalances.available), pending: String(connectBalances.pending) }
+                  : { type: 'withdraw', balance: vault.balance },
+              })
+            }
           />
         </View>
 
@@ -474,6 +555,30 @@ const styles = StyleSheet.create({
   },
   balanceCard: {
     marginTop: Spacing.three,
+  },
+  verificationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+  },
+  verificationContent: {
+    flex: 1,
+    gap: 2,
+  },
+  connectCard: {
+    gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    padding: Spacing.three,
+    marginTop: Spacing.four,
+  },
+  connectRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   balance: {
     fontSize: 44,

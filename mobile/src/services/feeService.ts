@@ -11,6 +11,9 @@ export type FeeRates = {
   deposit_elikia_fixed: number;
   withdrawal_yabeto_percent: number;
   withdrawal_elikia_percent: number;
+  /** Yabeto Connect surcharge and fixed collection fee — absent from caches written by older builds. */
+  connect_yabeto_percent?: number;
+  connect_collection_fixed?: number;
 };
 
 /** Matches the confirmed defaults seeded server-side — used only if a brand-new install has never synced once. */
@@ -23,6 +26,8 @@ export const FALLBACK_FEE_RATES: FeeRates = {
   deposit_elikia_fixed: 75,
   withdrawal_yabeto_percent: 2,
   withdrawal_elikia_percent: 0.5,
+  connect_yabeto_percent: 1,
+  connect_collection_fixed: 25,
 };
 
 const CACHE_KEY = 'elikia_fee_rates';
@@ -55,4 +60,17 @@ export function withdrawalPercent(rates: FeeRates): number {
 
 export function depositFixed(rates: FeeRates): number {
   return rates.deposit_yabeto_fixed + rates.deposit_elikia_fixed;
+}
+
+/**
+ * Deposit fee for a verified (Yabeto Connect) vault: Yabeto bills its collection rate plus the
+ * Connect surcharge and a fixed fee instead of the plain fixed fee — mirrors FeeService::deposit().
+ */
+export function connectDepositFee(amount: number, rates: FeeRates): number {
+  const connectPercent = rates.connect_yabeto_percent ?? FALLBACK_FEE_RATES.connect_yabeto_percent ?? 0;
+  const connectFixed = rates.connect_collection_fixed ?? FALLBACK_FEE_RATES.connect_collection_fixed ?? 0;
+  const provider = (amount * (rates.deposit_yabeto_percent + connectPercent)) / 100 + connectFixed;
+  const platform = (amount * rates.deposit_elikia_percent) / 100 + rates.deposit_elikia_fixed;
+
+  return Math.round(provider + platform);
 }

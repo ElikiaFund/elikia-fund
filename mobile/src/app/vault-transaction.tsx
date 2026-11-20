@@ -10,7 +10,16 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { depositFixed, depositPercent, feeService, FALLBACK_FEE_RATES, type FeeRates, withdrawalPercent } from '@/services/feeService';
+import { identityVerificationCompanyId } from '@/services/apiService';
+import {
+  connectDepositFee,
+  depositFixed,
+  depositPercent,
+  feeService,
+  FALLBACK_FEE_RATES,
+  type FeeRates,
+  withdrawalPercent,
+} from '@/services/feeService';
 import { vaultService, type PaymentMethod, type VaultMovement } from '@/services/vaultService';
 
 type TransactionKind = 'deposit' | 'withdraw';
@@ -21,12 +30,18 @@ const currency = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: '
 export default function VaultTransactionScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string; balance?: string }>();
+  const params = useLocalSearchParams<{ type?: string; balance?: string; connect?: string; available?: string; pending?: string }>();
   const kind: TransactionKind = params.type === 'withdraw' ? 'withdraw' : 'deposit';
   const availableBalance = params.balance ? Number(params.balance) : null;
+  // Verified (Yabeto Connect) vault: a withdrawal pays out exactly the matured amount, all at once,
+  // to the number registered during identity verification — no amount, operator or phone to pick.
+  const isConnect = params.connect === '1';
+  const isConnectWithdraw = kind === 'withdraw' && isConnect;
+  const connectAvailable = Math.floor(Number(params.available ?? 0));
+  const connectPending = Number(params.pending ?? 0);
 
   const [step, setStep] = useState<Step>('amount');
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(isConnectWithdraw && connectAvailable > 0 ? String(connectAvailable) : '');
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [phone, setPhone] = useState('+242 ');
   const [pin, setPin] = useState('');
@@ -54,13 +69,33 @@ export default function VaultTransactionScreen() {
   const estimatedFee =
     amountValue > 0
       ? kind === 'deposit'
-        ? Math.round((amountValue * depositPercent(feeRates)) / 100 + depositFixed(feeRates))
-        : Math.round((amountValue * withdrawalPercent(feeRates)) / 100)
+        ? isConnect
+          ? connectDepositFee(amountValue, feeRates)
+          : Math.round((amountValue * depositPercent(feeRates)) / 100 + depositFixed(feeRates))
+        : isConnectWithdraw
+          ? 0
+          : Math.round((amountValue * withdrawalPercent(feeRates)) / 100)
       : 0;
   const estimatedNet = amountValue > 0 ? amountValue - estimatedFee : 0;
 
   const finalFee = resultMovement ? Number(resultMovement.fee_amount) : estimatedFee;
   const finalNet = resultMovement ? Number(resultMovement.net_amount) : estimatedNet;
+
+  function successMessage(): string {
+    if (isConnectWithdraw) {
+      return isPending
+        ? 'Votre retrait est en cours de traitement. Le coffre se mettra à jour automatiquement une fois le versement confirmé.'
+        : `${currency.format(Number(resultMovement?.amount ?? amountValue))} ont été versés sur votre numéro Mobile Money enregistré, sans frais.`;
+    }
+
+    if (isPending) {
+      return `Une demande de confirmation a été envoyée au ${phone}. Le coffre se mettra à jour automatiquement une fois le paiement confirmé.`;
+    }
+
+    return kind === 'deposit'
+      ? `Vous avez déposé ${currency.format(amountValue)}. Après frais (${currency.format(finalFee)}), ${currency.format(finalNet)} ont été ajoutés à votre coffre.`
+      : `${currency.format(amountValue)} ont été retirés de votre coffre. Vous recevrez ${currency.format(finalNet)} sur votre Mobile Money (frais : ${currency.format(finalFee)}).`;
+  }
 
   function handlePhoneChange(text: string) {
     // Keep the +242 country prefix locked in place — only track the local digits.
@@ -72,19 +107,24 @@ export default function VaultTransactionScreen() {
     setError(null);
     setHasError(false);
 
-    if (text.length === 4 && method && !isSubmittingRef.current) {
+    if (text.length === 4 && (method || isConnectWithdraw) && !isSubmittingRef.current) {
       isSubmittingRef.current = true;
       setIsSubmitting(true);
 
       try {
-        const result =
-          kind === 'deposit'
-            ? await vaultService.deposit(amountValue, text, method, phone)
-            : await vaultService.withdraw(amountValue, text, method, phone);
+        const result = isConnectWithdraw
+          ? await vaultService.withdrawAvailable(amountValue, text)
+          : kind === 'deposit'
+            ? await vaultService.deposit(amountValue, text, method!, phone)
+            : await vaultService.withdraw(amountValue, text, method!, phone);
         setResultStatus(result.movement.status);
         setResultMovement(result.movement);
         setStep('success');
       } catch (e) {
+        if (identityVerificationCompanyId(e) !== null) {
+          router.replace('/identity-verification');
+          return;
+        }
         setError(e instanceof Error ? e.message : 'Une erreur est survenue. Veuillez réessayer.');
         setHasError(true);
         setPin('');
@@ -102,7 +142,7 @@ export default function VaultTransactionScreen() {
           <View style={styles.headerRow}>
             {step !== 'amount' && step !== 'success' && (
               <Pressable
-                onPress={() => setStep(step === 'pin' ? 'phone' : step === 'phone' ? 'method' : 'amount')}
+                onPress={() => setStep(step === 'pin' && !isConnectWithdraw ? 'phone' : step === 'phone' ? 'method' : 'amount')}
                 style={styles.backButton}
                 hitSlop={8}
               >
@@ -111,7 +151,44 @@ export default function VaultTransactionScreen() {
             )}
           </View>
 
-          {step === 'amount' && (
+          {step === 'amount' && isConnectWithdraw && (
+            <View style={styles.content}>
+              <ThemedText type="title" style={styles.title}>
+                Retirer
+              </ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+                {connectAvailable > 0
+                  ? 'Un retrait porte sur la totalité du montant disponible. Il est versé sans frais sur le numéro Mobile Money enregistré lors de la vérification de votre identité.'
+                  : "Aucun montant n'est encore disponible : vos derniers versements sont en période de maturation chez Yabeto."}
+              </ThemedText>
+
+              <ThemedText type="title" style={styles.fixedAmount}>
+                {currency.format(connectAvailable)}
+              </ThemedText>
+
+              {connectPending > 0 && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.connectHint}>
+                  {currency.format(connectPending)} en maturation resteront dans votre coffre.
+                </ThemedText>
+              )}
+
+              <ThemedText type="small" themeColor="textSecondary" style={styles.connectHint}>
+                Envie d&apos;en garder une partie ? Retirez le disponible, puis redéposez ce que vous souhaitez épargner.
+              </ThemedText>
+
+              <Pressable
+                onPress={() => setStep('pin')}
+                disabled={connectAvailable <= 0}
+                style={[styles.primaryButton, { backgroundColor: theme.tint }, connectAvailable <= 0 && styles.buttonDisabled]}
+              >
+                <ThemedText type="smallBold" style={{ color: theme.tintForeground }}>
+                  Retirer {currency.format(connectAvailable)}
+                </ThemedText>
+              </Pressable>
+            </View>
+          )}
+
+          {step === 'amount' && !isConnectWithdraw && (
             <View style={styles.content}>
               <ThemedText type="title" style={styles.title}>
                 {title}
@@ -281,11 +358,7 @@ export default function VaultTransactionScreen() {
                 {isPending ? 'Confirmation en attente' : kind === 'deposit' ? 'Dépôt effectué' : 'Retrait effectué'}
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-                {isPending
-                  ? `Une demande de confirmation a été envoyée au ${phone}. Le coffre se mettra à jour automatiquement une fois le paiement confirmé.`
-                  : kind === 'deposit'
-                    ? `Vous avez déposé ${currency.format(amountValue)}. Après frais (${currency.format(finalFee)}), ${currency.format(finalNet)} ont été ajoutés à votre coffre.`
-                    : `${currency.format(amountValue)} ont été retirés de votre coffre. Vous recevrez ${currency.format(finalNet)} sur votre Mobile Money (frais : ${currency.format(finalFee)}).`}
+                {successMessage()}
               </ThemedText>
 
               <Pressable onPress={() => router.back()} style={[styles.primaryButton, { backgroundColor: theme.tint }]}>
@@ -293,6 +366,18 @@ export default function VaultTransactionScreen() {
                   Terminé
                 </ThemedText>
               </Pressable>
+
+              {isConnectWithdraw && !isPending && (
+                <Pressable
+                  onPress={() => router.replace({ pathname: '/vault-transaction', params: { type: 'deposit', connect: '1' } })}
+                  style={styles.secondaryButton}
+                  hitSlop={8}
+                >
+                  <ThemedText type="small" style={{ color: theme.tint, fontWeight: '700' }}>
+                    Redéposer une partie en épargne
+                  </ThemedText>
+                </Pressable>
+              )}
             </View>
           )}
         </ScrollView>
@@ -446,5 +531,18 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  fixedAmount: {
+    fontSize: 40,
+    lineHeight: 48,
+    marginBottom: Spacing.three,
+  },
+  connectHint: {
+    textAlign: 'center',
+    maxWidth: 320,
+    marginBottom: Spacing.three,
+  },
+  secondaryButton: {
+    marginTop: Spacing.four,
   },
 });

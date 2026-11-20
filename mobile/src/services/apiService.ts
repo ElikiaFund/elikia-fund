@@ -14,6 +14,10 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number | undefined,
     public readonly errors: Record<string, string[]> | undefined,
+    /** Stable machine-readable code some API errors carry (e.g. `identity_verification_required`). */
+    public readonly code?: string,
+    /** Raw response body, for errors that carry extra fields alongside `code`. */
+    public readonly data?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -55,6 +59,22 @@ apiService.interceptors.response.use(
     }
 
     const message = error.response?.data?.message ?? 'Une erreur est survenue. Veuillez réessayer.';
-    return Promise.reject(new ApiError(message, error.response?.status, error.response?.data?.errors));
+    const data = error.response?.data;
+    return Promise.reject(
+      new ApiError(message, error.response?.status, data?.errors, typeof data?.code === 'string' ? data.code : undefined, data),
+    );
   },
 );
+
+/**
+ * A Yabeto Connect company tried to move money before its identity was verified. Returns the
+ * company that needs verifying, or null for any other error.
+ */
+export function identityVerificationCompanyId(e: unknown): number | null {
+  if (!(e instanceof ApiError) || e.code !== 'identity_verification_required') {
+    return null;
+  }
+
+  const companyId = Number(e.data?.company_id);
+  return Number.isFinite(companyId) ? companyId : null;
+}
