@@ -25,6 +25,10 @@ import {
   VAULT_DEPOSIT_FEE_FIXED_FCFA,
   VAULT_DEPOSIT_FEE_PERCENT,
   VAULT_WITHDRAWAL_FEE_PERCENT,
+  VERIFIED_DEPOSIT_FEE_FIXED_FCFA,
+  VERIFIED_DEPOSIT_FEE_PERCENT,
+  VERIFIED_TONTINE_FEE_FIXED_FCFA,
+  VERIFIED_TONTINE_FEE_PERCENT,
 } from "@/lib/constants";
 
 export const metadata: Metadata = buildMetadata({
@@ -83,7 +87,17 @@ const FAQS = [
   {
     question: "Mes transactions sont-elles réelles ou simulées ?",
     answer:
-      "Une fois l'application installée, vos transactions, votre coffre et vos tontines sont bien réels et vous appartiennent. Les paiements par mobile money peuvent, selon la disponibilité, être traités par un prestataire tiers ou simulés pendant la phase actuelle.",
+      "Elles sont bien réelles et vous appartiennent. Les paiements par mobile money (MTN Mobile Money, Airtel Money) sont traités par notre prestataire de paiement agréé, Yabetoo.",
+  },
+  {
+    question: "Qu'est-ce qu'un compte vérifié ?",
+    answer:
+      "Pour les nouvelles entreprises, votre argent est conservé sur votre propre compte de paiement chez Yabetoo, et non chez Elikia Fund. Avant tout dépôt, retrait ou cotisation, Yabetoo vérifie votre identité directement depuis l'application (pièce d'identité, selfie et numéro Mobile Money de retrait). Elikia Fund ne reçoit pas vos documents, seulement le résultat de la vérification.",
+  },
+  {
+    question: "Pourquoi mon argent n'est-il pas disponible immédiatement au retrait ?",
+    answer:
+      "Sur un compte vérifié, chaque montant reçu passe par une période de maturation chez Yabetoo (7 jours par défaut) avant de pouvoir être retiré. L'application vous indique toujours le montant disponible et celui encore en maturation. Un retrait porte sur la totalité du montant disponible, versé sans frais sur votre numéro Mobile Money vérifié ; vous pouvez ensuite redéposer ce que vous souhaitez garder en épargne.",
   },
   {
     question: "Elikia Fund fonctionne-t-il sans connexion internet ?",
@@ -106,11 +120,11 @@ const FAQS = [
   },
   {
     question: "Quels frais s'appliquent aux tontines ?",
-    answer: `Une commission fixe de ${TONTINE_FEE_PERCENT} % est prélevée sur chaque cotisation versée dans une tontine. Ce montant est toujours affiché clairement, cotisation par cotisation.`,
+    answer: `Une commission fixe de ${TONTINE_FEE_PERCENT} % est prélevée sur chaque cotisation versée dans une tontine. Lorsque la tontine appartient à une entreprise au compte vérifié, les frais sont de ${VERIFIED_TONTINE_FEE_PERCENT} % + ${VERIFIED_TONTINE_FEE_FIXED_FCFA} FCFA. Ce montant est toujours affiché clairement, cotisation par cotisation.`,
   },
   {
     question: "Quels frais s'appliquent au coffre ?",
-    answer: `Un dépôt dans le coffre est facturé ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA fixe, et un retrait ${VAULT_WITHDRAWAL_FEE_PERCENT} %. Ces frais sont toujours affichés avant que vous confirmiez l'opération.`,
+    answer: `Un dépôt dans le coffre est facturé ${VAULT_DEPOSIT_FEE_PERCENT} % + ${VAULT_DEPOSIT_FEE_FIXED_FCFA} FCFA fixe, et un retrait ${VAULT_WITHDRAWAL_FEE_PERCENT} %. Avec un compte vérifié, un dépôt est facturé ${VERIFIED_DEPOSIT_FEE_PERCENT} % + ${VERIFIED_DEPOSIT_FEE_FIXED_FCFA} FCFA et les retraits sont gratuits. Ces frais sont toujours affichés avant que vous confirmiez l'opération.`,
   },
   {
     question: "Elikia Fund est-il disponible en dehors du Congo-Brazzaville ?",

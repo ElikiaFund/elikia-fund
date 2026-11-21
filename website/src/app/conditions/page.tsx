@@ -1,7 +1,19 @@
 // Reviewed and approved by legal counsel.
 import type { Metadata } from "next";
 
-import { LEGAL_LAST_UPDATED, SUPPORT_EMAIL, TONTINE_FEE_PERCENT } from "@/lib/constants";
+import {
+  FUNDS_MATURATION_DAYS,
+  LEGAL_LAST_UPDATED,
+  SUPPORT_EMAIL,
+  TONTINE_FEE_PERCENT,
+  VAULT_DEPOSIT_FEE_FIXED_FCFA,
+  VAULT_DEPOSIT_FEE_PERCENT,
+  VAULT_WITHDRAWAL_FEE_PERCENT,
+  VERIFIED_DEPOSIT_FEE_FIXED_FCFA,
+  VERIFIED_DEPOSIT_FEE_PERCENT,
+  VERIFIED_TONTINE_FEE_FIXED_FCFA,
+  VERIFIED_TONTINE_FEE_PERCENT,
+} from "@/lib/constants";
 import { buildMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = buildMetadata({
@@ -36,25 +48,57 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">3. Fonctionnement des tontines et frais de gestion</h2>
+          <h2 className="text-xl font-bold">3. Fonctionnement des tontines et frais</h2>
           <p className="mt-3 text-muted-foreground">
             Une commission de gestion fixe de <strong className="text-foreground">{TONTINE_FEE_PERCENT} %</strong> est
-            prélevée sur chaque cotisation versée dans une tontine. Ce montant, ainsi que le montant net reçu par le
-            groupe, est indiqué pour chaque cotisation.
+            prélevée sur chaque cotisation versée dans une tontine. Lorsque la tontine appartient à une entreprise
+            disposant d&apos;un compte vérifié (article 5), les frais sont de{" "}
+            <strong className="text-foreground">
+              {VERIFIED_TONTINE_FEE_PERCENT} % + {VERIFIED_TONTINE_FEE_FIXED_FCFA} FCFA
+            </strong>{" "}
+            par cotisation. Les frais du coffre sont de {VAULT_DEPOSIT_FEE_PERCENT} % + {VAULT_DEPOSIT_FEE_FIXED_FCFA}{" "}
+            FCFA par dépôt et de {VAULT_WITHDRAWAL_FEE_PERCENT} % par retrait ; avec un compte vérifié, ils sont de{" "}
+            {VERIFIED_DEPOSIT_FEE_PERCENT} % + {VERIFIED_DEPOSIT_FEE_FIXED_FCFA} FCFA par dépôt et les retraits sont
+            gratuits. Le détail des frais et le montant net sont toujours affichés avant confirmation.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-bold">4. Paiements mobile money</h2>
           <p className="mt-3 text-muted-foreground">
-            Les paiements par mobile money (MTN Mobile Money, Airtel Money) peuvent, selon la disponibilité, être
-            traités par un prestataire de paiement tiers ou simulés à des fins de démonstration pendant la phase
-            actuelle de l&apos;application. Nous ne garantissons pas la disponibilité continue des paiements réels.
+            Les paiements par mobile money (MTN Mobile Money, Airtel Money) sont traités par notre prestataire de
+            paiement, <strong className="text-foreground">Yabetoo</strong>. Elikia Fund fournit l&apos;application et
+            la tenue de vos comptes ; elle n&apos;est pas un établissement de crédit ou de monnaie électronique.
+            Nous ne garantissons pas la disponibilité continue des services des opérateurs mobile money ou de notre
+            prestataire.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">5. Score d&apos;éligibilité au crédit</h2>
+          <h2 className="text-xl font-bold">5. Comptes vérifiés et vérification d&apos;identité</h2>
+          <p className="mt-3 text-muted-foreground">
+            Les entreprises créées depuis la mise en place des comptes vérifiés disposent de leur propre compte de
+            paiement chez Yabetoo : l&apos;argent de leur coffre et de leurs tontines y est conservé directement, et
+            non par Elikia Fund. Avant tout dépôt, retrait ou cotisation, l&apos;identité du titulaire doit être
+            vérifiée par Yabetoo, sur sa propre plateforme accessible depuis l&apos;application. Tant que cette
+            vérification n&apos;est pas approuvée, aucune somme ne peut être déposée ni retirée. Les entreprises
+            créées auparavant conservent leur fonctionnement actuel.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold">6. Disponibilité des fonds et retraits</h2>
+          <p className="mt-3 text-muted-foreground">
+            Sur un compte vérifié, chaque montant reçu reste en période de maturation chez Yabetoo (
+            {FUNDS_MATURATION_DAYS} jours par défaut) avant de pouvoir être retiré. Un retrait porte sur la totalité du
+            montant disponible et est versé sur le numéro Mobile Money enregistré lors de la vérification
+            d&apos;identité. Lorsqu&apos;un retrait ne peut pas être confirmé par notre prestataire, son montant reste
+            réservé le temps que notre équipe le vérifie ; vous êtes informé dès qu&apos;il est réglé.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-bold">7. Score d&apos;éligibilité au crédit</h2>
           <p className="mt-3 text-muted-foreground">
             Le score affiché dans l&apos;application est informatif et indicatif. Il est calculé à partir de votre
             activité dans l&apos;application et ne constitue ni une offre de prêt, ni une garantie d&apos;obtention
@@ -63,7 +107,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">6. Utilisation acceptable</h2>
+          <h2 className="text-xl font-bold">8. Utilisation acceptable</h2>
           <p className="mt-3 text-muted-foreground">
             Vous vous engagez à ne pas fournir de fausses informations sur votre entreprise, à ne pas frauder le
             système de tontines ou de codes d&apos;invitation, et à utiliser l&apos;application conformément à sa
@@ -72,7 +116,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">7. Limitation de responsabilité</h2>
+          <h2 className="text-xl font-bold">9. Limitation de responsabilité</h2>
           <p className="mt-3 text-muted-foreground">
             L&apos;application est fournie « en l&apos;état » et « selon disponibilité », sans garantie
             d&apos;absence d&apos;erreurs ou d&apos;interruption de service. Dans la mesure permise par le droit
@@ -83,7 +127,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">8. Résiliation</h2>
+          <h2 className="text-xl font-bold">10. Résiliation</h2>
           <p className="mt-3 text-muted-foreground">
             Vous pouvez fermer votre compte à tout moment. Nous nous réservons le droit de suspendre un compte en
             cas de non-respect de ces conditions.
@@ -91,7 +135,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">9. Modifications des conditions</h2>
+          <h2 className="text-xl font-bold">11. Modifications des conditions</h2>
           <p className="mt-3 text-muted-foreground">
             Nous pouvons modifier ces conditions. La date de dernière mise à jour figure en haut de cette page. Toute
             modification importante vous sera communiquée via l&apos;application ou ce site.
@@ -99,7 +143,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">10. Droit applicable</h2>
+          <h2 className="text-xl font-bold">12. Droit applicable</h2>
           <p className="mt-3 text-muted-foreground">
             Les présentes conditions sont destinées à être interprétées conformément au droit applicable en
             République du Congo, sous réserve de confirmation par un conseil juridique compétent.
@@ -107,7 +151,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold">11. Contact</h2>
+          <h2 className="text-xl font-bold">13. Contact</h2>
           <p className="mt-3 text-muted-foreground">
             Pour toute question relative à ces conditions,{" "}
             <a href={`mailto:${SUPPORT_EMAIL}`} className="text-foreground underline underline-offset-4">
