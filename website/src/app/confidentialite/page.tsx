@@ -57,9 +57,16 @@ export default function PrivacyPage() {
               historique de vos cotisations.
             </li>
             <li>
-              <strong className="text-foreground">Paiements mobile money</strong> : lorsque cette fonctionnalité est
-              active, les données nécessaires au paiement (numéro de téléphone, nom, montant) sont transmises à notre
-              prestataire de paiement, Yabetoo, qui les traite en notre nom.
+              <strong className="text-foreground">Paiements mobile money</strong> : les données nécessaires au
+              paiement (numéro de téléphone, nom, montant) sont transmises à notre prestataire de paiement, Yabetoo.
+            </li>
+            <li>
+              <strong className="text-foreground">Compte vérifié</strong> : pour ouvrir le compte de paiement de votre
+              entreprise chez Yabetoo, nous lui transmettons le nom de l&apos;entreprise et l&apos;adresse e-mail de
+              son titulaire. Les documents de vérification d&apos;identité (pièce d&apos;identité, selfie, justificatif
+              d&apos;adresse ou d&apos;activité) et votre numéro Mobile Money de retrait sont collectés directement
+              par Yabetoo sur sa propre plateforme : Elikia Fund ne les reçoit pas et ne les conserve pas. Nous
+              recevons uniquement le statut de la vérification et les opérations autorisées sur votre compte.
             </li>
           </ul>
         </section>
@@ -79,7 +86,8 @@ export default function PrivacyPage() {
           <p className="mt-3 text-muted-foreground">
             Nous ne partageons vos données qu&apos;avec les prestataires strictement nécessaires au fonctionnement du
             service : <strong className="text-foreground">Yabetoo</strong> pour le traitement des paiements mobile
-            money lorsque cette fonctionnalité est active, et <strong className="text-foreground">Google, Apple ou
+            money et, pour les comptes vérifiés, la tenue du compte de paiement de votre entreprise et la
+            vérification de votre identité, et <strong className="text-foreground">Google, Apple ou
             Facebook</strong> uniquement si vous choisissez de vous connecter via l&apos;un de ces services. Aucun
             autre tiers n&apos;a accès à vos données.
           </p>
